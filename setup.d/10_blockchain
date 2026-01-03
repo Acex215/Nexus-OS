@@ -1,0 +1,203 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# NEXUS OS - Blockchain initialization
+# Adapted from FreedomBox setup.d pattern
+#
+# This script runs during package installation to set up the Geth
+# blockchain infrastructure that serves as the NEXUS OS kernel.
+
+set -e
+
+NEXUS_ROOT="/opt/nexus"
+BLOCKCHAIN_ROOT="${NEXUS_ROOT}/blockchain"
+LOG_FILE="/var/log/nexus-setup.log"
+
+log() {
+    echo "[NEXUS Setup $(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
+}
+
+error() {
+    echo "[NEXUS ERROR] $1" | tee -a "${LOG_FILE}" >&2
+    exit 1
+}
+
+# Create directory structure (FreedomBox pattern)
+setup_directories() {
+    log "Creating NEXUS OS directory structure..."
+
+    mkdir -p "${BLOCKCHAIN_ROOT}"/{data,keystore,config}
+    mkdir -p "${NEXUS_ROOT}"/{logs,run,tmp}
+    mkdir -p /var/lib/nexus
+
+    # Set proper permissions
+    chmod 750 "${BLOCKCHAIN_ROOT}"
+    chmod 700 "${BLOCKCHAIN_ROOT}/keystore"
+    chmod 755 "${NEXUS_ROOT}"/{logs,run,tmp}
+
+    log "Directory structure created"
+}
+
+# Install Geth (adapted from FreedomBox package installation pattern)
+install_blockchain() {
+    log "Installing Geth blockchain client..."
+
+    if command -v geth &> /dev/null; then
+        log "Geth already installed: $(geth version | head -n1)"
+        return 0
+    fi
+
+    # Add Ethereum PPA
+    if ! grep -q "ethereum/ethereum" /etc/apt/sources.list.d/*.list 2>/dev/null; then
+        log "Adding Ethereum PPA..."
+        add-apt-repository -y ppa:ethereum/ethereum
+        apt-get update
+    fi
+
+    # Install Geth
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        ethereum \
+        jq \
+        curl \
+        nmap \
+        ufw
+
+    log "Geth installed successfully"
+}
+
+# Generate device wallet (adapted from FreedomBox user creation)
+generate_device_wallet() {
+    log "Checking device wallet..."
+
+    local wallet_file="${NEXUS_ROOT}/device_wallet.txt"
+
+    if [ -f "${wallet_file}" ]; then
+        log "Device wallet already exists"
+        return 0
+    fi
+
+    log "Generating new device wallet..."
+
+    # Generate deterministic password based on device ID (MAC address)
+    local device_id
+    device_id=$(cat /sys/class/net/eth0/address 2>/dev/null || \
+                cat /sys/class/net/ens*/address 2>/dev/null | head -n1 || \
+                echo "default")
+    device_id=$(echo "${device_id}" | tr -d ':')
+
+    local password_file="${BLOCKCHAIN_ROOT}/password.txt"
+    echo "nexus-${device_id}-$(date +%s)" > "${password_file}"
+    chmod 600 "${password_file}"
+
+    # Create account using Geth
+    local wallet_address
+    wallet_address=$(geth account new \
+        --keystore "${BLOCKCHAIN_ROOT}/keystore" \
+        --password "${password_file}" 2>&1 | \
+        grep -oP '(?<=Public address of the key:   )[0-9a-fA-Fx]+' || \
+        grep -oP '(?<=Address: \{)[0-9a-fA-F]+(?=\})' || \
+        echo "")
+
+    if [ -z "${wallet_address}" ]; then
+        error "Failed to generate wallet address"
+    fi
+
+    # Ensure 0x prefix
+    if [[ ! "${wallet_address}" =~ ^0x ]]; then
+        wallet_address="0x${wallet_address}"
+    fi
+
+    echo "${wallet_address}" > "${wallet_file}"
+    chmod 644 "${wallet_file}"
+
+    log "Device wallet generated: ${wallet_address}"
+}
+
+# Configure firewall (adapted from FreedomBox firewall setup)
+configure_firewall() {
+    log "Configuring firewall for blockchain..."
+
+    # Enable UFW if not already enabled
+    if ! ufw status | grep -q "Status: active"; then
+        log "Enabling UFW firewall..."
+        ufw --force enable
+    fi
+
+    # Allow blockchain ports
+    ufw allow 8545/tcp comment "Geth HTTP RPC" || true
+    ufw allow 8546/tcp comment "Geth WebSocket" || true
+    ufw allow 30303/tcp comment "Geth P2P TCP" || true
+    ufw allow 30303/udp comment "Geth P2P UDP" || true
+
+    # Allow SSH (safety measure)
+    ufw allow 22/tcp comment "SSH" || true
+
+    log "Firewall configured"
+}
+
+# Create configuration file
+create_config() {
+    log "Creating NEXUS OS configuration..."
+
+    local config_file="${BLOCKCHAIN_ROOT}/config.json"
+
+    if [ -f "${config_file}" ]; then
+        log "Configuration already exists"
+        return 0
+    fi
+
+    cat > "${config_file}" << 'EOF'
+{
+  "network": {
+    "chain_id": 123454321,
+    "network_id": 123454321,
+    "consensus": "clique",
+    "block_time": 5
+  },
+  "rpc": {
+    "http_port": 8545,
+    "ws_port": 8546,
+    "allow_unprotected_txs": true
+  },
+  "p2p": {
+    "port": 30303,
+    "max_peers": 25
+  }
+}
+EOF
+
+    chmod 644 "${config_file}"
+    log "Configuration created"
+}
+
+# Initialize systemd service (if not already done by deployment script)
+setup_systemd_service() {
+    log "Checking systemd service..."
+
+    if systemctl list-unit-files | grep -q nexus-geth.service; then
+        log "Systemd service already configured"
+        return 0
+    fi
+
+    log "Note: Run deployment script to create systemd service"
+}
+
+# Main setup routine
+main() {
+    log "========================================="
+    log "NEXUS OS Blockchain Setup Starting"
+    log "========================================="
+
+    setup_directories
+    install_blockchain
+    generate_device_wallet
+    create_config
+    configure_firewall
+    setup_systemd_service
+
+    log "========================================="
+    log "NEXUS OS Blockchain Setup Complete"
+    log "========================================="
+}
+
+main "$@"
