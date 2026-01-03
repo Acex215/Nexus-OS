@@ -1,0 +1,247 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# NEXUS OS - Cluster discovery and auto-join
+# Adapted from FreedomBox first-run pattern
+#
+# This script runs on first boot to:
+# 1. Detect if this is a new node or existing cluster
+# 2. Auto-join existing cluster or initialize new one
+# 3. Configure node ID and networking
+
+set -e
+
+NEXUS_ROOT="/opt/nexus"
+BLOCKCHAIN_ROOT="${NEXUS_ROOT}/blockchain"
+STATE_FILE="/var/lib/nexus/first-run-completed"
+LOG_FILE="/var/log/nexus-first-run.log"
+
+log() {
+    echo "[NEXUS First-Run $(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
+}
+
+# Check if this script has already run
+if [ -f "${STATE_FILE}" ]; then
+    log "First-run already completed. Exiting."
+    exit 0
+fi
+
+log "========================================="
+log "NEXUS OS First Boot Configuration"
+log "========================================="
+
+# Detect network and scan for existing nodes
+detect_cluster() {
+    log "Scanning network for existing NEXUS OS nodes..."
+
+    # Get local network subnet
+    local local_ip
+    local_ip=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n1)
+
+    if [ -z "${local_ip}" ]; then
+        log "Warning: Could not detect local IP address"
+        return 1
+    fi
+
+    local subnet
+    subnet=$(echo "${local_ip}" | cut -d'.' -f1-3)
+
+    log "Local network detected: ${subnet}.0/24"
+
+    # Scan for Geth RPC ports (8545) on network
+    log "Scanning for Geth nodes (this may take 30 seconds)..."
+
+    local nodes
+    nodes=$(nmap -p 8545 --open -oG - "${subnet}.0/24" 2>/dev/null | \
+            grep "8545/open" | \
+            awk '{print $2}' | \
+            grep -v "${local_ip}" || echo "")
+
+    if [ -n "${nodes}" ]; then
+        log "Found existing cluster nodes:"
+        echo "${nodes}" | while read -r node; do
+            log "  - ${node}"
+        done
+        echo "${nodes}"
+        return 0
+    else
+        log "No existing cluster nodes found"
+        return 1
+    fi
+}
+
+# Initialize genesis block for new cluster
+initialize_new_cluster() {
+    log "Initializing NEW NEXUS OS cluster..."
+
+    # Run the genesis block creation script
+    if [ -f "/home/user/Nexus-OS/scripts/blockchain/create_genesis_block.sh" ]; then
+        bash /home/user/Nexus-OS/scripts/blockchain/create_genesis_block.sh
+    elif [ -f "${NEXUS_ROOT}/scripts/create_genesis_block.sh" ]; then
+        bash "${NEXUS_ROOT}/scripts/create_genesis_block.sh"
+    else
+        log "Warning: Genesis block script not found"
+
+        # Create minimal genesis block
+        local wallet
+        wallet=$(cat "${NEXUS_ROOT}/device_wallet.txt")
+
+        cat > "${BLOCKCHAIN_ROOT}/genesis.json" << EOF
+{
+  "config": {
+    "chainId": 123454321,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "clique": {
+      "period": 5,
+      "epoch": 30000
+    }
+  },
+  "difficulty": "1",
+  "gasLimit": "8000000",
+  "extradata": "0x0000000000000000000000000000000000000000000000000000000000000000${wallet#0x}0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "alloc": {
+    "${wallet}": { "balance": "1000000000000000000000" }
+  }
+}
+EOF
+
+        geth init \
+            --datadir "${BLOCKCHAIN_ROOT}/data" \
+            "${BLOCKCHAIN_ROOT}/genesis.json"
+    fi
+
+    log "New cluster initialized - this node is the first sealer"
+}
+
+# Join existing cluster
+join_existing_cluster() {
+    local cluster_nodes="$1"
+
+    log "Joining existing NEXUS OS cluster..."
+
+    # Pick first node as bootnode
+    local bootnode
+    bootnode=$(echo "${cluster_nodes}" | head -n1)
+
+    log "Using bootnode: ${bootnode}"
+
+    # Get enode URL from bootnode
+    local enode_url
+    enode_url=$(curl -s -X POST \
+        -H "Content-Type: application/json" \
+        --data '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' \
+        "http://${bootnode}:8545" | \
+        jq -r '.result.enode' 2>/dev/null || echo "")
+
+    if [ -z "${enode_url}" ] || [ "${enode_url}" = "null" ]; then
+        log "Warning: Could not retrieve enode URL from bootnode"
+        log "Falling back to manual configuration"
+        return 1
+    fi
+
+    # Replace 127.0.0.1 with actual IP in enode URL
+    enode_url=$(echo "${enode_url}" | sed "s/127.0.0.1/${bootnode}/g")
+
+    log "Bootnode enode: ${enode_url}"
+
+    # Update systemd service with bootnode
+    if [ -f "/etc/systemd/system/nexus-geth.service" ]; then
+        # Add --bootnodes flag to service
+        sed -i "s|ExecStart=/usr/bin/geth|ExecStart=/usr/bin/geth --bootnodes ${enode_url}|" \
+            /etc/systemd/system/nexus-geth.service
+
+        systemctl daemon-reload
+        log "Systemd service updated with bootnode configuration"
+    fi
+
+    # Download genesis block from bootnode
+    log "Synchronizing genesis configuration..."
+
+    # Get genesis hash from bootnode
+    local genesis_hash
+    genesis_hash=$(curl -s -X POST \
+        -H "Content-Type: application/json" \
+        --data '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["0x0", false],"id":1}' \
+        "http://${bootnode}:8545" | \
+        jq -r '.result.hash' 2>/dev/null || echo "")
+
+    if [ -n "${genesis_hash}" ] && [ "${genesis_hash}" != "null" ]; then
+        log "Genesis block hash: ${genesis_hash}"
+        log "Note: Manual genesis configuration may be required"
+    fi
+
+    log "Cluster join configuration complete"
+}
+
+# Assign node ID based on MAC address (FreedomBox pattern)
+assign_node_id() {
+    log "Assigning node ID..."
+
+    local mac_address
+    mac_address=$(cat /sys/class/net/eth0/address 2>/dev/null || \
+                  cat /sys/class/net/ens*/address 2>/dev/null | head -n1 || \
+                  echo "00:00:00:00:00:00")
+
+    # Convert last octet of MAC to node ID (1-254)
+    local last_octet
+    last_octet=$(echo "${mac_address}" | awk -F: '{print $NF}')
+    local node_id
+    node_id=$((16#${last_octet} % 253 + 2))  # Range: 2-254 (avoid 1 and 255)
+
+    echo "${node_id}" > "${NEXUS_ROOT}/node_id"
+
+    log "Node ID assigned: ${node_id}"
+    log "MAC Address: ${mac_address}"
+
+    # Set hostname
+    local new_hostname="nexus-node-${node_id}"
+    hostnamectl set-hostname "${new_hostname}" || true
+
+    log "Hostname set to: ${new_hostname}"
+}
+
+# Main first-run logic
+main() {
+    # Ensure required directories exist
+    mkdir -p "${NEXUS_ROOT}" "${BLOCKCHAIN_ROOT}" /var/lib/nexus
+
+    # Assign node ID
+    assign_node_id
+
+    # Detect cluster
+    local cluster_nodes
+    if cluster_nodes=$(detect_cluster); then
+        # Existing cluster found
+        join_existing_cluster "${cluster_nodes}"
+    else
+        # No cluster found - initialize new one
+        initialize_new_cluster
+    fi
+
+    # Start blockchain service
+    log "Starting NEXUS OS blockchain service..."
+
+    if systemctl is-active --quiet nexus-geth; then
+        systemctl restart nexus-geth
+    else
+        systemctl start nexus-geth || log "Service will be started manually"
+    fi
+
+    # Mark first-run as complete
+    date > "${STATE_FILE}"
+
+    log "========================================="
+    log "NEXUS OS First Boot Complete!"
+    log "Node ID: $(cat ${NEXUS_ROOT}/node_id)"
+    log "Wallet: $(cat ${NEXUS_ROOT}/device_wallet.txt)"
+    log "========================================="
+}
+
+main "$@"

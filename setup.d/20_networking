@@ -1,0 +1,204 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# NEXUS OS - Network configuration setup
+# Adapted from FreedomBox networking setup
+#
+# This script configures VLANs for security isolation and
+# sets up network interfaces for the NEXUS OS cluster.
+
+set -e
+
+NEXUS_ROOT="/opt/nexus"
+LOG_FILE="/var/log/nexus-setup.log"
+
+log() {
+    echo "[NEXUS Network $(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
+}
+
+# Install network tools
+install_network_tools() {
+    log "Installing network management tools..."
+
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        vlan \
+        bridge-utils \
+        net-tools \
+        ifupdown \
+        iptables-persistent \
+        avahi-daemon
+
+    # Load 8021q module for VLAN support
+    modprobe 8021q || true
+    echo "8021q" >> /etc/modules-load.d/nexus.conf
+
+    log "Network tools installed"
+}
+
+# Configure VLANs (will be activated on first boot)
+prepare_vlan_config() {
+    log "Preparing VLAN configuration templates..."
+
+    mkdir -p "${NEXUS_ROOT}/network/vlan-templates"
+
+    # VLAN 10: Blockchain network
+    cat > "${NEXUS_ROOT}/network/vlan-templates/vlan10.conf" << 'EOF'
+# VLAN 10: Blockchain Network
+# Isolated network for Geth nodes and blockchain communication
+# Subnet: 10.0.10.0/24
+# Gateway: 10.0.10.1
+
+auto eth0.10
+iface eth0.10 inet static
+    address 10.0.10.{NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device eth0
+EOF
+
+    # VLAN 20: AI Compute network
+    cat > "${NEXUS_ROOT}/network/vlan-templates/vlan20.conf" << 'EOF'
+# VLAN 20: AI Compute Network
+# Network for AI agents and machine learning workloads
+# Subnet: 10.0.20.0/24
+
+auto eth0.20
+iface eth0.20 inet static
+    address 10.0.20.{NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device eth0
+EOF
+
+    # VLAN 30: Storage network
+    cat > "${NEXUS_ROOT}/network/vlan-templates/vlan30.conf" << 'EOF'
+# VLAN 30: Storage Network
+# Isolated network for NAS and distributed storage
+# Subnet: 10.0.30.0/24
+
+auto eth0.30
+iface eth0.30 inet static
+    address 10.0.30.{NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device eth0
+EOF
+
+    # VLAN 40: Management network
+    cat > "${NEXUS_ROOT}/network/vlan-templates/vlan40.conf" << 'EOF'
+# VLAN 40: Management Network
+# Network for web interface and remote administration
+# Subnet: 10.0.40.0/24
+
+auto eth0.40
+iface eth0.40 inet static
+    address 10.0.40.{NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device eth0
+EOF
+
+    log "VLAN templates created"
+}
+
+# Configure Avahi/mDNS for service discovery (FreedomBox pattern)
+configure_mdns() {
+    log "Configuring mDNS service discovery..."
+
+    # Enable Avahi daemon
+    systemctl enable avahi-daemon || true
+
+    # Publish NEXUS OS service
+    cat > /etc/avahi/services/nexus.service << 'EOF'
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">NEXUS OS on %h</name>
+  <service>
+    <type>_http._tcp</type>
+    <port>80</port>
+    <txt-record>path=/</txt-record>
+  </service>
+  <service>
+    <type>_ethereum._tcp</type>
+    <port>8545</port>
+    <txt-record>chain=nexus</txt-record>
+  </service>
+</service-group>
+EOF
+
+    systemctl restart avahi-daemon || log "Avahi will start on boot"
+
+    log "mDNS configured"
+}
+
+# Set up iptables rules for VLAN routing
+prepare_firewall_rules() {
+    log "Preparing inter-VLAN firewall rules..."
+
+    mkdir -p "${NEXUS_ROOT}/network"
+
+    cat > "${NEXUS_ROOT}/network/iptables-rules.sh" << 'EOF'
+#!/bin/bash
+# NEXUS OS - Inter-VLAN routing rules
+# Adapted from FreedomBox firewall patterns
+
+# Enable IP forwarding
+sysctl -w net.ipv4.ip_forward=1
+
+# Allow blockchain VLAN to communicate with AI compute
+iptables -A FORWARD -i eth0.10 -o eth0.20 -j ACCEPT
+iptables -A FORWARD -i eth0.20 -o eth0.10 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow blockchain VLAN to access storage
+iptables -A FORWARD -i eth0.10 -o eth0.30 -j ACCEPT
+iptables -A FORWARD -i eth0.30 -o eth0.10 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow management access to all VLANs
+iptables -A FORWARD -i eth0.40 -o eth0.10 -j ACCEPT
+iptables -A FORWARD -i eth0.40 -o eth0.20 -j ACCEPT
+iptables -A FORWARD -i eth0.40 -o eth0.30 -j ACCEPT
+
+# Block AI compute from directly accessing storage (air-gapped)
+iptables -A FORWARD -i eth0.20 -o eth0.30 -j DROP
+iptables -A FORWARD -i eth0.30 -o eth0.20 -j DROP
+
+# Log and drop everything else
+iptables -A FORWARD -j LOG --log-prefix "NEXUS-FW-DROP: "
+iptables -A FORWARD -j DROP
+EOF
+
+    chmod +x "${NEXUS_ROOT}/network/iptables-rules.sh"
+
+    log "Firewall rules prepared"
+}
+
+# Configure IP forwarding
+enable_ip_forwarding() {
+    log "Enabling IP forwarding..."
+
+    # Persistent IP forwarding
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+        echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    fi
+
+    sysctl -w net.ipv4.ip_forward=1 || true
+
+    log "IP forwarding enabled"
+}
+
+# Main setup
+main() {
+    log "========================================="
+    log "NEXUS OS Network Setup Starting"
+    log "========================================="
+
+    install_network_tools
+    prepare_vlan_config
+    configure_mdns
+    prepare_firewall_rules
+    enable_ip_forwarding
+
+    log "========================================="
+    log "NEXUS OS Network Setup Complete"
+    log "Note: VLANs will be configured on first boot"
+    log "========================================="
+}
+
+main "$@"

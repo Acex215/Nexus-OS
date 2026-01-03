@@ -1,0 +1,188 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# NEXUS OS - VLAN configuration on first boot
+# Adapted from FreedomBox network first-run pattern
+#
+# This script configures VLANs for security isolation
+
+set -e
+
+NEXUS_ROOT="/opt/nexus"
+STATE_FILE="/var/lib/nexus/vlans-configured"
+LOG_FILE="/var/log/nexus-first-run.log"
+
+log() {
+    echo "[NEXUS VLAN $(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
+}
+
+# Check if VLANs already configured
+if [ -f "${STATE_FILE}" ]; then
+    log "VLANs already configured. Exiting."
+    exit 0
+fi
+
+log "========================================="
+log "NEXUS OS VLAN Configuration"
+log "========================================="
+
+# Get node ID
+NODE_ID=$(cat "${NEXUS_ROOT}/node_id" 2>/dev/null || echo "2")
+
+log "Configuring VLANs for node ID: ${NODE_ID}"
+
+# Detect primary network interface
+IFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
+
+if [ -z "${IFACE}" ]; then
+    IFACE="eth0"
+    log "Warning: Could not detect default interface, using ${IFACE}"
+else
+    log "Primary interface detected: ${IFACE}"
+fi
+
+# Configure VLAN 10 (Blockchain)
+configure_vlan_10() {
+    log "Configuring VLAN 10 (Blockchain)..."
+
+    cat >> /etc/network/interfaces << EOF
+
+# VLAN 10: Blockchain Network
+auto ${IFACE}.10
+iface ${IFACE}.10 inet static
+    address 10.0.10.${NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device ${IFACE}
+EOF
+
+    ip link add link "${IFACE}" name "${IFACE}.10" type vlan id 10 || true
+    ip addr add "10.0.10.${NODE_ID}/24" dev "${IFACE}.10" || true
+    ip link set dev "${IFACE}.10" up || true
+
+    log "VLAN 10 configured: 10.0.10.${NODE_ID}"
+}
+
+# Configure VLAN 20 (AI Compute)
+configure_vlan_20() {
+    log "Configuring VLAN 20 (AI Compute)..."
+
+    cat >> /etc/network/interfaces << EOF
+
+# VLAN 20: AI Compute Network
+auto ${IFACE}.20
+iface ${IFACE}.20 inet static
+    address 10.0.20.${NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device ${IFACE}
+EOF
+
+    ip link add link "${IFACE}" name "${IFACE}.20" type vlan id 20 || true
+    ip addr add "10.0.20.${NODE_ID}/24" dev "${IFACE}.20" || true
+    ip link set dev "${IFACE}.20" up || true
+
+    log "VLAN 20 configured: 10.0.20.${NODE_ID}"
+}
+
+# Configure VLAN 30 (Storage)
+configure_vlan_30() {
+    log "Configuring VLAN 30 (Storage)..."
+
+    cat >> /etc/network/interfaces << EOF
+
+# VLAN 30: Storage Network
+auto ${IFACE}.30
+iface ${IFACE}.30 inet static
+    address 10.0.30.${NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device ${IFACE}
+EOF
+
+    ip link add link "${IFACE}" name "${IFACE}.30" type vlan id 30 || true
+    ip addr add "10.0.30.${NODE_ID}/24" dev "${IFACE}.30" || true
+    ip link set dev "${IFACE}.30" up || true
+
+    log "VLAN 30 configured: 10.0.30.${NODE_ID}"
+}
+
+# Configure VLAN 40 (Management)
+configure_vlan_40() {
+    log "Configuring VLAN 40 (Management)..."
+
+    cat >> /etc/network/interfaces << EOF
+
+# VLAN 40: Management Network
+auto ${IFACE}.40
+iface ${IFACE}.40 inet static
+    address 10.0.40.${NODE_ID}
+    netmask 255.255.255.0
+    vlan-raw-device ${IFACE}
+EOF
+
+    ip link add link "${IFACE}" name "${IFACE}.40" type vlan id 40 || true
+    ip addr add "10.0.40.${NODE_ID}/24" dev "${IFACE}.40" || true
+    ip link set dev "${IFACE}.40" up || true
+
+    log "VLAN 40 configured: 10.0.40.${NODE_ID}"
+}
+
+# Apply inter-VLAN firewall rules
+apply_firewall_rules() {
+    log "Applying inter-VLAN firewall rules..."
+
+    if [ -f "${NEXUS_ROOT}/network/iptables-rules.sh" ]; then
+        bash "${NEXUS_ROOT}/network/iptables-rules.sh" || log "Warning: Firewall rules failed"
+    else
+        log "Warning: Firewall rules script not found"
+    fi
+
+    # Save iptables rules
+    if command -v netfilter-persistent &> /dev/null; then
+        netfilter-persistent save || true
+    fi
+
+    log "Firewall rules applied"
+}
+
+# Verify VLAN configuration
+verify_vlans() {
+    log "Verifying VLAN configuration..."
+
+    for vlan_id in 10 20 30 40; do
+        if ip link show "${IFACE}.${vlan_id}" &> /dev/null; then
+            log "  ✓ VLAN ${vlan_id} is UP"
+        else
+            log "  ✗ VLAN ${vlan_id} failed to configure"
+        fi
+    done
+}
+
+# Main configuration
+main() {
+    # Load VLAN kernel module
+    modprobe 8021q || log "Warning: Could not load 8021q module"
+
+    # Configure all VLANs
+    configure_vlan_10
+    configure_vlan_20
+    configure_vlan_30
+    configure_vlan_40
+
+    # Apply firewall rules
+    apply_firewall_rules
+
+    # Verify configuration
+    verify_vlans
+
+    # Mark as configured
+    date > "${STATE_FILE}"
+
+    log "========================================="
+    log "NEXUS OS VLAN Configuration Complete!"
+    log "Blockchain: 10.0.10.${NODE_ID}"
+    log "AI Compute: 10.0.20.${NODE_ID}"
+    log "Storage:    10.0.30.${NODE_ID}"
+    log "Management: 10.0.40.${NODE_ID}"
+    log "========================================="
+}
+
+main "$@"
