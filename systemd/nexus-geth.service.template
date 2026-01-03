@@ -1,0 +1,55 @@
+[Unit]
+Description=NEXUS OS Blockchain Kernel
+Documentation=https://github.com/Acex215/Nexus-OS
+After=network-online.target
+Wants=network-online.target
+Before=nexus-dns.service nexus-proxy.service nexus-agents.service
+
+[Service]
+Type=notify
+User=root
+WorkingDirectory=/opt/nexus/blockchain
+
+# Main Geth process - NEXUS OS Blockchain Kernel
+ExecStart=/usr/bin/geth \
+    --datadir /opt/nexus/blockchain/data \
+    --networkid 123454321 \
+    --http \
+    --http.addr 0.0.0.0 \
+    --http.port 8545 \
+    --http.api eth,net,web3,personal,admin,miner,debug,txpool \
+    --http.corsdomain "*" \
+    --ws \
+    --ws.addr 0.0.0.0 \
+    --ws.port 8546 \
+    --ws.api eth,net,web3,personal,admin,miner,debug,txpool \
+    --allow-insecure-unlock \
+    --unlock DEVICE_WALLET_ADDRESS \
+    --password /opt/nexus/blockchain/password.txt \
+    --mine \
+    --miner.etherbase DEVICE_WALLET_ADDRESS \
+    --miner.threads 2 \
+    --syncmode full \
+    --gcmode archive \
+    --maxpeers 5 \
+    --nodiscover \
+    --verbosity 3
+
+# Kernel-like properties
+Restart=always
+RestartSec=5
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=300
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+LimitMEMLOCK=infinity
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
