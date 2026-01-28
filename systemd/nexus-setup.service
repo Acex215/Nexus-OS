@@ -1,0 +1,19 @@
+[Unit]
+Description=NEXUS OS Initial Setup
+Documentation=https://github.com/Acex215/Nexus-OS
+ConditionPathExists=!/var/lib/nexus/setup-completed
+After=network-online.target
+Wants=network-online.target
+Before=nexus-first-run.service nexus-geth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+ExecStart=/opt/nexus/scripts/run-setup.sh
+ExecStartPost=/bin/touch /var/lib/nexus/setup-completed
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

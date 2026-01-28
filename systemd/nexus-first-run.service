@@ -1,0 +1,19 @@
+[Unit]
+Description=NEXUS OS First Boot Configuration
+Documentation=https://github.com/Acex215/Nexus-OS
+ConditionPathExists=!/var/lib/nexus/first-run-completed
+After=nexus-setup.service network-online.target
+Wants=network-online.target
+Before=nexus-geth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+ExecStart=/opt/nexus/scripts/run-first-boot.sh
+ExecStartPost=/bin/touch /var/lib/nexus/first-run-completed
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

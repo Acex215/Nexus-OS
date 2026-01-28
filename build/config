@@ -1,0 +1,57 @@
+# NEXUS OS Build Configuration
+# Used by pi-gen to create the SD card image
+
+# Image name
+IMG_NAME="nexus-os"
+
+# Release name
+RELEASE="bookworm"
+
+# Target architecture (arm64 for Pi 5, armhf for older Pis)
+TARGET_ARCH="arm64"
+
+# Keyboard layout
+KEYBOARD_KEYMAP="us"
+KEYBOARD_LAYOUT="English (US)"
+
+# Timezone
+TIMEZONE_DEFAULT="Etc/UTC"
+
+# Locale
+LOCALE_DEFAULT="en_US.UTF-8"
+
+# First user (can be changed during first boot)
+FIRST_USER_NAME="nexus"
+FIRST_USER_PASS="nexus"
+
+# Enable SSH
+ENABLE_SSH="1"
+
+# Stage list - which stages to build
+# stage0: Bootstrap
+# stage1: Minimal rootfs
+# stage2: Lite system (no desktop)
+# stage3: Desktop (SKIP for server)
+# stage4: Full desktop (SKIP for server)
+# stage-nexus: NEXUS OS customizations
+STAGE_LIST="stage0 stage1 stage2 stage-nexus"
+
+# Don't build desktop stages
+SKIP_STAGE3="1"
+SKIP_STAGE4="1"
+SKIP_STAGE5="1"
+
+# Compression for final image
+DEPLOY_COMPRESSION="xz"
+
+# Hostname
+TARGET_HOSTNAME="nexus-node"
+
+# Use qemu for cross-compilation (needed if building on x86)
+USE_QEMU="1"
+
+# Pi-gen work directory
+WORK_DIR="${PWD}/work"
+
+# Deploy directory (where final images go)
+DEPLOY_DIR="${PWD}/deploy"
