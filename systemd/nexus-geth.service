@@ -1,0 +1,59 @@
+[Unit]
+Description=NEXUS OS Blockchain Kernel
+Documentation=https://github.com/Acex215/Nexus-OS
+After=network-online.target nexus-first-run.service
+Wants=network-online.target
+Before=nexus-dns.service nexus-proxy.service nexus-agents.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nexus/blockchain
+
+# Source configuration
+EnvironmentFile=-/etc/nexus/nexus.conf
+EnvironmentFile=-/opt/nexus/blockchain/environment
+
+# Main Geth process - NEXUS OS Blockchain Kernel
+ExecStartPre=/opt/nexus/scripts/pre-start-geth.sh
+ExecStart=/usr/bin/geth \
+    --datadir /opt/nexus/blockchain/data \
+    --networkid 123454321 \
+    --http \
+    --http.addr 0.0.0.0 \
+    --http.port 8545 \
+    --http.api eth,net,web3,personal,admin,miner,debug,txpool \
+    --http.corsdomain "*" \
+    --ws \
+    --ws.addr 0.0.0.0 \
+    --ws.port 8546 \
+    --ws.api eth,net,web3,personal,admin,miner,debug,txpool \
+    --allow-insecure-unlock \
+    --unlock ${NEXUS_WALLET_ADDRESS} \
+    --password /opt/nexus/blockchain/password.txt \
+    --mine \
+    --miner.etherbase ${NEXUS_WALLET_ADDRESS} \
+    --miner.threads 2 \
+    --syncmode full \
+    --gcmode archive \
+    --maxpeers 25 \
+    --verbosity 3
+
+# Kernel-like properties
+Restart=always
+RestartSec=5
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=300
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+LimitMEMLOCK=infinity
+
+# Security hardening
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
