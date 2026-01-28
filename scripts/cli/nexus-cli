@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+"""
+NEXUS OS Command Line Interface
+
+A CLI tool for managing NEXUS OS blockchain nodes.
+
+Usage:
+    nexus-cli status      - Show blockchain and node status
+    nexus-cli wallet      - Display wallet address and balance
+    nexus-cli peers       - List connected peers
+    nexus-cli logs        - View blockchain logs (follow mode)
+    nexus-cli console     - Open Geth JavaScript console
+    nexus-cli start       - Start blockchain service
+    nexus-cli stop        - Stop blockchain service
+    nexus-cli restart     - Restart blockchain service
+    nexus-cli info        - Display node configuration
+"""
+
+import sys
+import os
+import json
+import subprocess
+import argparse
+
+# Handle import errors gracefully for minimal installations
+try:
+    import click
+    HAS_CLICK = True
+except ImportError:
+    HAS_CLICK = False
+
+try:
+    from web3 import Web3
+    HAS_WEB3 = True
+except ImportError:
+    HAS_WEB3 = False
+
+try:
+    import colorlog
+    import logging
+    HAS_COLORLOG = True
+except ImportError:
+    HAS_COLORLOG = False
+
+# Configuration
+DEFAULT_RPC_URL = "http://localhost:8545"
+DEFAULT_WS_URL = "ws://localhost:8546"
+CONFIG_FILE = "/etc/nexus/nexus.conf"
+DATA_DIR = "/opt/nexus/blockchain/data"
+WALLET_FILE = "/opt/nexus/device_wallet.txt"
+SERVICE_NAME = "nexus-geth"
+
+# Version
+VERSION = "1.1.0-beta"
+
+
+def get_rpc_url():
+    """Get RPC URL from environment or config."""
+    url = os.environ.get("NEXUS_RPC_URL")
+    if url:
+        return url
+
+    # Try to read from config file
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE) as f:
+                for line in f:
+                    if line.startswith("NEXUS_RPC_PORT="):
+                        port = line.split("=")[1].strip()
+                        return f"http://localhost:{port}"
+        except Exception:
+            pass
+
+    return DEFAULT_RPC_URL
+
+
+def get_web3():
+    """Create Web3 instance connected to local node."""
+    if not HAS_WEB3:
+        print("Error: web3 module not installed. Run: pip3 install web3")
+        sys.exit(2)
+
+    url = get_rpc_url()
+    w3 = Web3(Web3.HTTPProvider(url))
+
+    if not w3.is_connected():
+        print(f"Error: Cannot connect to blockchain at {url}")
+        print("Is the nexus-geth service running?")
+        print("  Check status: sudo systemctl status nexus-geth")
+        print("  Start service: nexus-cli start")
+        sys.exit(2)
+
+    return w3
+
+
+def run_command(cmd, check=True):
+    """Run a shell command and return output."""
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=check
+        )
+        return result.stdout.strip(), result.returncode
+    except subprocess.CalledProcessError as e:
+        return e.stderr.strip(), e.returncode
+
+
+def service_is_active():
+    """Check if nexus-geth service is active."""
+    _, code = run_command(f"systemctl is-active {SERVICE_NAME}", check=False)
+    return code == 0
+
+
+def print_header(title):
+    """Print a formatted header."""
+    print()
+    print("=" * 50)
+    print(f"  {title}")
+    print("=" * 50)
+
+
+def cmd_status():
+    """Show blockchain and node status."""
+    print_header("NEXUS OS Node Status")
+
+    # Service status
+    output, code = run_command(f"systemctl is-active {SERVICE_NAME}", check=False)
+    if code == 0:
+        print(f"  Service Status:  RUNNING")
+    else:
+        print(f"  Service Status:  STOPPED")
+        print()
+        print("  Start with: nexus-cli start")
+        return 3
+
+    # Connect to blockchain
+    try:
+        w3 = get_web3()
+    except SystemExit:
+        return 2
+
+    # Blockchain info
+    try:
+        block_number = w3.eth.block_number
+        chain_id = w3.eth.chain_id
+        syncing = w3.eth.syncing
+
+        print(f"  Block Number:    {block_number}")
+        print(f"  Chain ID:        {chain_id}")
+
+        if syncing:
+            print(f"  Sync Status:     Syncing ({syncing['currentBlock']}/{syncing['highestBlock']})")
+        else:
+            print(f"  Sync Status:     Synchronized")
+
+        # Peer count
+        try:
+            # Use net_peerCount RPC call
+            peer_count = w3.net.peer_count
+            print(f"  Peer Count:      {peer_count}")
+        except Exception:
+            print(f"  Peer Count:      Unknown")
+
+        # Mining status
+        try:
+            mining = w3.eth.mining
+            print(f"  Mining:          {'Yes' if mining else 'No'}")
+        except Exception:
+            pass
+
+        # Gas price
+        try:
+            gas_price = w3.eth.gas_price
+            print(f"  Gas Price:       {w3.from_wei(gas_price, 'gwei')} Gwei")
+        except Exception:
+            pass
+
+    except Exception as e:
+        print(f"  Error getting blockchain status: {e}")
+        return 1
+
+    print()
+    return 0
+
+
+def cmd_wallet():
+    """Display wallet address and balance."""
+    print_header("NEXUS OS Wallet")
+
+    # Read wallet address from file
+    wallet_address = None
+    if os.path.exists(WALLET_FILE):
+        try:
+            with open(WALLET_FILE) as f:
+                wallet_address = f.read().strip()
+        except Exception:
+            pass
+
+    if not wallet_address:
+        print("  Wallet file not found.")
+        print("  Generate with: /opt/nexus/scripts/blockchain/generate_device_wallets.sh")
+        return 1
+
+    print(f"  Address:         {wallet_address}")
+
+    # Get balance if connected
+    if service_is_active():
+        try:
+            w3 = get_web3()
+            balance_wei = w3.eth.get_balance(wallet_address)
+            balance_eth = w3.from_wei(balance_wei, 'ether')
+            print(f"  Balance:         {balance_eth:.6f} ETH")
+
+            nonce = w3.eth.get_transaction_count(wallet_address)
+            print(f"  Nonce:           {nonce}")
+        except Exception as e:
+            print(f"  Balance:         (unable to fetch: {e})")
+    else:
+        print("  Balance:         (service not running)")
+
+    print()
+    return 0
+
+
+def cmd_peers():
+    """List connected peers."""
+    print_header("Connected Peers")
+
+    if not service_is_active():
+        print("  Service not running. Start with: nexus-cli start")
+        return 3
+
+    try:
+        w3 = get_web3()
+        peer_count = w3.net.peer_count
+        print(f"  Total Peers: {peer_count}")
+        print()
+
+        # Get detailed peer info via geth attach
+        output, code = run_command(
+            "geth attach --exec 'admin.peers' http://localhost:8545 2>/dev/null",
+            check=False
+        )
+
+        if code == 0 and output:
+            print("  Peer Details:")
+            print("  " + "-" * 46)
+            # Parse and display peer info
+            try:
+                # The output is JavaScript array, try to parse it
+                # This is a simplified display
+                if "enode://" in output:
+                    lines = output.split("\n")
+                    for line in lines:
+                        if "enode://" in line:
+                            # Extract enode
+                            start = line.find("enode://")
+                            if start >= 0:
+                                enode = line[start:].split('"')[0].split("'")[0]
+                                if len(enode) > 60:
+                                    enode = enode[:57] + "..."
+                                print(f"    {enode}")
+                else:
+                    print("    No peer details available")
+            except Exception:
+                print("    Unable to parse peer info")
+        else:
+            if peer_count == 0:
+                print("  No peers connected.")
+                print()
+                print("  To add a peer manually:")
+                print("  geth attach --exec \"admin.addPeer('enode://...')\" http://localhost:8545")
+
+    except Exception as e:
+        print(f"  Error: {e}")
+        return 1
+
+    print()
+    return 0
+
+
+def cmd_logs():
+    """View blockchain logs in follow mode."""
+    print("Viewing nexus-geth logs (Ctrl+C to exit)...")
+    print()
+
+    try:
+        # Use journalctl to follow logs
+        os.execvp("journalctl", ["journalctl", "-u", SERVICE_NAME, "-f", "--no-pager"])
+    except Exception as e:
+        print(f"Error: {e}")
+        print("Try: sudo journalctl -u nexus-geth -f")
+        return 1
+
+
+def cmd_console():
+    """Open Geth JavaScript console."""
+    if not service_is_active():
+        print("Service not running. Start with: nexus-cli start")
+        return 3
+
+    print("Opening Geth console (type 'exit' to quit)...")
+    print()
+
+    try:
+        os.execvp("geth", ["geth", "attach", get_rpc_url()])
+    except Exception as e:
+        print(f"Error: {e}")
+        print(f"Try: geth attach {get_rpc_url()}")
+        return 1
+
+
+def cmd_start():
+    """Start blockchain service."""
+    print("Starting nexus-geth service...")
+
+    if service_is_active():
+        print("Service is already running.")
+        return 0
+
+    output, code = run_command(f"sudo systemctl start {SERVICE_NAME}", check=False)
+
+    if code == 0:
+        print("Service started successfully.")
+        print("Check status: nexus-cli status")
+        return 0
+    else:
+        print(f"Failed to start service: {output}")
+        print("Check logs: nexus-cli logs")
+        return 1
+
+
+def cmd_stop():
+    """Stop blockchain service."""
+    print("Stopping nexus-geth service...")
+
+    if not service_is_active():
+        print("Service is not running.")
+        return 0
+
+    output, code = run_command(f"sudo systemctl stop {SERVICE_NAME}", check=False)
+
+    if code == 0:
+        print("Service stopped successfully.")
+        return 0
+    else:
+        print(f"Failed to stop service: {output}")
+        return 1
+
+
+def cmd_restart():
+    """Restart blockchain service."""
+    print("Restarting nexus-geth service...")
+
+    output, code = run_command(f"sudo systemctl restart {SERVICE_NAME}", check=False)
+
+    if code == 0:
+        print("Service restarted successfully.")
+        print("Check status: nexus-cli status")
+        return 0
+    else:
+        print(f"Failed to restart service: {output}")
+        print("Check logs: nexus-cli logs")
+        return 1
+
+
+def cmd_info():
+    """Display node configuration."""
+    print_header("NEXUS OS Node Configuration")
+
+    # Node ID
+    if service_is_active():
+        output, code = run_command(
+            "geth attach --exec 'admin.nodeInfo.id' http://localhost:8545 2>/dev/null",
+            check=False
+        )
+        if code == 0:
+            node_id = output.strip().strip('"')
+            if len(node_id) > 20:
+                print(f"  Node ID:         {node_id[:20]}...")
+            else:
+                print(f"  Node ID:         {node_id}")
+
+    # Wallet address
+    if os.path.exists(WALLET_FILE):
+        with open(WALLET_FILE) as f:
+            wallet = f.read().strip()
+            print(f"  Wallet:          {wallet}")
+
+    # RPC URL
+    print(f"  RPC URL:         {get_rpc_url()}")
+    print(f"  WebSocket:       {DEFAULT_WS_URL}")
+
+    # Data directory
+    print(f"  Data Directory:  {DATA_DIR}")
+
+    # Config file
+    if os.path.exists(CONFIG_FILE):
+        print(f"  Config File:     {CONFIG_FILE}")
+
+        # Read and display key config values
+        print()
+        print("  Configuration:")
+        print("  " + "-" * 46)
+        with open(CONFIG_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    print(f"    {line}")
+
+    print()
+    return 0
+
+
+def cmd_version():
+    """Display version information."""
+    print(f"nexus-cli version {VERSION}")
+    print("NEXUS OS - Blockchain Operating System")
+    print("https://github.com/Acex215/Nexus-OS")
+    return 0
+
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="NEXUS OS Command Line Interface",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Commands:
+  status      Show blockchain and node status
+  wallet      Display wallet address and balance
+  peers       List connected peers
+  logs        View blockchain logs (follow mode)
+  console     Open Geth JavaScript console
+  start       Start blockchain service
+  stop        Stop blockchain service
+  restart     Restart blockchain service
+  info        Display node configuration
+
+Examples:
+  nexus-cli status           Check if node is running
+  nexus-cli wallet           View your wallet balance
+  nexus-cli logs             Follow blockchain logs
+  nexus-cli console          Interactive Geth console
+        """
+    )
+
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=["status", "wallet", "peers", "logs", "console",
+                 "start", "stop", "restart", "info", "version"],
+        help="Command to run"
+    )
+
+    parser.add_argument(
+        "-v", "--version",
+        action="store_true",
+        help="Show version and exit"
+    )
+
+    args = parser.parse_args()
+
+    if args.version:
+        return cmd_version()
+
+    if not args.command:
+        parser.print_help()
+        return 0
+
+    # Dispatch to command handler
+    commands = {
+        "status": cmd_status,
+        "wallet": cmd_wallet,
+        "peers": cmd_peers,
+        "logs": cmd_logs,
+        "console": cmd_console,
+        "start": cmd_start,
+        "stop": cmd_stop,
+        "restart": cmd_restart,
+        "info": cmd_info,
+        "version": cmd_version,
+    }
+
+    handler = commands.get(args.command)
+    if handler:
+        return handler()
+    else:
+        parser.print_help()
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

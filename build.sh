@@ -188,6 +188,16 @@ cp -r "${NEXUS_SRC}/backup/"* "${ROOTFS_DIR}/opt/nexus/backup/" || true
 chmod +x "${ROOTFS_DIR}/opt/nexus/scripts/blockchain/"*.sh 2>/dev/null || true
 chmod +x "${ROOTFS_DIR}/opt/nexus/setup.d/"* 2>/dev/null || true
 chmod +x "${ROOTFS_DIR}/opt/nexus/first-run.d/"* 2>/dev/null || true
+
+# Install smart contracts
+install -m 755 -d "${ROOTFS_DIR}/opt/nexus/contracts"
+cp -r "${NEXUS_SRC}/contracts/"*.sol "${ROOTFS_DIR}/opt/nexus/contracts/" 2>/dev/null || true
+cp "${NEXUS_SRC}/scripts/blockchain/deploy_contracts.py" "${ROOTFS_DIR}/opt/nexus/contracts/" 2>/dev/null || true
+chmod +x "${ROOTFS_DIR}/opt/nexus/contracts/deploy_contracts.py" 2>/dev/null || true
+
+# Install CLI tool
+cp "${NEXUS_SRC}/scripts/cli/nexus-cli" "${ROOTFS_DIR}/usr/local/bin/nexus-cli" 2>/dev/null || true
+chmod +x "${ROOTFS_DIR}/usr/local/bin/nexus-cli" 2>/dev/null || true
 RUNEOF
     chmod +x "${STAGE_DIR}/01-nexus-files/00-run.sh"
 

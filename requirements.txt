@@ -1,0 +1,21 @@
+# NEXUS OS Python Dependencies
+
+# Blockchain
+web3>=6.0.0
+
+# API Framework
+flask>=2.0.0
+flask-cors>=3.0.0
+
+# HTTP Client
+requests>=2.28.0
+
+# Configuration
+pyyaml>=6.0
+
+# CLI Tool
+click>=8.0.0
+colorlog>=6.0.0
+
+# Solidity Compilation (optional, for contract deployment)
+py-solc-x>=1.1.0

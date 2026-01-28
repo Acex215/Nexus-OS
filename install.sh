@@ -181,6 +181,47 @@ copy_files() {
     log "Files copied"
 }
 
+# Copy smart contracts
+copy_contracts() {
+    log "Installing smart contracts..."
+
+    mkdir -p /opt/nexus/contracts
+
+    if [ -d "${SCRIPT_DIR}/contracts" ]; then
+        cp "${SCRIPT_DIR}/contracts/"*.sol /opt/nexus/contracts/ 2>/dev/null || true
+        cp "${SCRIPT_DIR}/scripts/blockchain/deploy_contracts.py" /opt/nexus/contracts/ 2>/dev/null || true
+        chmod +x /opt/nexus/contracts/deploy_contracts.py 2>/dev/null || true
+        log "Smart contracts installed to /opt/nexus/contracts"
+    else
+        warn "Contracts directory not found, skipping"
+    fi
+}
+
+# Install CLI tool
+install_cli() {
+    log "Installing nexus-cli..."
+
+    if [ -f "${SCRIPT_DIR}/scripts/cli/nexus-cli" ]; then
+        cp "${SCRIPT_DIR}/scripts/cli/nexus-cli" /usr/local/bin/nexus-cli
+        chmod +x /usr/local/bin/nexus-cli
+        log "CLI installed to /usr/local/bin/nexus-cli"
+    else
+        warn "CLI not found, skipping"
+    fi
+}
+
+# Install Python dependencies
+install_python_deps() {
+    log "Installing Python dependencies..."
+
+    if [ -f "${SCRIPT_DIR}/requirements.txt" ]; then
+        # Try with --break-system-packages for newer pip versions
+        pip3 install -r "${SCRIPT_DIR}/requirements.txt" --break-system-packages 2>/dev/null || \
+        pip3 install -r "${SCRIPT_DIR}/requirements.txt" 2>/dev/null || \
+        warn "Could not install Python dependencies. Install manually with: pip3 install -r requirements.txt"
+    fi
+}
+
 # Install systemd services
 install_services() {
     log "Installing systemd services..."
@@ -324,9 +365,11 @@ print_summary() {
     echo ""
     echo "After first boot:"
     echo ""
+    echo "  CLI tool:        nexus-cli status"
     echo "  Check status:    sudo systemctl status nexus-geth"
     echo "  View logs:       sudo journalctl -u nexus-geth -f"
     echo "  Geth console:    geth attach http://localhost:8545"
+    echo "  Deploy contracts: cd /opt/nexus/contracts && ./deploy_contracts.py"
     echo ""
     echo "For multi-node setup:"
     echo ""
@@ -353,6 +396,9 @@ main() {
 
     create_directories
     copy_files
+    copy_contracts
+    install_cli
+    install_python_deps
     install_services
     create_config
     install_geth

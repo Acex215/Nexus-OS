@@ -56,6 +56,52 @@ sudo ./build.sh full
 
 ---
 
+## Command Line Interface
+
+After installation, manage your node with the `nexus-cli` tool:
+
+```bash
+# Check node status
+nexus-cli status
+
+# View wallet balance
+nexus-cli wallet
+
+# Monitor peers
+nexus-cli peers
+
+# View logs
+nexus-cli logs
+
+# Open Geth console
+nexus-cli console
+```
+
+---
+
+## Smart Contracts
+
+NEXUS OS includes foundational smart contracts for AI agent coordination:
+
+### ReasoningLedger
+Records AI reasoning processes on-chain for transparency and auditability.
+
+### ResourceManager
+Coordinates computational resource allocation across cluster nodes.
+
+### Deploying Contracts
+
+After the blockchain is running:
+
+```bash
+cd /opt/nexus/contracts
+python3 deploy_contracts.py
+```
+
+Contract addresses and ABIs are saved to `/opt/nexus/contracts/deployed/`.
+
+---
+
 ## Project Vision
 
 NEXUS OS reimagines the traditional operating system by placing blockchain at its core. Instead of Geth running as an application on top of Linux, **Geth becomes the kernel** - handling process coordination, resource allocation, and inter-process communication through smart contracts.
@@ -103,14 +149,22 @@ Nexus-OS/
 ├── build.sh                    # Main build script
 ├── install.sh                  # Installation script
 ├── Makefile                    # Build automation
+├── requirements.txt            # Python dependencies
+├── setup.py                    # Python package definition
 ├── build/                      # Build configuration
 │   └── config                  # pi-gen configuration
+├── contracts/                  # Smart contracts
+│   ├── ReasoningLedger.sol     # AI reasoning storage
+│   └── ResourceManager.sol     # Resource allocation
 ├── scripts/                    # Runtime scripts
 │   ├── run-setup.sh            # Setup orchestrator
 │   ├── run-first-boot.sh       # First-boot orchestrator
 │   ├── pre-start-geth.sh       # Geth pre-start checks
+│   ├── cli/                    # CLI tool
+│   │   └── nexus-cli           # Command-line interface
 │   └── blockchain/             # Blockchain scripts
 │       ├── deploy-geth.sh      # Full Geth deployment
+│       ├── deploy_contracts.py # Contract deployment
 │       ├── create_genesis_block.sh    # Multi-node genesis
 │       ├── generate_device_wallets.sh # Wallet generation
 │       └── genesis.template.json      # Genesis template
@@ -420,8 +474,10 @@ geth attach --exec "personal.listWallets" http://localhost:8545
 - [x] Multi-node cluster support
 
 ### Phase 2: Smart Contracts (In Progress)
-- [ ] ReasoningLedger.sol - AI reasoning storage
-- [ ] ResourceManager.sol - CPU/memory allocation
+- [x] ReasoningLedger.sol - AI reasoning storage
+- [x] ResourceManager.sol - CPU/memory allocation
+- [x] CLI tool (nexus-cli) - Node management
+- [x] Contract deployment script
 - [ ] ProcessCoordinator.sol - Inter-process communication
 - [ ] ContractRegistry.sol - Service discovery
 
