@@ -1,0 +1,50 @@
+#!/bin/bash
+# Privileged action: systemd service control
+# Adapted from FreedomBox's action pattern
+# Must be run via sudo from service_framework.py
+set -e
+
+ACTION="$1"
+UNIT="$2"
+
+if [ -z "$ACTION" ] || [ -z "$UNIT" ]; then
+    echo "Usage: service-ctl <enable|disable|restart|status> <unit-name>" >&2
+    exit 1
+fi
+
+# Whitelist allowed units (security boundary)
+ALLOWED_UNITS="nfs-server.service ipfs.service nexus-geth.service clef.service local-inference.service"
+FOUND=0
+for u in $ALLOWED_UNITS; do
+    if [ "$UNIT" = "$u" ]; then
+        FOUND=1
+        break
+    fi
+done
+
+if [ "$FOUND" -ne 1 ]; then
+    echo "Unit '$UNIT' not in allowed list" >&2
+    exit 2
+fi
+
+case "$ACTION" in
+    enable)
+        systemctl enable --now "$UNIT"
+        echo "Enabled $UNIT"
+        ;;
+    disable)
+        systemctl disable --now "$UNIT"
+        echo "Disabled $UNIT"
+        ;;
+    restart)
+        systemctl restart "$UNIT"
+        echo "Restarted $UNIT"
+        ;;
+    status)
+        systemctl is-active "$UNIT" || true
+        ;;
+    *)
+        echo "Unknown action: $ACTION" >&2
+        exit 3
+        ;;
+esac

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block content %}
+  <h2>{{ title }}</h2>
+
+  <p>
+    {% trans "Are you sure that you want to remove this repository?" %}
+  </p>
+  <p>
+    <b>{{ repository.name }}</b>
+  </p>
+  <p>
+    {% blocktrans trimmed %}
+      The remote repository will not be deleted.
+      This just removes the repository from the listing on the backup page, you
+      can add it again later on.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    <form class="form form-remove-location" method="post">
+      {% csrf_token %}
+
+      <input type="submit" class="btn btn-danger"
+             value="{% trans "Remove Location" %}"/>
+    </form>
+  </p>
+
+{% endblock %}

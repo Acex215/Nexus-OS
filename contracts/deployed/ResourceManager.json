@@ -1,0 +1,235 @@
+{
+  "name": "ResourceManager",
+  "address": "0x7E7f5e6cd9d7d485eeFa4Ec3Fb211705A3A8c6C6",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "hostname",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "NodeRegistered",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "node",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "requester",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "ResourcesAllocated",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "getAllNodes",
+      "outputs": [
+        {
+          "internalType": "address[]",
+          "name": "",
+          "type": "address[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        }
+      ],
+      "name": "getNode",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "hostname",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "cpuCores",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "memoryGB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "storageGB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "aiTops",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "active",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getNodeCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "nodeAddresses",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "nodes",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        },
+        {
+          "internalType": "string",
+          "name": "hostname",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "cpuCores",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "memoryGB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "storageGB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "aiTops",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "registeredAt",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "hostname",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "cpuCores",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "memoryGB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "storageGB",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "aiTops",
+          "type": "uint256"
+        }
+      ],
+      "name": "registerNode",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "deployer": "0x817B0842B208B76A7665948F8D1A0592F9b1e958",
+  "block": 2,
+  "txHash": "7e991d5e3cf34c021157e9e10180c585b4fa32f9f91135c766c118f45d6c2b93"
+}

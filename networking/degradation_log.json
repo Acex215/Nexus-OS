@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": 1771813092.431687,
+    "node": 4,
+    "from_level": 6,
+    "to_level": 1,
+    "from_name": "Offline",
+    "to_name": "Ethernet"
+  }
+]

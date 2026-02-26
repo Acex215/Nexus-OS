@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+{% load static %}
+
+{% block page_js %}
+  <script type="text/javascript" src="{% static 'networks/networks.js' %}"
+          defer></script>
+{% endblock %}
+
+{% block content %}
+
+  <h3>{{ title }}</h3>
+
+  <form class="form form-connection form-connection-edit" method="post">
+    {% csrf_token %}
+
+    {% include "connections_fields.html" %}
+
+    <input type="submit" class="btn btn-primary"
+           value="{% trans "Edit Connection" %}"/>
+  </form>
+
+{% endblock %}

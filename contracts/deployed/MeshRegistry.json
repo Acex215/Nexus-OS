@@ -1,0 +1,186 @@
+{
+  "name": "MeshRegistry",
+  "address": "0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "meshIP",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "PeerRegistered",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        }
+      ],
+      "name": "getPeer",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "enodeUrl",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "wgPubKey",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "meshIP",
+          "type": "string"
+        },
+        {
+          "internalType": "bool",
+          "name": "active",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "name": "getPeerAddress",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getPeerCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "peerList",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "peers",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "wallet",
+          "type": "address"
+        },
+        {
+          "internalType": "string",
+          "name": "enodeUrl",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "wgPublicKey",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "meshIP",
+          "type": "string"
+        },
+        {
+          "internalType": "bool",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "enodeUrl",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "wgPubKey",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "meshIP",
+          "type": "string"
+        }
+      ],
+      "name": "registerPeer",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "deployer": "0x817B0842B208B76A7665948F8D1A0592F9b1e958",
+  "block": 1717,
+  "txHash": "0a1d6b8487a5736b7f8caa053c3310fee0eae8dc2683dea028dffd8127fb3e5e"
+}

@@ -1,0 +1,16 @@
+# NEXUS OS WireGuard full-mesh overlay template
+# Each node gets a unique Address in 10.1.0.0/24
+# Runs over BATMAN-adv mesh (10.0.0.0/24) or Ethernet fallback
+
+[Interface]
+PrivateKey = __PRIVATE_KEY__
+Address = 10.1.0.__NODE_NUM__/24
+ListenPort = 51820
+
+# Peers are auto-populated by mesh_discovery.py
+# Template for each peer:
+# [Peer]
+# PublicKey = __PEER_PUBLIC_KEY__
+# AllowedIPs = 10.1.0.__PEER_NUM__/32
+# Endpoint = __PEER_ENDPOINT__:51820
+# PersistentKeepalive = 25

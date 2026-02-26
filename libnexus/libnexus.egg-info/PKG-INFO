@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: libnexus
+Version: 0.2.0
+Summary: NEXUS OS Kernel System Call Library
+Requires-Python: >=3.9
+Requires-Dist: web3>=6.0.0
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
