@@ -7,21 +7,21 @@ from libnexus import NexusKernel
 validators = [
     {
         'name': 'nexus-master',
-        'rpc': 'http://192.168.8.228:8545',
+        'rpc': 'http://10.0.20.3:8545',
         'wallet': '0x817B0842B208B76A7665948F8D1A0592F9b1e958',
         'hostname': 'nexus-master',
         'cpu': 4, 'memory': 8, 'storage': 256, 'tops': 0
     },
     {
         'name': 'nexus-ai',
-        'rpc': 'http://192.168.8.128:8545',
+        'rpc': 'http://10.0.20.4:8545',
         'wallet': '0x9602699C3Cb2aCf35CF20c32012A88CD451e55F0',
         'hostname': 'nexus-ai',
         'cpu': 4, 'memory': 8, 'storage': 128, 'tops': 26
     },
     {
         'name': 'nexus-storage',
-        'rpc': 'http://192.168.8.224:8545',
+        'rpc': 'http://10.0.20.11:8545',
         'wallet': '0x06eB84AE46d1b914A35432B6BA7351344aeb9C37',
         'hostname': 'nexus-storage',
         'cpu': 4, 'memory': 8, 'storage': 1800, 'tops': 0
@@ -61,7 +61,7 @@ print(f"\n{'=' * 60}")
 print("Verification")
 print("=" * 60)
 
-k = NexusKernel(rpc_url='http://192.168.8.228:8545')
+k = NexusKernel(rpc_url='http://10.0.20.3:8545')
 count = k.get_node_count()
 print(f"Total nodes registered: {count}")
 

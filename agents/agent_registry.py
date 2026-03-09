@@ -5,10 +5,10 @@ from typing import Dict, Any, List
 # Shared context block injected into all prompts
 _CLUSTER_CONTEXT = (
     "Cluster: 4 Raspberry Pi 5 nodes - "
-    "nexus-master (192.168.8.228, K3s master, Geth validator), "
-    "nexus-ai (192.168.8.128, AI HAT+ 26 TOPS, Geth validator), "
-    "nexus-storage (192.168.8.224, 2TB NFS NAS, Geth validator), "
-    "nexus-admin (192.168.8.153, dev station). "
+    "nexus-master (10.0.20.3, K3s master, Geth validator), "
+    "nexus-ai (10.0.20.4, AI HAT+ 26 TOPS, Geth validator), "
+    "nexus-storage (10.0.20.11, 2TB NFS NAS, Geth validator), "
+    "nexus-admin (10.0.10.5, dev station). "
     "Blockchain: Chain ID 123454321, Clique PoA, 5s blocks, 3 validators. "
     "All decisions logged to ReasoningLedger smart contract."
 )
@@ -151,7 +151,7 @@ Output format: Always respond with valid JSON:
 
 """ + _CLUSTER_CONTEXT + """
 
-Storage layout: /mnt/nexus-nas with subdirs blockchain/, agents/, backups/, shared/. NFS exported to 192.168.8.0/24. Daily budget: 500 ECT. Worker tasks: 5-15 ECT."""
+Storage layout: /mnt/nexus-nas with subdirs blockchain/, agents/, backups/, shared/. NFS exported to 10.0.20.0/24. Daily budget: 500 ECT. Worker tasks: 5-15 ECT."""
     },
 
     "network_director": {
@@ -165,7 +165,7 @@ Storage layout: /mnt/nexus-nas with subdirs blockchain/, agents/, backups/, shar
         "discord_channel": "#network-dept",
         "system_prompt": """You are the Network Director of NEXUS OS, responsible for all network connectivity across the 4-node cluster. You manage inter-node communication, P2P mesh networking, VPN tunnels, DNS resolution, and network performance.
 
-Your jurisdiction: LAN connectivity between all 4 nodes (192.168.8.0/24), Geth P2P networking (port 30303), K3s cluster networking, WireGuard VPN tunnels for external access, DNS and service discovery, and network performance monitoring.
+Your jurisdiction: LAN connectivity between all 4 nodes (10.0.20.0/24), Geth P2P networking (port 30303), K3s cluster networking, WireGuard VPN tunnels for external access, DNS and service discovery, and network performance monitoring.
 
 You manage 3 specialized workers:
 - Mesh Coordinator (network_worker_1): P2P networking and node discovery
@@ -185,7 +185,7 @@ Output format: Always respond with valid JSON:
 
 """ + _CLUSTER_CONTEXT + """
 
-Network topology: All nodes on 192.168.8.0/24 LAN. Geth static peers on port 30303. K3s uses flannel CNI. Daily budget: 500 ECT. Worker tasks: 5-15 ECT."""
+Network topology: All nodes on 10.0.20.0/24 LAN. Geth static peers on port 30303. K3s uses flannel CNI. Daily budget: 500 ECT. Worker tasks: 5-15 ECT."""
     },
 
     "security_director": {
@@ -474,7 +474,7 @@ Output format: Always respond with valid JSON:
 
 """ + _CLUSTER_CONTEXT + """
 
-NFS: nexus-storage exports /mnt/nexus-nas to 192.168.8.0/24. Mount options: defaults,noatime. Budget: 100 ECT/day, 3-8 ECT per task."""
+NFS: nexus-storage exports /mnt/nexus-nas to 10.0.20.0/24. Mount options: defaults,noatime. Budget: 100 ECT/day, 3-8 ECT per task."""
     },
 
     "storage_worker_3": {
@@ -565,7 +565,7 @@ Output format: Always respond with valid JSON:
 
 """ + _CLUSTER_CONTEXT + """
 
-VPN: WireGuard on UDP port 51820. Internal subnet: 192.168.8.0/24. Budget: 100 ECT/day, 3-8 ECT per task."""
+VPN: WireGuard on UDP port 51820. Internal subnet: 10.0.20.0/24. Budget: 100 ECT/day, 3-8 ECT per task."""
     },
 
     "network_worker_3": {
@@ -656,7 +656,7 @@ Output format: Always respond with valid JSON:
 
 """ + _CLUSTER_CONTEXT + """
 
-Monitoring: /var/log/auth.log, journalctl, Geth logs, network traffic on 192.168.8.0/24. Budget: 100 ECT/day, 3-8 ECT per task."""
+Monitoring: /var/log/auth.log, journalctl, Geth logs, network traffic on 10.0.20.0/24. Budget: 100 ECT/day, 3-8 ECT per task."""
     },
 
     "security_worker_3": {

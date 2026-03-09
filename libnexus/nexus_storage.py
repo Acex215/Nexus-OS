@@ -29,7 +29,7 @@ from web3.middleware import ExtraDataToPOAMiddleware
 
 # ── Defaults ─────────────────────────────────────────────────────
 DEFAULT_IPFS_API    = "http://127.0.0.1:5001/api/v0"
-DEFAULT_RPC         = "http://192.168.8.228:8545"
+DEFAULT_RPC         = "http://10.0.20.3:8545"
 DEFAULT_CONTRACT    = "0x859e30a6b752Af6D96d309Dc3a5bECfCfFDe31A6"
 DEPLOYER_ADDR       = "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
 DEPLOY_JSON         = "/opt/nexus/contracts/deployed/StorageRegistry.json"

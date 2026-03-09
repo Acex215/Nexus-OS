@@ -20,11 +20,11 @@ from web3.middleware import ExtraDataToPOAMiddleware
 
 # ── Configuration ────────────────────────────────────────────────
 VALIDATORS = {
-    "nexus-master":  {"ip": "192.168.8.228", "rpc": 8545},
-    "nexus-ai":      {"ip": "192.168.8.128", "rpc": 8545},
-    "nexus-storage": {"ip": "192.168.8.224", "rpc": 8545},
+    "nexus-master":  {"ip": "10.0.20.3", "rpc": 8545},
+    "nexus-ai":      {"ip": "10.0.20.4", "rpc": 8545},
+    "nexus-storage": {"ip": "10.0.20.11", "rpc": 8545},
 }
-ADMIN_NODE = {"name": "nexus-admin", "ip": "192.168.8.153"}
+ADMIN_NODE = {"name": "nexus-admin", "ip": "10.0.10.5"}
 
 CONTRACT_ADDR = "0x0317451264E1de1A0696A81f6141e72E58686DE4"  # ReasoningLedger
 RESOURCE_MGR  = "0x7E7f5e6cd9d7d485eeFa4Ec3Fb211705A3A8c6C6"  # ResourceManager
@@ -382,7 +382,7 @@ def main():
     print(SEP)
 
     # Connect to primary validator
-    w3 = connect("192.168.8.228")
+    w3 = connect("10.0.20.3")
     if not w3.is_connected():
         print("\n  [FATAL] Cannot connect to nexus-master:8545")
         sys.exit(1)

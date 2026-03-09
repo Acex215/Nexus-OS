@@ -30,10 +30,10 @@ logger = logging.getLogger(__name__)
 
 # Node configuration
 NODE_MAP = {
-    1: {'name': 'nexus-master', 'eth_ip': '192.168.8.228', 'mesh_ip': '10.0.0.1', 'wg_ip': '10.1.0.1'},
-    2: {'name': 'nexus-ai',     'eth_ip': '192.168.8.128', 'mesh_ip': '10.0.0.2', 'wg_ip': '10.1.0.2'},
-    3: {'name': 'nexus-storage','eth_ip': '192.168.8.224', 'mesh_ip': '10.0.0.3', 'wg_ip': '10.1.0.3'},
-    4: {'name': 'nexus-admin',  'eth_ip': '192.168.8.153', 'mesh_ip': '10.0.0.4', 'wg_ip': '10.1.0.4'},
+    1: {'name': 'nexus-master', 'eth_ip': '10.0.20.3', 'mesh_ip': '10.0.0.1', 'wg_ip': '10.1.0.1'},
+    2: {'name': 'nexus-ai',     'eth_ip': '10.0.20.4', 'mesh_ip': '10.0.0.2', 'wg_ip': '10.1.0.2'},
+    3: {'name': 'nexus-storage','eth_ip': '10.0.20.11', 'mesh_ip': '10.0.0.3', 'wg_ip': '10.1.0.3'},
+    4: {'name': 'nexus-admin',  'eth_ip': '10.0.10.5', 'mesh_ip': '10.0.0.4', 'wg_ip': '10.1.0.4'},
 }
 
 WG_INTERFACE = 'nexus-mesh'

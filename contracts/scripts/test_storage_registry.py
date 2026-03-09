@@ -8,7 +8,7 @@ import sys
 from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 
-RPC_URL  = "http://192.168.8.228:8545"
+RPC_URL  = "http://10.0.20.3:8545"
 DEPLOYER = "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
 
 # Node addresses (using deployer for all in test; in prod these would be node wallets)

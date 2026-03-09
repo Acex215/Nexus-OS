@@ -4,7 +4,7 @@ import time
 import statistics
 from web3 import Web3
 
-RPC = "http://192.168.8.228:8547"
+RPC = "http://10.0.20.3:8547"
 WALLET = "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
 TARGET = "0x0000000000000000000000000000000000000001"  # burn address
 TX_COUNT = 100

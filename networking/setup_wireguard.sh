@@ -17,7 +17,7 @@ WG_PORT=51820
 
 # Node mapping: node_num -> mesh_ip (BATMAN) and eth_ip (fallback)
 declare -A MESH_IPS=([1]="10.0.0.1" [2]="10.0.0.2" [3]="10.0.0.3" [4]="10.0.0.4")
-declare -A ETH_IPS=([1]="192.168.8.228" [2]="192.168.8.128" [3]="192.168.8.224" [4]="192.168.8.153")
+declare -A ETH_IPS=([1]="10.0.20.3" [2]="10.0.20.4" [3]="10.0.20.11" [4]="10.0.10.5")
 
 if [ "$NODE_NUM" = "genkeys" ]; then
     echo "=== Generating WireGuard keys ==="

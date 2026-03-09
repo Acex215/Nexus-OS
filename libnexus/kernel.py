@@ -13,7 +13,7 @@ class NexusKernel:
     In NEXUS OS: programs call kernel via smart contracts.
     """
 
-    def __init__(self, rpc_url='http://192.168.8.228:8545', wallet=None):
+    def __init__(self, rpc_url='http://10.0.20.3:8545', wallet=None):
         """
         Initialize kernel connection
 

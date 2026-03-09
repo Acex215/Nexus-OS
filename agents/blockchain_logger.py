@@ -24,7 +24,7 @@ logger = logging.getLogger("blockchain_logger")
 
 # ── Contract + RPC configuration ──────────────────────────────────────
 
-RPC_URL = "http://192.168.8.228:8545"
+RPC_URL = "http://10.0.20.3:8545"
 CONTRACT_PATH = "/opt/nexus/contracts/deployed/ReasoningLedger.json"
 DEPLOYER = "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
 

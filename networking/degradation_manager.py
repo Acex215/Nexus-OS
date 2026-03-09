@@ -6,7 +6,7 @@ Monitors connectivity across all network layers and auto-switches
 between them based on availability. Logs level transitions on-chain.
 
 Degradation chain (best to worst):
-  Level 1: Ethernet (192.168.8.0/24) — full bandwidth, <1ms
+  Level 1: Ethernet (10.0.20.0/24) — full bandwidth, <1ms
   Level 2: WiFi mesh (BATMAN-adv 10.0.0.0/24) — ~50Mbps, 1-6ms
   Level 3: WireGuard overlay (10.1.0.0/24) — encrypted tunnel
   Level 4: Sub-GHz RF (433MHz via Flipper) — 64B packets, ~1kbps
@@ -40,25 +40,25 @@ logger = logging.getLogger(__name__)
 NODE_MAP = {
     1: {
         'name': 'nexus-master',
-        'eth': '192.168.8.228',
+        'eth': '10.0.20.3',
         'mesh': '10.0.0.1',
         'wg': '10.1.0.1',
     },
     2: {
         'name': 'nexus-ai',
-        'eth': '192.168.8.128',
+        'eth': '10.0.20.4',
         'mesh': '10.0.0.2',
         'wg': '10.1.0.2',
     },
     3: {
         'name': 'nexus-storage',
-        'eth': '192.168.8.224',
+        'eth': '10.0.20.11',
         'mesh': '10.0.0.3',
         'wg': '10.1.0.3',
     },
     4: {
         'name': 'nexus-admin',
-        'eth': '192.168.8.153',
+        'eth': '10.0.10.5',
         'mesh': '10.0.0.4',
         'wg': '10.1.0.4',
     },

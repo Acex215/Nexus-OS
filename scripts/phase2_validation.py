@@ -29,9 +29,9 @@ print("\n1. BLOCKCHAIN HEALTH")
 print("-" * 70)
 
 validators = {
-    'nexus-master':  {'rpc': 'http://192.168.8.228:8545', 'wallet': '0x817B0842B208B76A7665948F8D1A0592F9b1e958'},
-    'nexus-ai':      {'rpc': 'http://192.168.8.128:8545', 'wallet': '0x9602699C3Cb2aCf35CF20c32012A88CD451e55F0'},
-    'nexus-storage': {'rpc': 'http://192.168.8.224:8545', 'wallet': '0x06eB84AE46d1b914A35432B6BA7351344aeb9C37'},
+    'nexus-master':  {'rpc': 'http://10.0.20.3:8545', 'wallet': '0x817B0842B208B76A7665948F8D1A0592F9b1e958'},
+    'nexus-ai':      {'rpc': 'http://10.0.20.4:8545', 'wallet': '0x9602699C3Cb2aCf35CF20c32012A88CD451e55F0'},
+    'nexus-storage': {'rpc': 'http://10.0.20.11:8545', 'wallet': '0x06eB84AE46d1b914A35432B6BA7351344aeb9C37'},
 }
 
 # Check service status on each validator
@@ -72,7 +72,7 @@ for node, info in validators.items():
         check(f"{node} peer count", False, str(e))
 
 # Block production rate
-k = NexusKernel(rpc_url='http://192.168.8.228:8545')
+k = NexusKernel(rpc_url='http://10.0.20.3:8545')
 print(f"\n  Measuring block production over 15 seconds...")
 block_start = k.get_block_number()
 time.sleep(15)
@@ -221,7 +221,7 @@ print("\n6. END-TO-END TEST: Reasoning Entry")
 print("-" * 70)
 
 k_master = NexusKernel(
-    rpc_url='http://192.168.8.228:8545',
+    rpc_url='http://10.0.20.3:8545',
     wallet='0x817B0842B208B76A7665948F8D1A0592F9b1e958'
 )
 

@@ -38,7 +38,7 @@ echo ""
 echo "--- Joining worker nodes ---"
 for node in nexus-ai nexus-storage nexus-admin; do
   echo "Joining $node..."
-  ssh mhuraibi@$node "curl -sfL https://get.k3s.io | K3S_URL=https://192.168.8.228:6443 K3S_TOKEN='$K3S_TOKEN' sh -s - agent --node-name $node"
+  ssh mhuraibi@$node "curl -sfL https://get.k3s.io | K3S_URL=https://10.0.20.3:6443 K3S_TOKEN='$K3S_TOKEN' sh -s - agent --node-name $node"
 done
 
 # Wait for workers to join

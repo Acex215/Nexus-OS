@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # NEXUS OS - Phase 1 Infrastructure Validation
-# Run from: nexus-admin (192.168.8.153)
+# Run from: nexus-admin (10.0.10.5)
 # =============================================================================
 
 set -euo pipefail
@@ -15,10 +15,10 @@ FAILED=0
 
 # Node definitions
 declare -A NODES=(
-    [nexus-master]="192.168.8.228"
-    [nexus-ai]="192.168.8.128"
-    [nexus-storage]="192.168.8.224"
-    [nexus-admin]="192.168.8.153"
+    [nexus-master]="10.0.20.3"
+    [nexus-ai]="10.0.20.4"
+    [nexus-storage]="10.0.20.11"
+    [nexus-admin]="10.0.10.5"
 )
 
 REMOTE_NODES=(nexus-master nexus-ai nexus-storage)
