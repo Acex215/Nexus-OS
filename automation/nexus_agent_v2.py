@@ -264,6 +264,9 @@ class GitManager:
             path = l[3:].strip()
             if "__pycache__" in path or path.endswith(".pyc"):
                 continue  # ignore bytecode drift
+            # Ignore the task queue — agent writes in_progress status into it
+            if path == "automation/task_queue.yaml":
+                continue
             # Ignore submodules: git status shows them as directories
             abs_path = self.repo / path
             if abs_path.is_dir() and not abs_path.is_symlink():
@@ -657,11 +660,14 @@ CRITICAL RULES — read carefully:
                     issues.append(
                         f"DB says {fp} exists but it's missing from disk — DB stale?"
                     )
-                # new file — OK
+                # new file or file outside repo — OK
             else:
-                ok, msg = self.verify.file_matches_db(fp, self.db)
-                if not ok:
-                    issues.append(msg)
+                # Only check DB consistency for files inside NEXUS_ROOT.
+                # Files elsewhere (e.g. ~/.claude/memory/) are not indexed and that's fine.
+                if Path(fp).is_relative_to(NEXUS_ROOT):
+                    ok, msg = self.verify.file_matches_db(fp, self.db)
+                    if not ok:
+                        issues.append(msg)
 
         if issues:
             return False, "Probe failed:\n" + "\n".join(f"  - {i}" for i in issues)
