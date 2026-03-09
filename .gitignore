@@ -8,3 +8,20 @@ automation/task_queue.yaml
 
 # Submodule working tree changes handled separately
 automation/task_queue.yaml
+automation/task_queue.yaml
+automation/*.log
+automation/indexer.log
+automation/orchestrator.log
+automation/logs/
+automation/__pycache__/
+automation/.git_monitor_state
+automation/.notification_state.json
+automation/.task_timings.json
+automation/audit.jsonl
+automation/world_model.db
+automation/intent_registry.yaml.bak.*
+automation/change_ledger.md
+backups/
+ipfs/datastore/
+*.ldb
+*.agent_v2_backup.*
