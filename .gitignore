@@ -7,3 +7,4 @@ automation/task_queue.yaml
 **/*.pyo
 
 # Submodule working tree changes handled separately
+automation/task_queue.yaml
