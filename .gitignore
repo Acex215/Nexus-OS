@@ -1,0 +1,9 @@
+# Runtime state — modified by agent during operation, not source-controlled
+automation/task_queue.yaml
+
+# Python bytecode
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Submodule working tree changes handled separately
