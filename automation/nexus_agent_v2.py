@@ -772,7 +772,7 @@ RULES:
 
         changes_made = []
 
-        # Apply modifications
+        # Apply modifications — patch-based approach (fast, low token count)
         for change in task.plan.get("changes", []):
             file_path = change["file"]
             if not os.path.exists(file_path):
@@ -781,55 +781,102 @@ RULES:
             with open(file_path) as f:
                 current_content = f.read()
 
-            edit_prompt = f"""Apply this change to the file and return the COMPLETE updated file.
+            # Show only the relevant context window around the change (first 60 lines
+            # for insertions at top; last 40 lines for insertions at end; full for short files).
+            lines = current_content.splitlines(keepends=True)
+            if len(lines) <= 80:
+                context_snippet = current_content
+            else:
+                # Show first 40 + last 20 lines as context
+                context_snippet = (
+                    "".join(lines[:40])
+                    + f"\n... [{len(lines) - 60} lines omitted] ...\n"
+                    + "".join(lines[-20:])
+                )
+
+            patch_prompt = f"""You are applying a precise code change.
 
 FILE: {file_path}
 CHANGE: {change['description']}
 
-CURRENT CONTENT:
-```python
-{current_content[:6000]}
+FILE CONTEXT (may be truncated):
+```
+{context_snippet}
 ```
 
-Respond with ONLY the complete updated file content — no markdown fences, no commentary.
-The output will be written directly to disk."""
+Respond with ONLY valid JSON — no other text:
+{{
+    "action": "replace" | "insert_before" | "insert_after" | "prepend" | "append",
+    "search": "exact string to find in the file (for replace/insert_before/insert_after)",
+    "new_code": "the new code to insert or use as replacement"
+}}
+
+RULES:
+- "replace": replaces search string with new_code
+- "insert_before": inserts new_code immediately before search string
+- "insert_after": inserts new_code immediately after search string
+- "prepend": adds new_code at the very start of the file
+- "append": adds new_code at the very end of the file
+- search must be an EXACT substring of the file (for replace/insert_before/insert_after)
+- For a docstring at file top: use "insert_after" with search = the shebang/first import line,
+  OR use "replace" on the existing short docstring if one exists"""
 
             response, tier = await self.llm.complete(
                 [
                     {
                         "role": "system",
                         "content": (
-                            "You are a code editor. Output only the complete updated file content. "
-                            "No explanation. No markdown fences. Raw code only."
+                            "You are a surgical code patcher. "
+                            "Output ONLY a JSON patch object. No explanation."
                         ),
                     },
-                    {"role": "user", "content": edit_prompt},
+                    {"role": "user", "content": patch_prompt},
                 ],
-                max_tokens=8192,
+                max_tokens=1024,
                 temperature=0.1,
             )
 
-            # Strip any accidental fences
-            new_content = response.strip()
-            for fence in ("```python", "```"):
-                if new_content.startswith(fence):
-                    new_content = new_content[len(fence):]
-                if new_content.endswith("```"):
-                    new_content = new_content[:-3]
-            new_content = new_content.strip()
+            try:
+                patch = json.loads(_extract_json(response))
+            except (json.JSONDecodeError, ValueError):
+                return False, f"LLM returned invalid patch JSON for {file_path}: {response[:200]}"
 
-            if not new_content:
-                return False, f"LLM returned empty content for {file_path}"
+            action = patch.get("action", "")
+            search = patch.get("search", "")
+            new_code = patch.get("new_code", "")
 
             # Backup original
             backup_path = file_path + f".agent_v2_backup.{task.task_id}"
             shutil.copy2(file_path, backup_path)
 
+            updated = current_content
+            if action == "replace":
+                if search not in current_content:
+                    return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
+                updated = current_content.replace(search, new_code, 1)
+            elif action == "insert_before":
+                if search not in current_content:
+                    return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
+                updated = current_content.replace(search, new_code + search, 1)
+            elif action == "insert_after":
+                if search not in current_content:
+                    return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
+                updated = current_content.replace(search, search + new_code, 1)
+            elif action == "prepend":
+                updated = new_code + current_content
+            elif action == "append":
+                updated = current_content + new_code
+            else:
+                return False, f"Unknown patch action: {action!r}"
+
+            if updated == current_content and action not in ("replace",):
+                self.log.warning("Patch produced no change in %s (action=%s)", file_path, action)
+
             with open(file_path, "w") as f:
-                f.write(new_content)
+                f.write(updated)
 
             changes_made.append(file_path)
-            self.log.info("Modified: %s", file_path)
+            self.log.info("Patched (%s): %s", action, file_path)
 
         # Create new files
         for new_file in task.plan.get("new_files", []):
