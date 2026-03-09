@@ -875,46 +875,56 @@ RULES:
             )
 
             try:
-                patch = json.loads(_extract_json(response))
+                parsed = json.loads(_extract_json(response))
             except (json.JSONDecodeError, ValueError):
                 return False, f"LLM returned invalid patch JSON for {file_path}: {response[:200]}"
 
-            action = patch.get("action", "")
-            search = patch.get("search", "")
-            new_code = patch.get("new_code", "")
+            # LLM may return a single patch dict or a list of patches
+            if isinstance(parsed, dict):
+                patches = [parsed]
+            elif isinstance(parsed, list):
+                patches = parsed
+            else:
+                return False, f"Unexpected patch format: {type(parsed).__name__}"
 
-            # Backup original
+            # Backup original before applying any patches
             backup_path = file_path + f".agent_v2_backup.{task.task_id}"
             shutil.copy2(file_path, backup_path)
 
             updated = current_content
-            if action == "replace":
-                if search not in current_content:
-                    return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
-                updated = current_content.replace(search, new_code, 1)
-            elif action == "insert_before":
-                if search not in current_content:
-                    return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
-                updated = current_content.replace(search, new_code + search, 1)
-            elif action == "insert_after":
-                if search not in current_content:
-                    return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
-                updated = current_content.replace(search, search + new_code, 1)
-            elif action == "prepend":
-                updated = new_code + current_content
-            elif action == "append":
-                updated = current_content + new_code
-            else:
-                return False, f"Unknown patch action: {action!r}"
+            for patch in patches:
+                action = patch.get("action", "")
+                search = patch.get("search", "")
+                new_code = patch.get("new_code", "")
 
-            if updated == current_content and action not in ("replace",):
-                self.log.warning("Patch produced no change in %s (action=%s)", file_path, action)
+                if action == "replace":
+                    if search not in updated:
+                        return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
+                    updated = updated.replace(search, new_code, 1)
+                elif action == "insert_before":
+                    if search not in updated:
+                        return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
+                    updated = updated.replace(search, new_code + search, 1)
+                elif action == "insert_after":
+                    if search not in updated:
+                        return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
+                    updated = updated.replace(search, search + new_code, 1)
+                elif action == "prepend":
+                    updated = new_code + updated
+                elif action == "append":
+                    updated = updated + new_code
+                else:
+                    return False, f"Unknown patch action: {action!r}"
+
+                self.log.info("Patched (%s): %s", action, file_path)
+
+            if updated == current_content:
+                self.log.warning("All patches produced no change in %s", file_path)
 
             with open(file_path, "w") as f:
                 f.write(updated)
 
             changes_made.append(file_path)
-            self.log.info("Patched (%s): %s", action, file_path)
 
         # Create new files
         for new_file in task.plan.get("new_files", []):
