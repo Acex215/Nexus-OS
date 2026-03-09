@@ -1360,6 +1360,8 @@ def main():
                 if isinstance(data, dict) and "passed" in data:
                     status = "PASS" if data["passed"] else "FAIL"
                     print(f"  {gate}: {status} — {data.get('result', '')[:80]}")
+            # Always return to main after run-once
+            pipeline.git.return_to_main()
 
         asyncio.run(_once())
 
