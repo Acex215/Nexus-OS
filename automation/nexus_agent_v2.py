@@ -34,7 +34,7 @@ LLM_TIERS = [
         "name": "tier1-thinkpad",
         "url": "http://10.0.30.2:1234/v1/chat/completions",
         "model": "qwen3.5-35b",
-        "timeout": 180,       # bumped: large planning prompts can take >2min
+        "timeout": 300,       # 5min: large file rewrites on 35B model can be slow
         "max_tokens": 8192,
     },
     {
