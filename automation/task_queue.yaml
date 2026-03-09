@@ -14,7 +14,13 @@
 #   rolled_back — changes were reverted
 #   blocked     — human-blocked, agent skips this
 
-tasks: []
+tasks:
+  - id: "test-docstring-001"
+    description: "Add a module-level docstring to /opt/nexus/agents/verify_system.py explaining what the file does and listing the 5 health checks it performs"
+    status: queued
+    priority: 1
+    added_by: human
+    added_at: "2026-03-09T00:00:00Z"
 
 # Example task (uncomment to test):
 # - id: "test-verify-001"

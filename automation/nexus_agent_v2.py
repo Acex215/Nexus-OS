@@ -250,11 +250,20 @@ class GitManager:
 
     def is_clean(self) -> bool:
         result = self._run("status", "--porcelain")
-        lines = [
-            l
-            for l in result.stdout.strip().split("\n")
-            if l and not l.startswith("??")
-        ]
+        lines = []
+        for l in result.stdout.strip().split("\n"):
+            if not l:
+                continue
+            if l.startswith("??"):
+                continue  # untracked — ignore
+            path = l[3:].strip()
+            if "__pycache__" in path or path.endswith(".pyc"):
+                continue  # ignore bytecode drift
+            # Ignore submodules: git status shows them as directories
+            abs_path = self.repo / path
+            if abs_path.is_dir() and not abs_path.is_symlink():
+                continue  # directory entry = submodule gitlink, skip
+            lines.append(l)
         return len(lines) == 0
 
     def create_work_branch(self, task_id: str) -> str:
@@ -577,15 +586,26 @@ Rules:
 
         for comp_id in task.affected_components:
             gaps = self.db.get_gaps_for_component(comp_id)
-            blocking_gaps = [
-                g for g in gaps if g.get("severity") == "P0" and g.get("status") == "open"
-            ]
-            if blocking_gaps:
-                gap_ids = [g["id"] for g in blocking_gaps]
-                return (
-                    False,
-                    f"P0 gaps block this component: {gap_ids}. Fix these first.",
-                )
+            open_p0 = [g for g in gaps if g.get("severity") == "P0" and g.get("status") == "open"]
+            if open_p0:
+                # Only block if the gap's affected files overlap with what we're modifying.
+                # Normalize gap file paths by stripping line-number suffixes (e.g. "foo.py:27" → "foo.py").
+                blocking_gaps = []
+                for g in open_p0:
+                    gap_files = {
+                        fp.split(":")[0] for fp in g.get("affected_files", [])
+                    }
+                    if not gap_files:
+                        # No file list — block the whole component to be safe
+                        blocking_gaps.append(g)
+                    elif gap_files & set(task.affected_files):
+                        blocking_gaps.append(g)
+                if blocking_gaps:
+                    gap_ids = [g["id"] for g in blocking_gaps]
+                    return (
+                        False,
+                        f"P0 gaps block files being modified: {gap_ids}. Fix these first.",
+                    )
 
             context["gaps"].extend(gaps)
             context["interfaces"].extend(
