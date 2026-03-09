@@ -34,7 +34,7 @@ LLM_TIERS = [
         "name": "tier1-thinkpad",
         "url": "http://10.0.30.2:1234/v1/chat/completions",
         "model": "qwen3.5-35b",
-        "timeout": 300,       # 5min: large file rewrites on 35B model can be slow
+        "timeout": 600,       # 10min: qwen3.5-35b planning prompts can take 5-8min
         "max_tokens": 8192,
     },
     {
@@ -287,8 +287,16 @@ class GitManager:
         return f"agent-v2-backup-{task_id}"
 
     def rollback(self, branch_name: str):
-        """Hard rollback: delete the work branch and return to main."""
-        self._run("checkout", "main")
+        """Hard rollback: return to main then delete the work branch."""
+        result = self._run("checkout", "main")
+        if result.returncode != 0:
+            logging.getLogger("git-manager").error(
+                "rollback: checkout main failed (rc=%d): %s",
+                result.returncode,
+                result.stderr.strip(),
+            )
+            # Force checkout regardless — don't leave on a dead branch
+            self._run("checkout", "-f", "main")
         self._run("branch", "-D", branch_name)
 
     def commit(self, message: str, files: List[str]):
@@ -482,40 +490,61 @@ class AgentPipeline:
             ("G8:COMMIT", self._gate_commit),
         ]
 
-        for gate_name, gate_fn in gates:
-            self.log.info("=== %s === [%s]", gate_name, task.task_id)
-            try:
-                passed, result = await gate_fn(task)
-                task.gate_results[gate_name] = {"passed": passed, "result": result}
+        try:
+            for gate_name, gate_fn in gates:
+                self.log.info("=== %s === [%s]", gate_name, task.task_id)
+                try:
+                    passed, result = await gate_fn(task)
+                    task.gate_results[gate_name] = {"passed": passed, "result": result}
 
-                if not passed:
-                    task.status = TaskStatus.HALTED
-                    task.error = f"Halted at {gate_name}: {result}"
-                    self.log.warning("HALT at %s: %s", gate_name, result)
+                    if not passed:
+                        task.status = TaskStatus.HALTED
+                        task.error = f"Halted at {gate_name}: {result}"
+                        self.log.warning("HALT at %s: %s", gate_name, result)
 
-                    # Rollback only if we already created a branch (G5+)
-                    pre_branch_gates = {"G1:SCOPE", "G2:CONTEXT", "G3:PROBE", "G4:PLAN"}
-                    if task.branch_name and gate_name not in pre_branch_gates:
+                        # Rollback only if we already created a branch (G5+)
+                        pre_branch_gates = {"G1:SCOPE", "G2:CONTEXT", "G3:PROBE", "G4:PLAN"}
+                        if task.branch_name and gate_name not in pre_branch_gates:
+                            self.git.rollback(task.branch_name)
+                            task.status = TaskStatus.ROLLED_BACK
+                            self.log.info("Rolled back branch %s", task.branch_name)
+
+                        break
+                except Exception as e:
+                    task.status = TaskStatus.FAILED
+                    task.error = f"Exception in {gate_name}: {str(e)}"
+                    self.log.error("Exception in %s: %s", gate_name, e, exc_info=True)
+
+                    if task.branch_name:
                         self.git.rollback(task.branch_name)
                         task.status = TaskStatus.ROLLED_BACK
-                        self.log.info("Rolled back branch %s", task.branch_name)
 
                     break
-            except Exception as e:
-                task.status = TaskStatus.FAILED
-                task.error = f"Exception in {gate_name}: {str(e)}"
-                self.log.error("Exception in %s: %s", gate_name, e, exc_info=True)
+            else:
+                task.status = TaskStatus.COMPLETED
+                task.completed_at = datetime.now(timezone.utc).isoformat()
 
-                if task.branch_name:
+        except (asyncio.CancelledError, KeyboardInterrupt, SystemExit) as e:
+            # Service was killed (SIGTERM → CancelledError, SIGINT → KeyboardInterrupt)
+            task.status = TaskStatus.FAILED
+            task.error = f"Service interrupted during processing: {type(e).__name__}"
+            self.log.warning("Task %s interrupted: %s", task.task_id, type(e).__name__)
+            # Attempt rollback if mid-execution
+            if task.branch_name:
+                try:
                     self.git.rollback(task.branch_name)
                     task.status = TaskStatus.ROLLED_BACK
+                except Exception:
+                    pass
+            raise  # re-raise so asyncio/systemd sees the signal
+        finally:
+            # Always write audit entry and ensure we're on main
+            self._audit(task)
+            try:
+                self.git.return_to_main()
+            except Exception:
+                pass
 
-                break
-        else:
-            task.status = TaskStatus.COMPLETED
-            task.completed_at = datetime.now(timezone.utc).isoformat()
-
-        self._audit(task)
         return task
 
     # ── Gate 1: SCOPE ─────────────────────────────────────────────
@@ -1216,8 +1245,17 @@ class TaskQueue:
 
     def _save(self, data: Dict):
         self.queue_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.queue_path, "w") as f:
-            yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+        # Atomic write: write to temp file then rename to avoid partial-write corruption
+        import tempfile
+        dir_ = str(self.queue_path.parent)
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dir_, delete=False, suffix=".tmp", encoding="utf-8"
+        ) as tmp:
+            yaml.dump(data, tmp, default_flow_style=False, allow_unicode=True)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_name = tmp.name
+        os.rename(tmp_name, self.queue_path)
 
     def pop_next(self) -> Optional[TaskState]:
         """Return and mark-in-progress the next QUEUED task."""
