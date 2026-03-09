@@ -256,7 +256,7 @@ class GitManager:
     def is_clean(self) -> bool:
         result = self._run("status", "--porcelain")
         lines = []
-        for l in result.stdout.strip().split("\n"):
+        for l in result.stdout.splitlines():  # splitlines() preserves per-line leading chars
             if not l:
                 continue
             if l.startswith("??"):
