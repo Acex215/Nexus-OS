@@ -1,0 +1,25 @@
+# NEXUS Agent v2 — Task Queue
+#
+# Add tasks here. The agent processes them in order.
+# Only tasks with status: queued are picked up.
+#
+# Task IDs should be descriptive: component-action-NNN
+# After completion, the agent updates status to: completed/halted/failed/rolled_back
+#
+# STATUS VALUES:
+#   queued      — waiting to be processed
+#   completed   — all 8 gates passed
+#   halted      — stopped at a gate (see audit log for details)
+#   failed      — exception during processing
+#   rolled_back — changes were reverted
+#   blocked     — human-blocked, agent skips this
+
+tasks: []
+
+# Example task (uncomment to test):
+# - id: "test-verify-001"
+#   description: "Add a health check endpoint to the dashboard API that returns component status from compiled database"
+#   status: queued
+#   priority: 3
+#   added_by: human
+#   added_at: "2026-03-09T00:00:00Z"
