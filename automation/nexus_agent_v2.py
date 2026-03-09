@@ -849,15 +849,23 @@ Respond with ONLY valid JSON — no other text:
     "new_code": "the new code to insert or use as replacement"
 }}
 
+IMPORTANT — ALLOWED ACTIONS (the ONLY 5 values accepted for "action"):
+  replace        — find search string, substitute with new_code (most common)
+  insert_before  — insert new_code immediately BEFORE the search string
+  insert_after   — insert new_code immediately AFTER the search string
+  prepend        — add new_code at the very START of the file (no search needed)
+  append         — add new_code at the very END of the file (no search needed)
+
+DO NOT use any other action name. "wrap", "modify", "add", "update", "delete",
+"insert", "edit", or any other string will cause an error and roll back the task.
+
 RULES:
-- "replace": replaces search string with new_code
-- "insert_before": inserts new_code immediately before search string
-- "insert_after": inserts new_code immediately after search string
-- "prepend": adds new_code at the very start of the file
-- "append": adds new_code at the very end of the file
-- search must be an EXACT substring of the file (for replace/insert_before/insert_after)
-- For a docstring at file top: use "insert_after" with search = the shebang/first import line,
-  OR use "replace" on the existing short docstring if one exists"""
+- search must be an EXACT verbatim substring copied from the file context above
+- search should be long enough to be unique in the file (3+ lines preferred)
+- For a docstring at file top: use "replace" on the existing docstring, or
+  "insert_after" with search = the shebang/first import line
+- You may return a list of patch objects if multiple non-overlapping edits are needed:
+  [{{"action": "replace", "search": "...", "new_code": "..."}}, ...]"""
 
             response, tier = await self.llm.complete(
                 [
