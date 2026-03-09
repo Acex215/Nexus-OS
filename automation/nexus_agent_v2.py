@@ -34,19 +34,22 @@ LLM_TIERS = [
         "name": "tier1-thinkpad",
         "url": "http://10.0.30.2:1234/v1/chat/completions",
         "model": "qwen3.5-35b",
-        "timeout": 120,
+        "timeout": 180,       # bumped: large planning prompts can take >2min
+        "max_tokens": 8192,
     },
     {
         "name": "tier2-nexus-ai2",
         "url": "http://10.0.20.6:11434/v1/chat/completions",
         "model": "qwen2.5-coder:7b",
-        "timeout": 60,
+        "timeout": 120,
+        "max_tokens": 4096,
     },
     {
         "name": "tier3-nexus-ai",
         "url": "http://10.0.20.4:8090/v1/chat/completions",
         "model": "local/SmolLM2-1.7B",
         "timeout": 30,
+        "max_tokens": 1024,   # SmolLM2 context window limit
     },
 ]
 
@@ -146,13 +149,15 @@ class LLMRouter:
 
         for tier in self.available_tiers:
             try:
+                # Honour per-tier context window limits
+                effective_max_tokens = min(max_tokens, tier.get("max_tokens", max_tokens))
                 async with httpx.AsyncClient(timeout=tier["timeout"]) as client:
                     resp = await client.post(
                         tier["url"],
                         json={
                             "model": tier["model"],
                             "messages": messages,
-                            "max_tokens": max_tokens,
+                            "max_tokens": effective_max_tokens,
                             "temperature": temperature,
                         },
                     )
