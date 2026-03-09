@@ -530,15 +530,18 @@ Available components: {json.dumps(components_list)}
 
 Respond with ONLY valid JSON:
 {{
-    "affected_components": ["component-id-1", "component-id-2"],
+    "affected_components": ["component-id-1"],
     "affected_files": ["/opt/nexus/path/to/file.py"],
     "reasoning": "Why these components are affected"
 }}
 
-Rules:
-- Only list components that will actually be READ or MODIFIED
-- List specific file paths that will be changed
-- If you're not sure which files, list the component and I'll resolve files from the database"""
+CRITICAL RULES — read carefully:
+- affected_components: ONLY the component(s) that OWN files being WRITTEN/MODIFIED.
+  Do NOT include components that are merely imported or read.
+- affected_files: ONLY the specific files that will have their content CHANGED on disk.
+  Do NOT list files that are only read for context or imported.
+- If the task names a specific file (e.g. "modify /opt/nexus/agents/foo.py"), that is the ONLY file.
+- Keep scope minimal. Fewer components = better. A typical task touches 1 component, 1-3 files."""
 
         response, tier = await self.llm.complete(
             [
