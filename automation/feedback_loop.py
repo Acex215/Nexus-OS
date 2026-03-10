@@ -54,10 +54,6 @@ Respond ONLY with valid JSON:
 """
 
 
-def _strip_json(raw: str) -> str:
-    cleaned = re.sub(r'```(?:json)?\s*', '', raw).strip().rstrip('`').strip()
-    m = re.search(r'\{.*\}', cleaned, re.DOTALL)
-    return m.group() if m else ""
 
 
 def _fallback_analysis(execution_result: dict) -> dict:
