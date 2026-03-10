@@ -35,7 +35,7 @@ ROUTING_TABLE: dict[str, dict] = {
 }
 
 TIER_ENDPOINTS: dict[int, dict] = {
-    1: {"url": "http://10.0.30.2:1234/v1/chat/completions",  "model": "qwen2.5-coder-14b-instruct"},
+    1: {"url": "http://10.0.30.2:1234/v1/chat/completions",  "model": "qwen/qwen3.5-35b-a3b"},
     2: {"url": "http://10.0.20.6:11434/v1/chat/completions", "model": "qwen2.5-coder:7b"},
     3: {"url": "http://10.0.20.3:11434/v1/chat/completions", "model": "qwen2.5:1.5b"},
 }
