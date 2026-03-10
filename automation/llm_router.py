@@ -13,6 +13,7 @@ Public API:
 """
 import json
 import logging
+import re
 import time
 
 import requests
@@ -111,7 +112,31 @@ def _call_tier(tier: int, system_prompt: str, user_prompt: str,
     try:
         r = requests.post(endpoint["url"], json=payload, timeout=timeout)
         r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        raw = r.json()["choices"][0]["message"]["content"]
+        # Strip Qwen3.5 thinking tokens if present
+        if raw and "Thinking Process:" in raw:
+            # The actual answer comes after the thinking block
+            # Try to find JSON directly (for G4/G5 patch responses)
+            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+            if json_match:
+                raw = json_match.group()
+            else:
+                # For non-JSON responses, take everything after the last double newline
+                # that doesn't start with "Thinking" or numbered steps
+                lines = raw.split('\n')
+                non_thinking = []
+                thinking_done = False
+                for line in lines:
+                    if thinking_done:
+                        non_thinking.append(line)
+                    elif line.strip() == '' and non_thinking == []:
+                        continue
+                    elif not line.startswith('Thinking') and not line.startswith('1.') and not line.startswith('   '):
+                        thinking_done = True
+                        non_thinking.append(line)
+                if non_thinking:
+                    raw = '\n'.join(non_thinking)
+        return raw
     except requests.exceptions.Timeout:
         log.warning("Tier %d timed out after %ds", tier, timeout)
         return _TIMEOUT_SENTINEL
