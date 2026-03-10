@@ -27,6 +27,7 @@ COMPILED_DB = NEXUS_ROOT / "docs" / "compiled-db"
 TASK_QUEUE = NEXUS_ROOT / "automation" / "task_queue.yaml"
 AUDIT_LOG = NEXUS_ROOT / "automation" / "logs" / "agent_v2_audit.jsonl"
 WORK_BRANCH_PREFIX = "agent/v2/"
+MAX_PATCHES_PER_TASK = 10  # P4: halt if LLM returns more patches than this
 
 # LLM endpoint configuration — tiered (strongest first)
 LLM_TIERS = [
@@ -485,6 +486,7 @@ class AgentPipeline:
             ("G3:PROBE", self._gate_probe),
             ("G4:PLAN", self._gate_plan),
             ("G5:EXECUTE", self._gate_execute),
+            ("G5.5:VALIDATE", self._gate_validate),
             ("G6:VERIFY", self._gate_verify),
             ("G7:UPDATE_DB", self._gate_update_db),
             ("G8:COMMIT", self._gate_commit),
@@ -809,10 +811,19 @@ RULES:
         self.log.info("Created branch: %s", task.branch_name)
 
         changes_made = []
+        applied_patches = []  # G5.5: tracks {file, action, search, new_code} for post-validate
 
         # Apply modifications — patch-based approach (fast, low token count)
         for change in task.plan.get("changes", []):
             file_path = change["file"]
+
+            # P2: Scope enforcement — skip files not mentioned in task description
+            if file_path not in task.description:
+                self.log.warning(
+                    "Skipping patch for %s — not mentioned in task description", file_path
+                )
+                continue
+
             if not os.path.exists(file_path):
                 return False, f"File to modify doesn't exist: {file_path}"
 
@@ -836,6 +847,8 @@ RULES:
 
 FILE: {file_path}
 CHANGE: {change['description']}
+
+SCOPE CONSTRAINT: You may ONLY modify the file listed above ({file_path}). Do NOT update code_index.yaml, documentation, or any other file unless the task specifically asks you to.
 
 FILE CONTEXT (may be truncated):
 ```
@@ -895,6 +908,13 @@ RULES:
             else:
                 return False, f"Unexpected patch format: {type(parsed).__name__}"
 
+            # P4: Halt if LLM returned too many patches
+            if len(patches) > MAX_PATCHES_PER_TASK:
+                return False, (
+                    f"LLM generated {len(patches)} patches — exceeds limit of "
+                    f"{MAX_PATCHES_PER_TASK}. Task may be over-scoped."
+                )
+
             # Backup original before applying any patches
             backup_path = file_path + f".agent_v2_backup.{task.task_id}"
             shutil.copy2(file_path, backup_path)
@@ -905,17 +925,25 @@ RULES:
                 search = patch.get("search", "")
                 new_code = patch.get("new_code", "")
 
+                # P3: Verify search string exists and is unambiguous before applying
+                if action in ("replace", "insert_before", "insert_after") and search:
+                    count = updated.count(search)
+                    if count == 0:
+                        return False, (
+                            f"Patch search string not found in {file_path}: {search[:80]!r} "
+                            f"— file starts with: {updated[:200]!r}"
+                        )
+                    if count > 1:
+                        return False, (
+                            f"Ambiguous search string — found {count} occurrences of "
+                            f"{search[:80]!r} in {file_path}"
+                        )
+
                 if action == "replace":
-                    if search not in updated:
-                        return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
                     updated = updated.replace(search, new_code, 1)
                 elif action == "insert_before":
-                    if search not in updated:
-                        return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
                     updated = updated.replace(search, new_code + search, 1)
                 elif action == "insert_after":
-                    if search not in updated:
-                        return False, f"Patch search string not found in {file_path}: {search[:80]!r}"
                     updated = updated.replace(search, search + new_code, 1)
                 elif action == "prepend":
                     updated = new_code + updated
@@ -924,6 +952,13 @@ RULES:
                 else:
                     return False, f"Unknown patch action: {action!r}"
 
+                # G5.5: record applied patch for post-execution validation
+                applied_patches.append({
+                    "file": file_path,
+                    "action": action,
+                    "search": search,
+                    "new_code": new_code,
+                })
                 self.log.info("Patched (%s): %s", action, file_path)
 
             if updated == current_content:
@@ -983,8 +1018,52 @@ Output ONLY the complete file content. No markdown fences. Raw code only."""
             task.affected_files.append(file_path)
             self.log.info("Created: %s", file_path)
 
-        task.gate_results["execute_data"] = {"files_changed": changes_made}
+        task.gate_results["execute_data"] = {
+            "files_changed": changes_made,
+            "patches_applied": applied_patches,  # G5.5 uses this for validation
+        }
         return True, f"Executed: {len(changes_made)} files written"
+
+    # ── Gate 5.5: VALIDATE (backwards-patch detection) ────────────
+
+    async def _gate_validate(self, task: TaskState) -> Tuple[bool, str]:
+        """G5.5: Verify applied patches are not backwards (search→new_code, not new_code→search)."""
+        patches = task.gate_results.get("execute_data", {}).get("patches_applied", [])
+        if not patches:
+            return True, "No patches to validate"
+
+        for p in patches:
+            if p.get("action") != "replace":
+                continue
+            file_path = p["file"]
+            search = p.get("search", "")
+            new_code = p.get("new_code", "")
+            if not search or not new_code:
+                continue
+
+            try:
+                with open(file_path) as f:
+                    content = f.read()
+            except OSError as e:
+                return False, f"Patch validation: cannot read {file_path}: {e}"
+
+            new_present = new_code in content
+            old_present = search in content
+
+            if not new_present or old_present:
+                # Rollback the file using backup
+                backup_path = file_path + f".agent_v2_backup.{task.task_id}"
+                if os.path.exists(backup_path):
+                    shutil.copy2(backup_path, file_path)
+                    self.log.warning("Rolled back %s from backup after validation failure", file_path)
+                msg = (
+                    f"Patch validation failed: expected {new_code[:60]!r} in {file_path} "
+                    f"but found {search[:60]!r} instead"
+                )
+                self.log.error(msg)
+                return False, msg
+
+        return True, f"Patch validation passed ({len(patches)} patches verified)"
 
     # ── Gate 6: VERIFY ────────────────────────────────────────────
 
