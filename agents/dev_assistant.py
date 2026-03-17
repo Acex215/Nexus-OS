@@ -50,8 +50,8 @@ log = logging.getLogger("dev_assistant")
 
 NEXUS_ROOT        = Path("/opt/nexus")
 MAX_STEPS_PER_TASK       = 10
-MAX_CLARIFICATION_ROUNDS = 2    # after this many rounds, force clear=True and proceed
-MAX_FILE_SIZE            = 6000  # chars sent to LLM; longer files are truncated
+MAX_CLARIFICATION_ROUNDS = 2     # after this many rounds, force clear=True and proceed
+MAX_FILE_SIZE            = 12000  # chars sent to LLM; longer files are truncated
 
 PROTECTED_PATHS: List[str] = [
     ".env",
@@ -98,11 +98,12 @@ class DevAssistant(discord.Client):
         super().__init__(**kwargs)
         self.router      = LLMRouter()
         self.bc          = get_blockchain_logger()
-        self.guild_id    = int(os.getenv("GUILD_ID", "0"))
-        self.channel_name = "agent-chat"
+        self.guild_id         = int(os.getenv("GUILD_ID", "0"))
+        self.channel_name     = "agent-chat"
         self.channel: Optional[discord.TextChannel] = None
-        self.owner_id    = int(os.getenv("OWNER_DISCORD_ID", "0"))
+        self.owner_id         = int(os.getenv("OWNER_DISCORD_ID", "0"))
         self.active_task: Optional[TaskContext] = None
+        self.cancel_requested: bool = False   # set True mid-execution to request abort
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -161,11 +162,20 @@ class DevAssistant(discord.Client):
         content_lower = message.content.strip().lower()
         task = self.active_task
 
-        # ── 1. Executing: bot is applying patches, cannot be interrupted ──────
+        # ── 1. Executing: bot is applying patches ─────────────────────────────
         if task and task.status == "executing":
-            await self.channel.send(
-                f"🔧 Executing — please wait ({len(task.patches)}/{MAX_STEPS_PER_TASK} steps done)."
-            )
+            words = set(re.split(r"[\s,!.]+", content_lower)) - {""}
+            if words & _REJECT_WORDS:
+                self.cancel_requested = True
+                await self.channel.send(
+                    "🔧 ⚠️ Cancellation requested — will stop after the current step "
+                    "and roll back all changes."
+                )
+            else:
+                await self.channel.send(
+                    f"🔧 Executing ({len(task.patches)}/{len(task.plan or [])} steps done). "
+                    "Type **cancel** to abort and roll back."
+                )
             return
 
         # ── 2. Awaiting clarification: user answering the bot's questions ─────
@@ -234,6 +244,7 @@ class DevAssistant(discord.Client):
     # ── Task Flow ─────────────────────────────────────────────────────────────
 
     async def _start_task(self, description: str) -> None:
+        self.cancel_requested = False
         task_id = str(int(time.time()))
         self.active_task = TaskContext(
             task_id=task_id,
@@ -435,6 +446,13 @@ class DevAssistant(discord.Client):
             return
 
         for i, step in enumerate(task.plan):
+            # Honour a cancellation requested via chat during execution
+            if self.cancel_requested:
+                await self.channel.send("🔧 ⚠️ Cancellation confirmed — rolling back.")
+                self.cancel_requested = False
+                await self._rollback()
+                return
+
             fpath     = step["file"]
             action    = step.get("action", "modify").lower()
             step_desc = step["description"]
@@ -579,6 +597,7 @@ class DevAssistant(discord.Client):
             await self._run_git("stash", "pop")
         task.status = "failed"
         self.active_task = None
+        self.cancel_requested = False
         await self.channel.send(
             f"🔧 ❌ Rolled back. Branch `{task.branch_name or '(none)'}` abandoned. "
             "Working tree restored to `main`."
@@ -605,12 +624,11 @@ class DevAssistant(discord.Client):
             for i, s in enumerate(task.plan)
         )[:1024]
         embed.add_field(name="Steps Detail", value=steps_text or "—", inline=False)
-        embed.set_footer(text="✅ Approve  •  ❌ Reject  •  or type approve/reject")
+        embed.set_footer(
+            text="React ✅ to approve or ❌ to reject — or type: approve / reject / cancel"
+        )
 
-        msg = await self.channel.send(embed=embed)
-        await msg.add_reaction("✅")
-        await msg.add_reaction("❌")
-        return msg
+        return await self.channel.send(embed=embed)
 
     async def _post_embed(
         self,
