@@ -13,7 +13,6 @@ from agent_registry import get_agent, AGENT_REGISTRY
 async def ceo():
     w = NexusAgentWorkflow("ceo")
     yield w
-    await w.llm_client.close()
 
 
 # ── 1. CEO urgent delegation ────────────────────────────────────────
@@ -62,7 +61,6 @@ async def test_director_workflow():
     result = await w.process_message(
         "CPU usage is high on nexus-ai. Should we redistribute pods?"
     )
-    await w.llm_client.close()
 
     assert result["analysis"] is not None, "Directors must have analysis"
     assert len(result["analysis"]) > 10, "Analysis too short"
@@ -82,7 +80,6 @@ async def test_worker_workflow():
     result = await w.process_message(
         "Schedule this pod on the node with lowest CPU usage"
     )
-    await w.llm_client.close()
 
     assert result["analysis"] is None, "Workers must NOT have analysis"
     assert result["decision"]["decision"], "Missing decision"
@@ -168,7 +165,6 @@ async def test_context_extraction():
 @pytest.mark.asyncio
 async def test_all_agents_instantiate():
     """Every agent in the registry should build a valid workflow graph."""
-    from llm_client import reset_client
     errors = []
     for agent_id in AGENT_REGISTRY:
         try:
@@ -184,7 +180,6 @@ async def test_all_agents_instantiate():
 
     assert not errors, f"Failures:\n" + "\n".join(errors)
     print(f"\n  All {len(AGENT_REGISTRY)} agents instantiated successfully")
-    reset_client()
 
 
 # ── CLI runner ───────────────────────────────────────────────────────
@@ -225,7 +220,6 @@ if __name__ == "__main__":
         await test_all_agents_instantiate()
         print("   PASSED")
 
-        await w.llm_client.close()
         print("\nAll 8 integration tests passed")
 
     asyncio.run(main())

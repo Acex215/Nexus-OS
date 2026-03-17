@@ -23,7 +23,6 @@ async def test_full_chain():
     ceo_r = await ceo.process_message(
         "URGENT: nexus-storage at 95% capacity, critical cleanup needed immediately"
     )
-    await ceo.llm_client.close()
 
     print(f"     Decision : {ceo_r['decision'].get('decision', '?')[:80]}")
     print(f"     Delegates: {ceo_r['delegates_to']}")
@@ -42,7 +41,6 @@ async def test_full_chain():
     sd_r = await sd.process_message(
         "CEO delegated: Critical storage cleanup on nexus-storage at 95% capacity"
     )
-    await sd.llm_client.close()
 
     print(f"     Decision : {sd_r['decision'].get('decision', '?')[:80]}")
     print(f"     Analysis : {(sd_r.get('analysis') or 'N/A')[:80]}...")
@@ -60,7 +58,6 @@ async def test_full_chain():
     sw_r = await sw.process_message(
         "Director task: Initiate automated backup cleanup on nexus-storage"
     )
-    await sw.llm_client.close()
 
     print(f"     Decision : {sw_r['decision'].get('decision', '?')[:80]}")
     print(f"     ECT      : {sw_r['ect_cost']}")

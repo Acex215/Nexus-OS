@@ -16,7 +16,7 @@ from langgraph.graph import END, StateGraph
 from typing_extensions import TypedDict
 
 from agent_registry import get_agent
-from llm_client import get_llm_client
+from llm_router_v2 import LLMRouter
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class NexusAgentWorkflow:
     def __init__(self, agent_id: str):
         self.agent_id = agent_id
         self.agent_config = get_agent(agent_id)
-        self.llm_client = get_llm_client()
+        self.router = LLMRouter()
         self.log = logging.getLogger(f"workflow.{agent_id}")
 
         if self.agent_config["role"] in self.LEADERSHIP_ROLES:
@@ -130,13 +130,16 @@ class NexusAgentWorkflow:
         )
 
         try:
-            response = await self.llm_client.chat_completion(
-                self.agent_config["role"],
+            result = await self.router.generate(
+                self.agent_id,
                 [{"role": "user", "content": prompt}],
+                task_type="planning",
                 max_tokens=200,
                 temperature=0.7,
             )
-            return {"analysis": response.strip()}
+            if result.get("error") or not result.get("content"):
+                raise RuntimeError(result.get("error", "Empty response"))
+            return {"analysis": result["content"].strip()}
         except Exception as exc:
             self.log.error("Analysis failed: %s", exc)
             return {"analysis": "Analysis unavailable - proceeding with context only."}
@@ -170,14 +173,16 @@ class NexusAgentWorkflow:
         ]
 
         try:
-            response = await self.llm_client.chat_completion(
-                self.agent_config["role"],
+            result = await self.router.generate(
+                self.agent_id,
                 messages,
                 max_tokens=512,
                 temperature=0.7,
             )
+            if result.get("error") or not result.get("content"):
+                raise RuntimeError(result.get("error", "Empty response"))
 
-            decision = self._parse_json_response(response)
+            decision = self._parse_json_response(result["content"])
             self._validate_decision(decision)
             return {"decision": decision}
 

@@ -102,7 +102,6 @@ async def test_full_pipeline(bc):
 
     w = NexusAgentWorkflow("ceo")
     result = await w.process_message("Network latency is high on nexus-ai")
-    await w.llm_client.close()
 
     reasoning_hash = result["reasoning_hash"]
     assert len(reasoning_hash) == 64

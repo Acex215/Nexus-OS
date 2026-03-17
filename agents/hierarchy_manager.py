@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 from agent_registry import AGENT_REGISTRY, get_agent, get_token_env_key
 from agent_workflow import NexusAgentWorkflow
 from blockchain_logger import get_blockchain_logger
-from llm_client import get_llm_client
 
 # ── Logging ───────────────────────────────────────────────────────────
 
@@ -433,13 +432,6 @@ class HierarchyManager:
             *(bot.stop() for bot in self.bots.values()),
             return_exceptions=True,
         )
-
-        # Close shared LLM client
-        try:
-            client = get_llm_client()
-            await client.close()
-        except Exception:
-            pass
 
         logger.info("All agents stopped")
         self._shutdown.set()
