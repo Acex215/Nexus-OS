@@ -49,8 +49,9 @@ log = logging.getLogger("dev_assistant")
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 NEXUS_ROOT        = Path("/opt/nexus")
-MAX_STEPS_PER_TASK = 10
-MAX_FILE_SIZE     = 6000   # chars sent to LLM; longer files are truncated
+MAX_STEPS_PER_TASK       = 10
+MAX_CLARIFICATION_ROUNDS = 2    # after this many rounds, force clear=True and proceed
+MAX_FILE_SIZE            = 6000  # chars sent to LLM; longer files are truncated
 
 PROTECTED_PATHS: List[str] = [
     ".env",
@@ -77,7 +78,7 @@ _REJECT_WORDS  = {"reject", "no", "cancel", "abort", "stop", "discard", "nope"}
 class TaskContext:
     task_id: str
     description: str
-    status: str                          # analyzing / planning / awaiting_approval / executing / done / failed
+    status: str                          # analyzing / awaiting_clarification / planning / awaiting_approval / executing / done / failed
     analysis: Optional[dict]             = None
     plan: Optional[List[dict]]           = None
     branch_name: Optional[str]           = None
@@ -85,6 +86,7 @@ class TaskContext:
     files_read: Dict[str, str]           = field(default_factory=dict)   # path → content cache
     plan_msg_id: Optional[int]           = None   # Discord message ID for ✅/❌ reactions
     stashed: bool                        = False
+    clarification_rounds: int            = 0      # number of times we've asked for clarification
 
 
 # ─── Bot ──────────────────────────────────────────────────────────────────────
@@ -157,9 +159,25 @@ class DevAssistant(discord.Client):
             return
 
         content_lower = message.content.strip().lower()
+        task = self.active_task
 
-        # ── Handle approval/rejection via text while awaiting approval ────────
-        if self.active_task and self.active_task.status == "awaiting_approval":
+        # ── 1. Executing: bot is applying patches, cannot be interrupted ──────
+        if task and task.status == "executing":
+            await self.channel.send(
+                f"🔧 Executing — please wait ({len(task.patches)}/{MAX_STEPS_PER_TASK} steps done)."
+            )
+            return
+
+        # ── 2. Awaiting clarification: user answering the bot's questions ─────
+        if task and task.status == "awaiting_clarification":
+            task.description += f"\n\nClarification: {message.content}"
+            task.status = "analyzing"
+            await self.channel.send("🔧 Got it — re-analyzing with your answers…")
+            asyncio.create_task(self._continue_after_clarification())
+            return
+
+        # ── 3. Awaiting approval: approve / reject / revise ───────────────────
+        if task and task.status == "awaiting_approval":
             words = set(re.split(r"[\s,!.]+", content_lower)) - {""}
 
             if words & _APPROVE_WORDS:
@@ -168,24 +186,24 @@ class DevAssistant(discord.Client):
 
             if words & _REJECT_WORDS:
                 await self.channel.send("🔧 ❌ Task rejected. No files were modified.")
-                self.active_task.status = "failed"
+                task.status = "failed"
                 self.active_task = None
                 return
 
-            # Treat as clarification — re-plan with additional context
-            self.active_task.description += f"\n\nClarification: {message.content}"
+            # Treat as a modification request — append revision and re-plan
+            task.description += f"\n\nRevision: {message.content}"
             await self.channel.send("🔧 Got it — updating plan…")
             asyncio.create_task(self._plan())
             return
 
-        # ── Start a new task ──────────────────────────────────────────────────
-        if self.active_task and self.active_task.status not in ("done", "failed"):
+        # ── 4. Still busy (analyzing / planning) ─────────────────────────────
+        if task and task.status not in ("done", "failed"):
             await self.channel.send(
-                f"🔧 Still working on a task (status: `{self.active_task.status}`). "
-                "Type **cancel** to abort it first."
+                f"🔧 Still working (status: `{task.status}`). Please wait."
             )
             return
 
+        # ── 5. No live task (or previous done/failed): start fresh ────────────
         if not message.content.strip():
             return
 
@@ -234,6 +252,15 @@ class DevAssistant(discord.Client):
             # _analyze completed without needing clarification — move to planning
             await self._plan()
 
+    async def _continue_after_clarification(self) -> None:
+        """Re-run analysis on the updated description, then plan if clear."""
+        task = self.active_task
+        if task is None:
+            return
+        await self._analyze(task.description)
+        if self.active_task and self.active_task.status == "analyzing":
+            await self._plan()
+
     async def _analyze(self, description: str) -> None:
         """Ask Coordinator to assess clarity, files, and risk. Reads files into cache."""
         task = self.active_task
@@ -253,6 +280,9 @@ class DevAssistant(discord.Client):
             "You are a senior software architect for NEXUS OS, a blockchain-native "
             "operating system on a Pi cluster. Analyze this development task. Identify "
             "which files need to change and the risk level. "
+            "Default to clear=true unless the task is genuinely ambiguous about WHAT to do. "
+            "Questions about code quality, edge cases, or implementation details should NOT "
+            "block progress — those are handled during planning. "
             "Respond with ONLY JSON (no explanation):\n"
             '{"clear": bool, "files": ["path"], "risk": "low|medium|high", '
             '"questions": ["..."], "summary": "..."}'
@@ -292,20 +322,32 @@ class DevAssistant(discord.Client):
                 if content:
                     task.files_read[fpath] = content
 
+        task.clarification_rounds += 1
+
         if not analysis.get("clear", True):
-            questions = analysis.get("questions", [])
-            q_text = "\n".join(f"• {q}" for q in questions) or "(needs more detail)"
-            await self._post_embed(
-                "🔧 Needs Clarification",
-                f"{q_text}\n\nPlease reply with answers — I'll re-analyze.",
-                discord.Color.orange(),
-            )
-            # Status stays "analyzing" so on_message treats the next message as clarification
-            # (but on_message only checks "awaiting_approval" for the approval flow,
-            # so a new message will restart _start_task with the updated description)
-            task.status = "failed"
-            self.active_task = None
-            return
+            if task.clarification_rounds <= MAX_CLARIFICATION_ROUNDS:
+                questions = analysis.get("questions", [])
+                q_text = "\n".join(f"• {q}" for q in questions) or "(needs more detail)"
+                await self._post_embed(
+                    "🔧 Needs Clarification",
+                    f"{q_text}\n\nPlease reply with answers — I'll re-analyze.",
+                    discord.Color.orange(),
+                )
+                # Keep task alive so on_message can append the answer and re-analyze
+                task.status = "awaiting_clarification"
+                return
+            else:
+                # Forced past max clarification rounds — proceed with what we have
+                log.info(
+                    "Forcing clear=True after %d clarification rounds for task %s",
+                    task.clarification_rounds, task.task_id,
+                )
+                analysis["clear"] = True
+                analysis.setdefault("summary", task.description[:120])
+                await self.channel.send(
+                    "🔧 ℹ️ Proceeding after max clarification rounds. "
+                    "Plan will be based on context gathered so far."
+                )
 
     async def _plan(self) -> None:
         """Ask Coordinator to produce a step-by-step plan given analysis + file contents."""
