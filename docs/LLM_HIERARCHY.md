@@ -21,7 +21,7 @@ work. Workers fall back up the hierarchy when their primary tier is unavailable.
 │  Model: Qwen2.5-    │           │  Model: Qwen2.5-7B-         │
 │  Coder-14B          │           │  Instruct-1M                │
 │  Host: ThinkPad     │           │  Host: ThinkStation         │
-│  10.0.30.2:1234     │           │  10.0.30.3:1235             │
+│  10.0.30.2:1234     │           │  10.0.30.3:1234 (shared)    │
 │  HW: RTX 3060 12GB  │           │  HW: RTX 4090 (shared)      │
 └─────────────────────┘           └─────────────────────────────┘
                             │
@@ -44,7 +44,7 @@ work. Workers fall back up the hierarchy when their primary tier is unavailable.
 |---------|-------------|----------------------------------|-----------------------------|
 | Tier 1  | Coordinator | http://10.0.30.3:1234/v1        | qwen/qwen3.5-35b-a3b        |
 | Tier 2A | Coder       | http://10.0.30.2:1234/v1        | qwen/qwen2.5-coder-14b      |
-| Tier 2B | Director    | http://10.0.30.3:1235/v1        | qwen2.5-7b-instruct-1m      |
+| Tier 2B | Director    | http://10.0.30.3:1234/v1        | qwen2.5-7b-instruct-1m      |
 | Tier 3  | Worker      | http://10.0.20.6:11434/v1       | llama3.2:1b                 |
 
 All endpoints expose an OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`).
@@ -86,25 +86,24 @@ Output only code and concise technical explanations. No filler text.
 Follow the existing code style of the project.
 ```
 
-### Tier 2B — Director (ThinkStation, port 1235)
+### Tier 2B — Director (ThinkStation, port 1234 — shared with Coordinator)
 
-The ThinkStation runs **two models simultaneously** in LM Studio:
-- Port 1234: Coordinator (Qwen3.5-35B-A3B)
-- Port 1235: Director (Qwen2.5-7B-Instruct-1M)
+LM Studio 0.4.6+ serves **multiple loaded models on a single port**, routing
+by the `"model"` field in the request body. Both Coordinator and Director run
+on the same LM Studio instance at `10.0.30.3:1234`.
 
 Steps:
 1. In LM Studio on the ThinkStation, ensure the Coordinator is already loaded.
 2. Load a **second model**: `qwen2.5-7b-instruct-1m`
-3. Settings:
-   - **JIT**: **OFF** (required for dual-model operation)
-   - **Port**: **1235** (set before starting server for this model)
-4. Start the second server instance on port **1235**.
-5. Both models should appear under "Loaded Models" in LM Studio.
-6. Verify: `curl http://10.0.30.3:1235/v1/models`
+3. Settings for both models:
+   - **JIT**: **OFF** (required for multi-model operation)
+4. Both models are served on the same port **1234**.
+5. Verify both appear: `curl http://10.0.30.3:1234/v1/models`
 
-> **Note**: LM Studio supports running multiple model servers simultaneously
-> when JIT is disabled. Each model gets its own port. GPU VRAM must accommodate
-> both models (RTX 4090 24GB should handle 35B-A3B MoE + 7B easily).
+> **Model routing**: LM Studio selects the model based on the `"model"` field
+> in the request body. Coordinator requests send `"model": "qwen/qwen3.5-35b-a3b"`;
+> Director requests send `"model": "qwen2.5-7b-instruct-1m"`. No separate port
+> needed. GPU VRAM must accommodate both (RTX 4090 24GB handles 35B-A3B MoE + 7B).
 
 ### Tier 3 — Worker (nexus-ai2, port 8080)
 
@@ -157,7 +156,7 @@ ssh mhuraibi@10.0.20.6 'ollama pull llama3.2:1b'
 ```
 Worker request
   → Try Tier 3 (Worker, 10.0.20.6:11434)
-  → If DOWN: fall back to Tier 2B (Director, 10.0.30.3:1235)
+  → If DOWN: fall back to Tier 2B (Director, 10.0.30.3:1234)
   → If DOWN: fall back to Tier 2A (Coder, 10.0.30.2:1234)  [code tasks only]
   → If all DOWN: return error to agent
 
@@ -199,4 +198,4 @@ Options:
 
 ---
 
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-17 — Director moved to shared port 1234 (LM Studio 0.4.6 model-routing)*

@@ -6,8 +6,8 @@ agent tier and task type.
 
 Tier 1: Coordinator (ThinkStation:1234) — Qwen3.5-35B-A3B
 Tier 2A: Coder (ThinkPad:1234) — qwen2.5-coder-14b-instruct
-Tier 2B: Director (ThinkStation:1235) — Qwen2.5-7B-Instruct
-Tier 3: Worker (AI HAT+ or fallback to ThinkStation:1235)
+Tier 2B: Director (ThinkStation:1234) — Qwen2.5-7B-Instruct (shared port, model-routed)
+Tier 3: Worker (AI HAT+ or fallback to ThinkStation:1234)
 
 Usage:
     from llm_router_v2 import LLMRouter
@@ -61,13 +61,13 @@ class TierConfig:
 # ── Endpoint addresses ──
 # Update these if IPs or ports change
 THINKSTATION_PRIMARY = "http://10.0.30.3:1234"    # Qwen3.5-35B-A3B
-THINKSTATION_SECONDARY = "http://10.0.30.3:1235"  # Qwen2.5-7B-Instruct
+THINKSTATION_SECONDARY = "http://10.0.30.3:1234"  # Qwen2.5-7B-Instruct (same LM Studio, model-routed)
 THINKPAD = "http://10.0.30.2:1234"                # qwen2.5-coder-14b
 AI_HAT = "http://10.0.20.6:11434"                 # nexus-ai2 Hailo-10H (Ollama)
 
 # WireGuard alternatives (if VLAN routing not configured)
 WG_THINKSTATION_PRIMARY = "http://10.1.0.5:1234"
-WG_THINKSTATION_SECONDARY = "http://10.1.0.5:1235"
+WG_THINKSTATION_SECONDARY = "http://10.1.0.5:1234"
 WG_THINKPAD = "http://10.1.0.5:1234"  # ThinkPad doesn't have WG yet, update if added
 
 

@@ -22,7 +22,7 @@ INFER_TIMEOUT=30  # seconds for inference test
 declare -a ENDPOINTS=(
   "Coordinator|Tier 1|http://10.0.30.3:1234|qwen/qwen3.5-35b-a3b"
   "Coder|Tier 2A|http://10.0.30.2:1234|qwen/qwen2.5-coder-14b"
-  "Director|Tier 2B|http://10.0.30.3:1235|qwen2.5-7b-instruct-1m"
+  "Director|Tier 2B|http://10.0.30.3:1234|qwen2.5-7b-instruct-1m"
   "Worker|Tier 3|http://10.0.20.6:11434|llama3.2:1b"
 )
 
@@ -161,7 +161,7 @@ if [[ $DOWN_COUNT -gt 0 ]]; then
           echo -e "  • ${BOLD}Coder${RESET}: Start LM Studio on ThinkPad (10.0.30.2), load qwen2.5-coder-14b, enable server on port 1234. JIT=OFF."
           ;;
         Director)
-          echo -e "  • ${BOLD}Director${RESET}: In LM Studio on ThinkStation, load qwen2.5-7b-instruct-1m as a second model and set server port to 1235. JIT=OFF."
+          echo -e "  • ${BOLD}Director${RESET}: In LM Studio on ThinkStation (10.0.30.3), load qwen2.5-7b-instruct-1m alongside the coordinator. Both share port 1234; LM Studio routes by model name. JIT=OFF required."
           ;;
         Worker)
           echo -e "  • ${BOLD}Worker${RESET}: On nexus-ai2 (10.0.20.6) check: systemctl status ollama && ollama list. NFS must be mounted (/mnt/nexus-nas). See /opt/nexus/docs/LLM_HIERARCHY.md for details."
