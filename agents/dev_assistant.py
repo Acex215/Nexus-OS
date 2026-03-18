@@ -542,8 +542,28 @@ class DevAssistant(discord.Client):
                 await self._rollback()
                 return
 
+            # Guard: reject patches that delete too many lines
+            search_lines = search_str.count("\n")
+            replace_lines = replace_str.count("\n")
+            net_deleted = search_lines - replace_lines
+            if net_deleted > 10:
+                await self.channel.send(
+                    f"🔧 ⚠️ Patch rejected: would delete {net_deleted} net lines (max 10). Rolling back."
+                )
+                log.warning("Destructive patch rejected: %d net lines deleted", net_deleted)
+                await self._rollback()
+                return
             new_content = current.replace(search_str, replace_str, 1)
 
+            # Guard: reject if file shrinks by more than 20%
+            if len(new_content) < len(current) * 0.8:
+                shrink_pct = round((1 - len(new_content) / len(current)) * 100)
+                await self.channel.send(
+                    f"🔧 ⚠️ Patch rejected: file would shrink by {shrink_pct}% — likely truncation. Rolling back."
+                )
+                log.warning("File shrinkage rejected: %d%% for %s", shrink_pct, fpath)
+                await self._rollback()
+                return
             try:
                 abs_path.parent.mkdir(parents=True, exist_ok=True)
                 abs_path.write_text(new_content)
