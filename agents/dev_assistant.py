@@ -51,7 +51,7 @@ log = logging.getLogger("dev_assistant")
 NEXUS_ROOT        = Path("/opt/nexus")
 MAX_STEPS_PER_TASK       = 10
 MAX_CLARIFICATION_ROUNDS = 2     # after this many rounds, force clear=True and proceed
-MAX_FILE_SIZE            = 24000  # chars sent to LLM; longer files are truncated
+MAX_FILE_SIZE            = 12000  # chars sent to LLM; longer files are truncated
 
 PROTECTED_PATHS: List[str] = [
     ".env",
