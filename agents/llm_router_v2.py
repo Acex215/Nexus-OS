@@ -1,3 +1,4 @@
+# NEXUS OS 4-Tier LLM Router — routes requests to coordinator/coder/director/worker
 #!/usr/bin/env python3
 """
 NEXUS OS 3-Tier LLM Router
