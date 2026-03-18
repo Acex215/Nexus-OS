@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Phase 2 health check placeholder
 """NEXUS OS Blockchain Logger — log agent decisions to ReasoningLedger.
 
 Every agent decision produces a SHA256 reasoning hash. This module logs a
