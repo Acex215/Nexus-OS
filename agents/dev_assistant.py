@@ -66,6 +66,7 @@ PROTECTED_PATHS: List[str] = [
     ".pem",
     "id_rsa",
     "id_ed25519",
+    "dev_assistant.py",
 ]
 
 _APPROVE_WORDS = {"approve", "yes", "go", "ok", "proceed", "lgtm", "ship it"}
@@ -462,46 +463,86 @@ class DevAssistant(discord.Client):
                 f"`{action.upper()}` `{fpath}`\n> {step_desc}"
             )
 
-            # Current content (for context to coder)
+            # Read current content
             current = task.files_read.get(fpath) or self._read_file(fpath) or ""
 
-            # Ask CODER to produce the complete new file content
+            # Resolve + protect path early (before coder call)
+            abs_path = self._resolve_path(fpath)
+            if abs_path is None:
+                await self.channel.send(f"🔧 ⚠️ Path `{fpath}` is outside /opt/nexus/ or protected. Aborting.")
+                await self._rollback()
+                return
+
+            # Extract a focused section (~50 lines) to keep coder context small
+            section = self._extract_section(current, step_desc)
+
             system = (
-                "Generate the COMPLETE updated file content for this change. "
-                "Output ONLY the file content — no markdown fences, no explanation. "
-                "Do NOT add any features or changes beyond what is described."
+                "You are a code editor. Given a file section and a change description,\n"
+                "output ONLY a SEARCH/REPLACE block:\n\n"
+                "<<<SEARCH\n"
+                "exact lines to find\n"
+                ">>>\n"
+                "<<<REPLACE\n"
+                "replacement lines\n"
+                ">>>\n\n"
+                "The SEARCH block must match the file EXACTLY (whitespace-sensitive).\n"
+                "Keep replacement minimal. Output NOTHING else."
             )
             user = (
                 f"File: {fpath}\n"
                 f"Change: {step_desc}\n\n"
-                f"Current content:\n{current}"
+                f"Relevant section:\n{section}"
             )
 
             async with self.channel.typing():
-                result = await self.router.generate(
-                    "ceo",   # agent_id; task_type selects coder tier
-                    [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                    task_type="code_gen",
-                    max_tokens=4096,
-                    temperature=0.1,
-                )
+                try:
+                    result = await asyncio.wait_for(
+                        self.router.generate(
+                            "ceo",
+                            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                            task_type="code_gen",
+                            max_tokens=2048,
+                            temperature=0.1,
+                        ),
+                        timeout=180,
+                    )
+                except asyncio.TimeoutError:
+                    await self.channel.send(f"🔧 ⚠️ Coder timed out on step {i + 1}. Rolling back.")
+                    await self._rollback()
+                    return
 
             if result.get("error") or not result.get("content"):
                 await self.channel.send(f"🔧 ⚠️ Coder failed for step {i + 1}: {result.get('error')}. Rolling back.")
                 await self._rollback()
                 return
 
-            new_content = result["content"]
-            # Strip accidental markdown fences the coder might still emit
-            new_content = re.sub(r"^```[a-zA-Z]*\n?", "", new_content)
-            new_content = re.sub(r"\n?```$", "", new_content)
-
-            # Write file
-            abs_path = self._resolve_path(fpath)
-            if abs_path is None:
-                await self.channel.send(f"🔧 ⚠️ Path `{fpath}` is outside /opt/nexus/ or protected. Aborting.")
+            # Parse SEARCH/REPLACE block
+            patch = self._parse_search_replace(result["content"])
+            if patch is None:
+                await self.channel.send(
+                    f"🔧 ⚠️ Coder returned invalid SEARCH/REPLACE for step {i + 1}. Rolling back."
+                )
                 await self._rollback()
                 return
+
+            search_str, replace_str = patch
+
+            if search_str not in current:
+                await self.channel.send(
+                    f"🔧 ⚠️ SEARCH string not found in `{fpath}` for step {i + 1}. Rolling back."
+                )
+                log.warning("SEARCH block not found:\n%.200s", search_str)
+                await self._rollback()
+                return
+
+            if current.count(search_str) > 1:
+                await self.channel.send(
+                    f"🔧 ⚠️ SEARCH string not unique in `{fpath}` for step {i + 1}. Rolling back."
+                )
+                await self._rollback()
+                return
+
+            new_content = current.replace(search_str, replace_str, 1)
 
             try:
                 abs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -735,6 +776,38 @@ class DevAssistant(discord.Client):
             except json.JSONDecodeError:
                 pass
         return None
+
+    @staticmethod
+    def _extract_section(content: str, description: str, context_lines: int = 50) -> str:
+        """Extract the most relevant section of a file for the coder."""
+        lines = content.split("\n")
+        if len(lines) <= context_lines * 2:
+            return content
+        desc_words = set(re.findall(r"\w+", description.lower()))
+        best_idx = 0
+        best_score = -1
+        for i, line in enumerate(lines):
+            line_words = set(re.findall(r"\w+", line.lower()))
+            score = len(desc_words & line_words)
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        start = max(0, best_idx - context_lines)
+        end = min(len(lines), best_idx + context_lines)
+        return "\n".join(lines[start:end])
+
+    @staticmethod
+    def _parse_search_replace(text: str) -> Optional[Tuple[str, str]]:
+        """Parse <<<SEARCH ... >>> <<<REPLACE ... >>> blocks from coder output."""
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip())
+        text = re.sub(r"\n?```$", "", text)
+        m = re.search(
+            r"<<<SEARCH\s*\n(.*?)\n>>>\s*\n<<<REPLACE\s*\n(.*?)\n>>>",
+            text, re.DOTALL,
+        )
+        if not m:
+            return None
+        return m.group(1), m.group(2)
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
