@@ -71,7 +71,7 @@ def handle_queue_command(
         return True, "⏸️ Autonomous loop not active."
 
     # ── resume ────────────────────────────────────────────────────────────────
-    if lower in ("resume", "continue", "go", "unpause"):
+    if lower in ("resume", "continue", "unpause"):
         if auto_loop:
             auto_loop.resume()
             return True, "▶️ Autonomous execution resumed."

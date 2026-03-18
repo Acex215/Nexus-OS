@@ -562,7 +562,6 @@ class DevAssistant(discord.Client):
             # Parse SEARCH/REPLACE block
             patch = self._parse_search_replace(result["content"])
             if patch is None:
-                log.warning("Raw coder response:\n%s", result["content"][:2000])
                 await self.channel.send(
                     f"🔧 ⚠️ Coder returned invalid SEARCH/REPLACE for step {i + 1}. Rolling back."
                 )
