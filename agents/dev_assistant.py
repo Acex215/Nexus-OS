@@ -330,7 +330,16 @@ class DevAssistant(discord.Client):
             "block progress — those are handled during planning. "
             "Respond with ONLY JSON (no explanation):\n"
             '{"clear": bool, "files": ["path"], "risk": "low|medium|high", '
-            '"questions": ["..."], "summary": "..."}'
+            '"questions": ["..."], "summary": "..."}\n\n'
+            "CODEBASE LAYOUT:\n"
+            "- All agent code lives in /opt/nexus/agents/ (Python)\n"
+            "- Key files: dev_assistant.py, llm_router_v2.py, agent_registry.py, blockchain_logger.py, task_queue.py\n"
+            "- Blockchain contracts: /opt/nexus/contracts/\n"
+            "- Old automation (DO NOT MODIFY): /opt/nexus/automation/\n"
+            "- Config files: /opt/nexus/agents/.env\n"
+            "- ALWAYS use full absolute paths starting with /opt/nexus/\n"
+            "- NEVER invent paths like src/ or lib/ — only reference files that exist in the codebase\n"
+            "- dev_assistant.py is in PROTECTED_PATHS — modifications require explicit file path /opt/nexus/agents/dev_assistant.py"
         )
         user = f"Task: {description}"
         if file_context:
