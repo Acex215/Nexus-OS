@@ -33,6 +33,10 @@ from discord import RawReactionActionEvent
 sys.path.insert(0, "/opt/nexus/agents")
 from llm_router_v2 import LLMRouter
 from blockchain_logger import get_blockchain_logger
+from task_queue import TaskQueue
+from queue_commands import handle_queue_command
+from autonomous_loop import AutonomousLoop
+from task_decomposer import decompose_task
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +93,10 @@ class TaskContext:
     stashed: bool                        = False
     clarification_rounds: int            = 0      # number of times we've asked for clarification
 
+
+# Phase 2: Task queue and autonomous loop
+task_queue = TaskQueue("/opt/nexus/agents/task_queue.yaml")
+auto_loop = None  # Created when user says "go" / "start autonomous"
 
 # ─── Bot ──────────────────────────────────────────────────────────────────────
 
@@ -158,6 +166,31 @@ class DevAssistant(discord.Client):
         if message.channel.name != self.channel_name:
             return
         if self.owner_id and message.author.id != self.owner_id:
+            return
+
+        # --- Phase 2: Queue commands ---
+        global auto_loop
+        handled, response = handle_queue_command(message.content, task_queue, auto_loop)
+        if handled:
+            if response:
+                await message.channel.send(response)
+            return
+
+        # --- Phase 2: Start/stop autonomous mode ---
+        _lower = message.content.strip().lower()
+        if _lower in ("go", "start", "start autonomous", "autonomous"):
+            channel = message.channel
+            if auto_loop and auto_loop.is_running:
+                await channel.send("Already running. Say `pause` to stop.")
+            else:
+                auto_loop = AutonomousLoop(
+                    queue=task_queue,
+                    channel=channel,
+                    execute_fn=execute_task_from_queue,
+                    decompose_fn=decompose_task_wrapper,
+                )
+                await auto_loop.start()
+                await channel.send("🤖 Autonomous mode started.")
             return
 
         content_lower = message.content.strip().lower()
@@ -876,6 +909,99 @@ class DevAssistant(discord.Client):
         if not m:
             return None
         return m.group(1), m.group(2)
+
+
+# ─── Phase 2: Adapter Functions ───────────────────────────────────────────────
+
+async def execute_task_from_queue(task: dict) -> dict:
+    """Adapter: run a queue task through the existing Phase 1 execution pipeline.
+
+    Takes a task dict from TaskQueue (keys: id, description, priority, risk, affected_files).
+    Returns a result dict for the AutonomousLoop.
+    """
+    task_id = task["id"]
+    description = task["description"]
+
+    result = {
+        "success": False,
+        "commit_hash": None,
+        "blockchain_tx": None,
+        "branch": f"task/{task_id}",
+        "error": None,
+        "diffs": [],
+        "lines_added": 0,
+        "lines_removed": 0,
+        "files_changed": 0,
+    }
+
+    try:
+        ctx = TaskContext(
+            task_id=task_id,
+            description=description,
+            status="analyzing",
+        )
+        # Pre-set clarification_rounds to MAX so _analyze never blocks waiting for user input
+        ctx.clarification_rounds = MAX_CLARIFICATION_ROUNDS
+        bot.active_task = ctx
+        bot.cancel_requested = False
+
+        # Analysis — wraps bot._analyze (coordinator LLM: clarity check + file identification)
+        await bot._analyze(description)
+        if bot.active_task is None or ctx.status == "failed":
+            result["error"] = "Analysis failed"
+            return result
+
+        # Planning — wraps bot._plan (coordinator LLM: step-by-step plan)
+        await bot._plan()
+        if bot.active_task is None or ctx.status == "failed":
+            result["error"] = "Planning failed"
+            return result
+
+        # Execution — wraps bot._execute (coder LLM + SEARCH/REPLACE + git branch/commit + blockchain log)
+        # _execute sets status="executing" internally; active_task must be set (checked above)
+        await bot._execute()
+
+        # Collect results (commit_hash and tx_hash are local to _execute, not stored on ctx)
+        if ctx.status == "done":
+            result["success"] = True
+            result["branch"] = ctx.branch_name or result["branch"]
+            result["diffs"] = list(ctx.patches)
+            result["files_changed"] = len({s["file"] for s in (ctx.plan or [])})
+            for diff in ctx.patches:
+                for line in diff.split("\n"):
+                    if line.startswith("+") and not line.startswith("+++"):
+                        result["lines_added"] += 1
+                    elif line.startswith("-") and not line.startswith("---"):
+                        result["lines_removed"] += 1
+            # Retrieve commit hash via git (consistent with _run_git usage in _execute)
+            proc = await asyncio.create_subprocess_exec(
+                "git", "log", "-1", "--format=%H",
+                cwd=str(NEXUS_ROOT),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            commit_h = stdout.decode().strip()
+            if commit_h:
+                result["commit_hash"] = commit_h[:12]
+        else:
+            result["error"] = f"Execution failed (status: {ctx.status})"
+
+    except Exception as e:
+        result["error"] = str(e)[:500]
+
+    return result
+
+
+async def decompose_task_wrapper(task: dict):
+    """Adapter: call decompose_task with the bot's existing LLM router."""
+    async def llm_call(agent_id, messages, task_type, **kwargs):
+        # bot.router.generate is already async — no run_in_executor needed
+        return await bot.router.generate(
+            agent_id, messages, task_type=task_type, **kwargs
+        )
+
+    return await decompose_task(task, llm_call)
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
