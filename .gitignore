@@ -1,5 +1,6 @@
 # Runtime state — modified by agent during operation, not source-controlled
 automation/task_queue.yaml
+agents/task_queue.yaml
 
 # Python bytecode
 **/__pycache__/
