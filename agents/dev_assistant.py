@@ -463,8 +463,11 @@ class DevAssistant(discord.Client):
                 f"`{action.upper()}` `{fpath}`\n> {step_desc}"
             )
 
-            # Read current content
-            current = task.files_read.get(fpath) or self._read_file(fpath) or ""
+            # Read current content — two versions:
+            # current_for_llm: truncated (safe to send to LLM)
+            # current_full: complete file (used for patch application and disk writes)
+            current_for_llm = task.files_read.get(fpath) or self._read_file(fpath) or ""
+            current_full = self._read_file_full(fpath) or ""
 
             # Resolve + protect path early (before coder call)
             abs_path = self._resolve_path(fpath)
@@ -474,7 +477,7 @@ class DevAssistant(discord.Client):
                 return
 
             # Extract a focused section (~50 lines) to keep coder context small
-            section = self._extract_section(current, step_desc)
+            section = self._extract_section(current_for_llm, step_desc)
 
             system = (
                 "You are a code editor. Given a file section and a change description,\n"
@@ -527,7 +530,7 @@ class DevAssistant(discord.Client):
 
             search_str, replace_str = patch
 
-            if search_str not in current:
+            if search_str not in current_full:
                 await self.channel.send(
                     f"🔧 ⚠️ SEARCH string not found in `{fpath}` for step {i + 1}. Rolling back."
                 )
@@ -535,7 +538,7 @@ class DevAssistant(discord.Client):
                 await self._rollback()
                 return
 
-            if current.count(search_str) > 1:
+            if current_full.count(search_str) > 1:
                 await self.channel.send(
                     f"🔧 ⚠️ SEARCH string not unique in `{fpath}` for step {i + 1}. Rolling back."
                 )
@@ -553,11 +556,11 @@ class DevAssistant(discord.Client):
                 log.warning("Destructive patch rejected: %d net lines deleted", net_deleted)
                 await self._rollback()
                 return
-            new_content = current.replace(search_str, replace_str, 1)
+            new_content = current_full.replace(search_str, replace_str, 1)
 
             # Guard: reject if file shrinks by more than 20%
-            if len(new_content) < len(current) * 0.8:
-                shrink_pct = round((1 - len(new_content) / len(current)) * 100)
+            if len(new_content) < len(current_full) * 0.8:
+                shrink_pct = round((1 - len(new_content) / len(current_full)) * 100)
                 await self.channel.send(
                     f"🔧 ⚠️ Patch rejected: file would shrink by {shrink_pct}% — likely truncation. Rolling back."
                 )
@@ -745,6 +748,19 @@ class DevAssistant(discord.Client):
             content = content[:MAX_FILE_SIZE] + "\n[TRUNCATED]"
         return content
 
+    def _read_file_full(self, path_str: str) -> Optional[str]:
+        """Read complete file content without truncation. For patch application only."""
+        path = self._resolve_path(path_str)
+        if path is None:
+            return None
+        if not path.is_file():
+            return None
+        try:
+            return path.read_text(errors="replace")
+        except OSError as exc:
+            log.warning("Cannot read %s: %s", path, exc)
+            return None
+
     def _resolve_path(self, path_str: str) -> Optional[Path]:
         """
         Resolve path to an absolute Path under NEXUS_ROOT.
@@ -799,11 +815,45 @@ class DevAssistant(discord.Client):
 
     @staticmethod
     def _extract_section(content: str, description: str, context_lines: int = 50) -> str:
-        """Extract the most relevant section of a file for the coder."""
+        """Extract the most relevant section of a file for the coder.
+
+        Strategy:
+        1. If file is short enough, return it all.
+        2. If description mentions 'top', 'beginning', 'header', 'import' → first N lines.
+        3. If description mentions 'bottom', 'end', 'append' → last N lines.
+        4. If description mentions a function/class name, find it and return ± context.
+        5. Fallback: keyword-match scoring (original behavior).
+        """
         lines = content.split("\n")
         if len(lines) <= context_lines * 2:
             return content
-        desc_words = set(re.findall(r"\w+", description.lower()))
+
+        desc_lower = description.lower()
+
+        # Heuristic 1: top of file
+        top_keywords = {"top", "beginning", "header", "import", "first line", "start of file", "add a comment at the top"}
+        if any(kw in desc_lower for kw in top_keywords):
+            return "\n".join(lines[:context_lines])
+
+        # Heuristic 2: bottom of file
+        bottom_keywords = {"bottom", "end of file", "append", "last line", "add to end"}
+        if any(kw in desc_lower for kw in bottom_keywords):
+            return "\n".join(lines[-context_lines:])
+
+        # Heuristic 3: find function or class by name
+        # Extract potential identifiers from description (camelCase, snake_case, etc.)
+        identifiers = re.findall(r'\b[a-zA-Z_]\w{2,}\b', description)
+        for ident in identifiers:
+            for i, line in enumerate(lines):
+                if re.match(rf'^(async\s+)?def\s+{re.escape(ident)}\s*\(', line) or \
+                   re.match(rf'^class\s+{re.escape(ident)}[\s:(]', line):
+                    # Found the function/class definition — return it with context
+                    start = max(0, i - 10)  # 10 lines before for imports/decorators
+                    end = min(len(lines), i + context_lines)
+                    return "\n".join(lines[start:end])
+
+        # Fallback: keyword scoring (original behavior)
+        desc_words = set(re.findall(r"\w+", desc_lower))
         best_idx = 0
         best_score = -1
         for i, line in enumerate(lines):
