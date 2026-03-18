@@ -562,6 +562,7 @@ class DevAssistant(discord.Client):
             # Parse SEARCH/REPLACE block
             patch = self._parse_search_replace(result["content"])
             if patch is None:
+                log.warning("Raw coder response:\n%s", result["content"][:2000])
                 await self.channel.send(
                     f"🔧 ⚠️ Coder returned invalid SEARCH/REPLACE for step {i + 1}. Rolling back."
                 )
@@ -911,13 +912,20 @@ class DevAssistant(discord.Client):
         """Parse <<<SEARCH ... >>> <<<REPLACE ... >>> blocks from coder output."""
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text.strip())
         text = re.sub(r"\n?```$", "", text)
+        # Primary: well-formed output with closing >>>
         m = re.search(
             r"<<<SEARCH\s*\n(.*?)\n>>>\s*\n<<<REPLACE\s*\n(.*?)\n>>>",
             text, re.DOTALL,
         )
         if not m:
+            # Fallback: coder omitted the closing >>> after REPLACE block
+            m = re.search(
+                r"<<<SEARCH\s*\n(.*?)\n>>>\s*\n<<<REPLACE\s*\n(.*?)$",
+                text, re.DOTALL,
+            )
+        if not m:
             return None
-        return m.group(1), m.group(2)
+        return m.group(1).rstrip(), m.group(2).rstrip()
 
 
 # ─── Phase 2: Adapter Functions ───────────────────────────────────────────────
