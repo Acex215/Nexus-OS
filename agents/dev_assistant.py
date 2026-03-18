@@ -463,10 +463,7 @@ class DevAssistant(discord.Client):
                 f"`{action.upper()}` `{fpath}`\n> {step_desc}"
             )
 
-            # Read current content — two versions:
-            # current_for_llm: truncated (safe to send to LLM)
-            # current_full: complete file (used for patch application and disk writes)
-            current_for_llm = task.files_read.get(fpath) or self._read_file(fpath) or ""
+            # Read full file content — used for both section extraction and patch application
             current_full = self._read_file_full(fpath) or ""
 
             # Resolve + protect path early (before coder call)
@@ -477,7 +474,8 @@ class DevAssistant(discord.Client):
                 return
 
             # Extract a focused section (~50 lines) to keep coder context small
-            section = self._extract_section(current_for_llm, step_desc)
+            # Search the full file so functions past the 12K truncation point are found
+            section = self._extract_section(current_full, step_desc)
 
             system = (
                 "You are a code editor. Given a file section and a change description,\n"
