@@ -1,9 +1,8 @@
-"""
-safety_gates.py — Risk-based execution gates for the NEXUS OS autonomous dev assistant.
+"""Phase 3 — Risk-based approval gates, scope enforcement, and retry policy.
 
 Classes:
     SafetyGate     — approve/reject tasks by risk level with human override support
-    ScopeEnforcer  — verify file edits fall within a task's declared scope
+    ScopeEnforcer  — verify file edits fall within a declared scope
     RetryPolicy    — retry failed executions with context-aware prompting
 """
 
@@ -38,7 +37,7 @@ _MEDIUM_KEYWORDS = {
 # ---------------------------------------------------------------------------
 
 class SafetyGate:
-    """Approve or reject tasks based on risk level, with optional human override."""
+    """Phase 3 — Risk-based approval gates, scope enforcement, and retry policy."""
 
     def classify_risk(self, task: dict) -> str:
         """Return the task's risk level.
