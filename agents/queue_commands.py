@@ -20,6 +20,9 @@ import logging
 import re
 from typing import Optional
 
+from change_analyzer import format_changes_report
+from failure_analyzer import format_failure_report
+
 log = logging.getLogger("queue_commands")
 
 
@@ -96,6 +99,16 @@ def handle_queue_command(
     # ── health ────────────────────────────────────────────────────────────────
     if lower in ("health", "health check", "healthcheck"):
         return True, "__HEALTH_CHECK__"
+
+    # ── changes / changelog ───────────────────────────────────────────────────
+    m = re.match(r"^(?:changes|changelog|what changed)(?:\s+(\d+))?$", lower)
+    if m:
+        hours = int(m.group(1)) if m.group(1) else 24
+        return True, format_changes_report(hours)
+
+    # ── failure analysis ──────────────────────────────────────────────────────
+    if lower in ("failures", "failure analysis", "analyze failures"):
+        return True, format_failure_report()
 
     # ── help ──────────────────────────────────────────────────────────────────
     if lower in ("help", "commands", "?"):
@@ -245,6 +258,8 @@ def _cmd_help() -> str:
         "`remove <task-id>` — remove a pending task\n"
         "`pause` / `resume` — control autonomous execution\n"
         "`health` — check LLM endpoints, blockchain, disk space\n"
+        "`failures` — analyze failure patterns from task log\n"
+        "`changes` / `changes 48` — what changed in the last N hours\n"
         "`help` — this message\n\n"
         "_Tasks are also analyzed as before if not a queue command._"
     )

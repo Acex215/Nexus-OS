@@ -19,13 +19,16 @@ Usage in dev_assistant.py:
 
 import asyncio
 import logging
+import time as _time
 import traceback
 from datetime import datetime, timezone
 from typing import Optional, Callable, Awaitable
 
 import discord
 
+from knowledge_indexer import index_task as index_task_to_chroma
 from safety_gates import SafetyGate, ScopeEnforcer, RetryPolicy
+from task_logger import log_task, read_recent_logs
 from test_validator import TestValidator
 
 log = logging.getLogger("autonomous_loop")
@@ -206,6 +209,7 @@ class AutonomousLoop:
                 # Phase: executing
                 self.queue.update_status(task_id, "executing", branch=f"task/{task_id}")
 
+                _task_start = _time.monotonic()
                 result = await self.retry_policy.execute_with_retry(self.execute_fn, task)
 
                 success = result.get("success", False)
@@ -244,6 +248,17 @@ class AutonomousLoop:
                     )
                     self._consecutive_failures = 0
                     log.info("Task %s completed successfully", task_id)
+                    try:
+                        _duration = _time.monotonic() - _task_start
+                        await log_task(task, result, duration_seconds=_duration)
+                    except Exception as _log_err:
+                        log.warning("Task logging failed: %s", _log_err)
+                    try:
+                        recent = read_recent_logs(1)
+                        if recent:
+                            await index_task_to_chroma(recent[0])
+                    except Exception as _idx_err:
+                        log.warning("ChromaDB indexing failed: %s", _idx_err)
                 else:
                     self.queue.update_status(
                         task_id, "failed",
@@ -252,6 +267,17 @@ class AutonomousLoop:
                     )
                     self._consecutive_failures += 1
                     log.warning("Task %s failed: %s", task_id, result.get("error", "?"))
+                    try:
+                        _duration = _time.monotonic() - _task_start
+                        await log_task(task, result, duration_seconds=_duration)
+                    except Exception as _log_err:
+                        log.warning("Task logging failed: %s", _log_err)
+                    try:
+                        recent = read_recent_logs(1)
+                        if recent:
+                            await index_task_to_chroma(recent[0])
+                    except Exception as _idx_err:
+                        log.warning("ChromaDB indexing failed: %s", _idx_err)
 
                 self._completed_since_summary += 1
 

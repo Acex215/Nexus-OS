@@ -37,6 +37,7 @@ from task_queue import TaskQueue
 from queue_commands import handle_queue_command
 from autonomous_loop import AutonomousLoop
 from task_decomposer import decompose_task
+from knowledge_planner import get_planning_context
 from safety_gates import ScopeEnforcer
 
 scope_enforcer = ScopeEnforcer()
@@ -367,6 +368,9 @@ class DevAssistant(discord.Client):
         user = f"Task: {description}"
         if file_context:
             user += f"\n\nCurrent files:\n{file_context}"
+        planning_ctx = get_planning_context(description)
+        if planning_ctx:
+            user += f"\n\n{planning_ctx}"
 
         async with self.channel.typing():
             result = await self.router.generate(
