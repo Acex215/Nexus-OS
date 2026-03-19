@@ -25,6 +25,9 @@ from typing import Optional, Callable, Awaitable
 
 import discord
 
+from safety_gates import SafetyGate, ScopeEnforcer, RetryPolicy
+from test_validator import TestValidator
+
 log = logging.getLogger("autonomous_loop")
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -54,14 +57,24 @@ class AutonomousLoop:
         channel: discord.TextChannel,
         execute_fn: Callable[[dict], Awaitable[dict]],
         decompose_fn: Optional[Callable[[dict], Awaitable[Optional[list[dict]]]]] = None,
+        bot: Optional[discord.Client] = None,
+        owner_id: int = 0,
     ):
         self.queue = queue
         self.channel = channel
         self.execute_fn = execute_fn
         self.decompose_fn = decompose_fn
+        self.bot = bot
+        self.owner_id = owner_id
+
+        self.safety_gate = SafetyGate()
+        self.scope_enforcer = ScopeEnforcer()
+        self.retry_policy = RetryPolicy()
+        self.test_validator = TestValidator()
 
         self._running = False
         self._paused = False
+        self._gate_active = False
         self._task: Optional[asyncio.Task] = None
         self._current_task_id: Optional[str] = None
         self._completed_since_summary = 0
@@ -107,6 +120,10 @@ class AutonomousLoop:
     @property
     def current_task_id(self) -> Optional[str]:
         return self._current_task_id
+
+    @property
+    def gate_active(self) -> bool:
+        return self._gate_active
 
     def focus(self, task_id: str) -> bool:
         """Set a specific task to be picked next."""
@@ -170,10 +187,47 @@ class AutonomousLoop:
                         await asyncio.sleep(TASK_COOLDOWN_SECONDS)
                         continue
 
+                # Phase 3: Risk-based approval gate
+                task["risk"] = self.safety_gate.classify_risk(task)
+                self._gate_active = True
+                try:
+                    approved, reason = await self.safety_gate.check(
+                        task, self.channel, self.owner_id, self.bot
+                    )
+                finally:
+                    self._gate_active = False
+
+                if not approved:
+                    log.info("Task %s rejected by safety gate: %s", task_id, reason)
+                    self.queue.update_status(task_id, "blocked_human", error=reason)
+                    await self.channel.send(f"🛑 `{task_id}` blocked: {reason}")
+                    continue
+
                 # Phase: executing
                 self.queue.update_status(task_id, "executing", branch=f"task/{task_id}")
 
-                result = await self.execute_fn(task)
+                result = await self.retry_policy.execute_with_retry(self.execute_fn, task)
+
+                success = result.get("success", False)
+
+                if result["success"]:
+                    modified_files = list(task.get("affected_files") or [])
+                    if not modified_files and result.get("diffs"):
+                        import re as _re
+                        for diff in result["diffs"]:
+                            m = _re.search(r"^--- a/(.+)$", diff, _re.MULTILINE)
+                            if m:
+                                modified_files.append("/opt/nexus/" + m.group(1))
+
+                    test_result = await self.test_validator.validate(modified_files)
+                    if not test_result["passed"]:
+                        log.warning("Task %s passed execution but failed tests: %s",
+                                    task_id, test_result["output"][:200])
+                        await self.channel.send(
+                            f"🔧 ⚠️ `{task_id}` tests failed:\n```\n{test_result['output'][:500]}\n```"
+                        )
+                        result["success"] = False
+                        result["error"] = f"Tests failed: {test_result['output'][:200]}"
 
                 success = result.get("success", False)
 

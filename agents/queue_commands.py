@@ -93,6 +93,10 @@ def handle_queue_command(
     if lower in ("summary", "report", "recap"):
         return True, _cmd_summary(queue)
 
+    # ── health ────────────────────────────────────────────────────────────────
+    if lower in ("health", "health check", "healthcheck"):
+        return True, "__HEALTH_CHECK__"
+
     # ── help ──────────────────────────────────────────────────────────────────
     if lower in ("help", "commands", "?"):
         return True, _cmd_help()
@@ -240,6 +244,7 @@ def _cmd_help() -> str:
         "`focus on <task-id>` — prioritize a task\n"
         "`remove <task-id>` — remove a pending task\n"
         "`pause` / `resume` — control autonomous execution\n"
+        "`health` — check LLM endpoints, blockchain, disk space\n"
         "`help` — this message\n\n"
         "_Tasks are also analyzed as before if not a queue command._"
     )

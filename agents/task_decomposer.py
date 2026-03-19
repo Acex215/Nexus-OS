@@ -26,9 +26,11 @@ Rules:
 2. Each sub-task must be completable with a single SEARCH/REPLACE patch session (max 10 patches).
 3. Sub-tasks execute in dependency order — declare depends_on when ordering matters.
 4. Every sub-task must declare affected_files upfront.
-5. If the task is simple enough to do in one pass (≤3 steps, ≤3 files), return null.
-6. Priority inherits from the parent unless there's a reason to differ.
-7. Risk: "low" for adding code/tests, "medium" for refactoring, "high" for anything touching configs/contracts/deployment.
+5. affected_files MUST be real absolute paths that exist in the codebase (e.g., /opt/nexus/agents/queue_commands.py). NEVER use placeholder paths like '/path/to/file'. If you don't know the exact path, omit affected_files entirely — an empty list is better than a wrong path.
+6. Every sub-task MUST produce a code change (modify, create, or delete a file). Do NOT create sub-tasks for 'analyzing', 'reviewing', 'understanding', or 'reading' code. The execution pipeline only supports SEARCH/REPLACE patches and file creation — it cannot perform read-only analysis. If analysis is needed, incorporate it into the first sub-task that actually modifies code.
+7. If the task is simple enough to do in one pass (≤3 steps, ≤3 files), return null.
+8. Priority inherits from the parent unless there's a reason to differ.
+9. Risk: "low" for adding code/tests, "medium" for refactoring, "high" for anything touching configs/contracts/deployment.
 
 Respond ONLY with valid JSON. No markdown fences, no explanation.
 

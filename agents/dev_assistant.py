@@ -37,6 +37,9 @@ from task_queue import TaskQueue
 from queue_commands import handle_queue_command
 from autonomous_loop import AutonomousLoop
 from task_decomposer import decompose_task
+from safety_gates import ScopeEnforcer
+
+scope_enforcer = ScopeEnforcer()
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -159,6 +162,7 @@ class DevAssistant(discord.Client):
     # ── Message handler ───────────────────────────────────────────────────────
 
     async def on_message(self, message: discord.Message) -> None:
+        global auto_loop
         if message.author == self.user or message.author.bot:
             return
         if not isinstance(message.channel, discord.TextChannel):
@@ -168,10 +172,25 @@ class DevAssistant(discord.Client):
         if self.owner_id and message.author.id != self.owner_id:
             return
 
+        # Phase 3: suppress normal routing while safety gate is listening
+        if auto_loop and auto_loop.gate_active:
+            lower_check = message.content.strip().lower()
+            if lower_check in ("approve", "yes", "reject", "no", "cancel", "abort"):
+                return
+
         # --- Phase 2: Queue commands ---
-        global auto_loop
         handled, response = handle_queue_command(message.content, task_queue, auto_loop)
         if handled:
+            if response == "__HEALTH_CHECK__":
+                from health_monitor import HealthMonitor
+                monitor = HealthMonitor(
+                    llm_endpoints={
+                        "coordinator": "http://10.0.30.3:1234/v1/models",
+                        "coder": "http://10.0.30.2:1234/v1/models",
+                    },
+                )
+                hresult = await monitor.check_all()
+                response = monitor.format_report(hresult)
             if response:
                 await message.channel.send(response)
             return
@@ -188,6 +207,8 @@ class DevAssistant(discord.Client):
                     channel=channel,
                     execute_fn=execute_task_from_queue,
                     decompose_fn=decompose_task_wrapper,
+                    bot=bot,
+                    owner_id=bot.owner_id,
                 )
                 await auto_loop.start()
                 await channel.send("🤖 Autonomous mode started.")
@@ -333,7 +354,9 @@ class DevAssistant(discord.Client):
             '"questions": ["..."], "summary": "..."}\n\n'
             "CODEBASE LAYOUT:\n"
             "- All agent code lives in /opt/nexus/agents/ (Python)\n"
-            "- Key files: dev_assistant.py, llm_router_v2.py, agent_registry.py, blockchain_logger.py, task_queue.py\n"
+            "- Key files: dev_assistant.py, llm_router_v2.py, agent_registry.py, blockchain_logger.py\n"
+            "- Phase 2 files: task_queue.py, queue_commands.py, task_decomposer.py, autonomous_loop.py\n"
+            "- Phase 3 files: safety_gates.py, safety_config.py, health_monitor.py, test_validator.py\n"
             "- Blockchain contracts: /opt/nexus/contracts/\n"
             "- Old automation (DO NOT MODIFY): /opt/nexus/automation/\n"
             "- Config files: /opt/nexus/agents/.env\n"
@@ -483,6 +506,9 @@ class DevAssistant(discord.Client):
         slug = re.sub(r"[^a-z0-9]+", "-", task.description.lower())[:30].strip("-") or "task"
         task.branch_name = f"dev-assistant/{task.task_id}-{slug}"
         rc, _, stderr = await self._run_git("checkout", "-b", task.branch_name)
+        if rc != 0 and "already exists" in stderr:
+            await self._run_git("branch", "-D", task.branch_name)
+            rc, _, stderr = await self._run_git("checkout", "-b", task.branch_name)
         if rc != 0:
             await self.channel.send(f"🔧 ⚠️ Could not create branch: {stderr}")
             await self._rollback()
@@ -514,6 +540,13 @@ class DevAssistant(discord.Client):
                 await self.channel.send(f"🔧 ⚠️ Path `{fpath}` is outside /opt/nexus/ or protected. Aborting.")
                 await self._rollback()
                 return
+
+            # Phase 3: Scope enforcement
+            if hasattr(bot, '_current_queue_task') and bot._current_queue_task:
+                in_scope, scope_reason = scope_enforcer.check_scope(bot._current_queue_task, fpath)
+                if not in_scope:
+                    await self.channel.send(f"🔧 ⚠️ Scope violation: {scope_reason}. Skipping step.")
+                    continue
 
             # Extract a focused section (~50 lines) to keep coder context small
             # Search the full file so functions past the 12K truncation point are found
@@ -959,6 +992,7 @@ async def execute_task_from_queue(task: dict) -> dict:
         # Pre-set clarification_rounds to MAX so _analyze never blocks waiting for user input
         ctx.clarification_rounds = MAX_CLARIFICATION_ROUNDS
         bot.active_task = ctx
+        bot._current_queue_task = task
         bot.cancel_requested = False
 
         # Analysis — wraps bot._analyze (coordinator LLM: clarity check + file identification)
@@ -1005,6 +1039,9 @@ async def execute_task_from_queue(task: dict) -> dict:
 
     except Exception as e:
         result["error"] = str(e)[:500]
+
+    finally:
+        bot._current_queue_task = None
 
     return result
 
