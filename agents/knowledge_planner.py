@@ -1,8 +1,4 @@
-"""knowledge_planner.py — Formats past task outcomes as LLM planning context.
-
-Queries ChromaDB via knowledge_indexer and produces ready-to-inject text blocks
-for the coordinator LLM prompt (Phase 4).
-"""
+"Phase 4 — Injects past task context into coordinator planning prompts."
 
 import logging
 
