@@ -1,7 +1,4 @@
-"""knowledge_indexer.py — Indexes completed task logs into ChromaDB.
-
-Provides semantic retrieval of past tasks during planning (Phase 4).
-"""
+'Phase 4 — ChromaDB indexer for completed task semantic retrieval.'
 
 import json
 import logging
