@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import discord
+from workspace_loader import WorkspaceLoader
 from discord import RawReactionActionEvent
 
 sys.path.insert(0, "/opt/nexus/agents")
@@ -111,6 +112,7 @@ class DevAssistant(discord.Client):
         super().__init__(**kwargs)
         self.router      = LLMRouter()
         self.bc          = get_blockchain_logger()
+        self.workspace   = WorkspaceLoader()
         self.guild_id         = int(os.getenv("GUILD_ID", "0"))
         self.channel_name     = "agent-chat"
         self.channel: Optional[discord.TextChannel] = None
@@ -352,27 +354,18 @@ class DevAssistant(discord.Client):
 
         file_context = self._format_file_context(task.files_read)
 
+        # Load workspace context for analysis
+        workspace_ctx = self.workspace.build_system_prompt(description)
         system = (
-            "You are a senior software architect for NEXUS OS, a blockchain-native "
-            "operating system on a Pi cluster. Analyze this development task. Identify "
+            f"{workspace_ctx}\n\n"
+            "Given the above context, analyze this development task. Identify "
             "which files need to change and the risk level. "
             "Default to clear=true unless the task is genuinely ambiguous about WHAT to do. "
             "Questions about code quality, edge cases, or implementation details should NOT "
             "block progress — those are handled during planning. "
             "Respond with ONLY JSON (no explanation):\n"
             '{"clear": bool, "files": ["path"], "risk": "low|medium|high", '
-            '"questions": ["..."], "summary": "..."}\n\n'
-            "CODEBASE LAYOUT:\n"
-            "- All agent code lives in /opt/nexus/agents/ (Python)\n"
-            "- Key files: dev_assistant.py, llm_router_v2.py, agent_registry.py, blockchain_logger.py\n"
-            "- Phase 2 files: task_queue.py, queue_commands.py, task_decomposer.py, autonomous_loop.py\n"
-            "- Phase 3 files: safety_gates.py, safety_config.py, health_monitor.py, test_validator.py\n"
-            "- Blockchain contracts: /opt/nexus/contracts/\n"
-            "- Old automation (DO NOT MODIFY): /opt/nexus/automation/\n"
-            "- Config files: /opt/nexus/agents/.env\n"
-            "- ALWAYS use full absolute paths starting with /opt/nexus/\n"
-            "- NEVER invent paths like src/ or lib/ — only reference files that exist in the codebase\n"
-            "- dev_assistant.py is in PROTECTED_PATHS — modifications require explicit file path /opt/nexus/agents/dev_assistant.py"
+            '"questions": ["..."], "summary": "..."}'
         )
         user = f"Task: {description}"
         if file_context:
@@ -448,8 +441,10 @@ class DevAssistant(discord.Client):
         task.status = "planning"
         file_context = self._format_file_context(task.files_read)
 
+        workspace_ctx = self.workspace.get_core_context()
         system = (
-            "You are planning code changes for NEXUS OS. For each change, specify the "
+            f"{workspace_ctx}\n\n"
+            "You are planning code changes. For each change, specify the "
             "file, action (create/modify), and what changes are needed. Keep changes "
             "minimal — do NOT add features not requested. "
             "Respond with ONLY JSON (no explanation):\n"
