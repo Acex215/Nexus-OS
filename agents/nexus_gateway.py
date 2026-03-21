@@ -196,6 +196,7 @@ class NexusGateway:
         """Start aiohttp server for health endpoint."""
         app = aiohttp.web.Application()
         app.router.add_get("/health", self._health_handler)
+        app.router.add_static("/chat", "/opt/nexus/webchat")
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
         site = aiohttp.web.TCPSite(runner, self.host, self.http_port)
