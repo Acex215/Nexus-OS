@@ -114,6 +114,30 @@ def handle_queue_command(
     if lower in ("help", "commands", "?"):
         return True, _cmd_help()
 
+    # ── metrics / dashboard ───────────────────────────────────────────────────
+    if lower in ("metrics", "dashboard", "perf", "performance"):
+        from metrics import format_metrics_report
+        return True, format_metrics_report()
+
+    # ── improve / self-improve ────────────────────────────────────────────────
+    if lower in ("improve", "self-improve", "proposals", "suggest"):
+        from self_improver import generate_proposals, format_proposals
+        proposals = generate_proposals()
+        if not proposals:
+            return True, "✅ No improvement proposals — metrics look healthy."
+        return True, format_proposals(proposals)
+
+    # ── approve improve N ─────────────────────────────────────────────────────
+    m = re.match(r"^approve\s+(?:improve\s+)?(\d+)$", lower)
+    if m:
+        from self_improver import generate_proposals
+        idx = int(m.group(1)) - 1
+        proposals = generate_proposals()
+        if 0 <= idx < len(proposals):
+            p = proposals[idx]
+            return True, _cmd_add_task(queue, p["description"], priority=p["priority"])
+        return True, f"❌ Invalid proposal number. {len(proposals)} proposals available."
+
     # ── Not a queue command ───────────────────────────────────────────────────
     return False, None
 
@@ -260,6 +284,9 @@ def _cmd_help() -> str:
         "`health` — check LLM endpoints, blockchain, disk space\n"
         "`failures` — analyze failure patterns from task log\n"
         "`changes` / `changes 48` — what changed in the last N hours\n"
+        "`metrics` — performance dashboard\n"
+        "`improve` — self-improvement proposals\n"
+        "`approve improve N` — add proposal N to task queue\n"
         "`help` — this message\n\n"
         "_Tasks are also analyzed as before if not a queue command._"
     )

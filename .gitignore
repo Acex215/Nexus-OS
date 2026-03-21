@@ -27,3 +27,4 @@ ipfs/datastore/
 *.ldb
 *.agent_v2_backup.*
 pi-gen
+training_data/
