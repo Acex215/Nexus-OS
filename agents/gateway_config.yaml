@@ -1,0 +1,28 @@
+# NEXUS Gateway Daemon Configuration
+gateway:
+  host: "0.0.0.0"
+  ws_port: 8765
+  http_port: 8766
+  auth_token: "${GATEWAY_AUTH_TOKEN}"  # Set via environment variable
+
+sessions:
+  store_path: "/opt/nexus/agents/sessions/"
+  max_per_user: 5
+  ttl_hours: 24
+
+channels:
+  discord:
+    enabled: true
+    # Discord-specific config lives in .env (tokens, guild ID, etc.)
+  cli:
+    enabled: true
+  webchat:
+    enabled: false  # Phase 8
+  telegram:
+    enabled: false  # Phase 8
+  slack:
+    enabled: false  # Phase 8
+
+logging:
+  level: "INFO"
+  file: "/opt/nexus/agents/logs/gateway.log"
