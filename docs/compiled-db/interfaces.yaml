@@ -1,628 +1,188 @@
-# NEXUS OS Inter-Component Communication Interfaces
-# Generated: 2026-03-09
-# Source: live code inspection of key interface files
-# Format:
-#   id:           IF### — globally unique interface identifier
-#   name:         human-readable name
-#   caller:       component initiating the call
-#   callee:       component receiving the call
-#   protocol:     transport/encoding (HTTP-JSON, Web3-transact, discord.py, subprocess, etc.)
-#   entry_point:  file:function where the call is made
-#   endpoint:     network address or local path being called
-#   payload:      what is sent
-#   response:     what is returned
-#   constraints:  limits, auth requirements, error modes
-#   status:       operational / partial / dead
-#   notes:        surprising findings or caveats
+# NEXUS OS Compiled Database — Interfaces
+# Generated: 2026-03-21
+# Scope: Dev Assistant pipeline + shared infrastructure interfaces
+#
+# Only documents interfaces that are LIVE or OPERATIONAL.
+# CAF-specific interfaces (IF001-IF021) are superseded.
 
 interfaces:
 
-  # ─────────────────────────────────────────────────────────────────
-  # Agents → Blockchain (ReasoningLedger)
-  # ─────────────────────────────────────────────────────────────────
+  # ════════════════════════════════════════════════════════════════
+  # DEV ASSISTANT → LLM ENDPOINTS
+  # ════════════════════════════════════════════════════════════════
 
-  - id: IF001
-    name: "Agent Decision Logging → ReasoningLedger"
-    caller: ai-agent-hierarchy
-    callee: smart-contracts (ReasoningLedger)
-    protocol: Web3-transact (HTTP-JSON-RPC via PoA Geth + Clef signer)
-    entry_point: /opt/nexus/agents/blockchain_logger.py:BlockchainLogger._log_decision_sync
-    endpoint: "http://10.0.20.3:8545 → contract 0x0317451264E1de1A0696A81f6141e72E58686DE4"
-    payload:
-      function: "logReasoning(string decision, string reasoning)"
-      decision_format: "{agent_id}: {task[:80]} (ect={cost})"
-      reasoning_format: "64-char hex SHA256 of full decision text"
-      gas: 300000
-      from: "0x817B0842B208B76A7665948F8D1A0592F9b1e958 (Clef-signed)"
-    response:
-      on_success: "tx_hash (hex string)"
-      on_revert: "None (logged as error)"
-      on_timeout: "None (queued to pending_logs for retry)"
-    constraints:
-      - "Nonce serialised via threading.Lock — concurrent agents share one BlockchainLogger singleton"
-      - "Async: runs in ThreadPoolExecutor via asyncio.run_in_executor to avoid blocking event loop"
-      - "Retry queue: failed entries appended to pending_logs, retried on next process_pending() call"
-      - "Receipt timeout: 30 seconds"
+  - id: IF100
+    name: "Dev Assistant → Coordinator LLM (ThinkStation)"
+    caller: dev-assistant-bot
+    callee: llm-inference
+    protocol: "HTTP POST JSON (OpenAI-compatible)"
+    entry_point: "/opt/nexus/agents/llm_router_v2.py → coordinator tier"
+    endpoint: "http://10.0.30.3:1234/v1/chat/completions"
+    model: "qwen/qwen3.5-35b-a3b"
+    timeout: 600
+    fallback: "qwen2.5-7b-instruct-1m on same endpoint"
+    used_for: "Task analysis, planning, decomposition, code review, strategy"
     status: operational
-    notes: "Singleton via get_blockchain_logger(); reset_blockchain_logger() for testing"
+    notes: "Thinking tokens stripped via strip_thinking_tokens(). 10min timeout due to model size."
 
-  - id: IF002
-    name: "libnexus Kernel → ReasoningLedger (direct)"
-    caller: libnexus
-    callee: smart-contracts (ReasoningLedger)
-    protocol: Web3-transact (synchronous)
-    entry_point: /opt/nexus/libnexus/kernel.py:NexusKernel.log_reasoning
-    endpoint: "http://10.0.20.3:8545 → contract 0x0317451264E1de1A0696A81f6141e72E58686DE4"
-    payload:
-      function: "logReasoning(string decision, string reasoning)"
-      gas: 500000 (default)
-      from: "self.wallet (injected at kernel init)"
-    response:
-      dict: "{tx_hash, block, gas_used}"
-    constraints:
-      - "Synchronous — blocks caller thread until receipt"
-      - "wallet must be set (Clef-unlocked) or raises ValueError"
-    status: operational
-    notes: "Higher-level wrapper around the same contract; agents use blockchain_logger.py instead"
-
-  # ─────────────────────────────────────────────────────────────────
-  # Agents → LLM Inference
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF003
-    name: "Worker Agent → Local SmolLM2 Inference"
-    caller: ai-agent-hierarchy (worker-tier agents)
-    callee: llm-inference (llama-server on nexus-ai)
-    protocol: HTTP POST JSON (OpenAI-compatible /v1/chat/completions)
-    entry_point: /opt/nexus/agents/llm_client.py:NexusLLMClient._try_local_inference
-    endpoint: "http://10.0.20.4:8090/v1/chat/completions"
-    payload:
-      model: "(not sent — server uses loaded model)"
-      messages: "[{role, content}]"
-      max_tokens: integer
-      temperature: float
-    response:
-      text: "choices[0].message.content"
-      latency: "tracked in InferenceMetrics"
-    constraints:
-      - "Timeout: 30 seconds (LOCAL_TIMEOUT)"
-      - "Health cached 60 seconds via _check_local_health()"
-      - "Only attempted for roles in LOCAL_ELIGIBLE_ROLES={'default','worker'} or role contains 'worker'"
-      - "Falls back to HuggingFace API on any failure"
-      - "aiohttp async client — must run in async context"
-    status: operational
-    notes: "SmolLM2-1.7B Q4_K_M; ~7-9 tok/s; llama-server service on nexus-ai (10.0.20.4)"
-
-  - id: IF004
-    name: "Agent → HuggingFace Inference API"
-    caller: ai-agent-hierarchy (all tiers)
-    callee: HuggingFace Router API (external)
-    protocol: HTTPS POST JSON
-    entry_point: /opt/nexus/agents/llm_client.py:NexusLLMClient._call_api
-    endpoint: "https://router.huggingface.co/v1/chat/completions"
-    payload:
-      model: "per MODEL_MAP: ceo/coo=Qwen2.5-7B, director=Llama-3.2-3B, default=Llama-3.2-1B"
-      messages: "[{role, content}]"
-      max_tokens: integer
-      temperature: float
-      Authorization: "Bearer <HF_API_KEY from env>"
-    response:
-      text: "choices[0].message.content"
-    constraints:
-      - "Rate-limited: token-bucket 28 req/min, burst=5 (free tier)"
-      - "Timeout: 60 seconds"
-      - "API key loaded from env via python-dotenv"
-      - "C-suite and director roles always use API (never try local)"
-    status: operational
-    notes: "Primary path for directors/C-suite; fallback for workers when local unavailable"
-
-  # ─────────────────────────────────────────────────────────────────
-  # Agents → Discord
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF005
-    name: "Agent Bot → Discord Gateway (receive + send)"
-    caller: ai-agent-hierarchy
-    callee: discord-comms (Discord API gateway)
-    protocol: discord.py WebSocket gateway (receive) + REST (send)
-    entry_point: /opt/nexus/agents/hierarchy_manager.py:NexusAgentBot.start
-    endpoint: "Discord API gateway (wss://gateway.discord.gg) + REST"
-    payload:
-      send: "discord.Embed via channel.send(embed=...)"
-      receive: "discord.Message via on_message event"
-      guild: "1441732155225931869 (The Enterprise)"
-    response:
-      send: "discord.Message object"
-      receive: "agent processes message, calls LLM, logs reasoning on-chain, sends embed reply"
-    constraints:
-      - "One discord.Client per active agent (25 active bots, 5 webhook-fallback)"
-      - "Webhook agents: is_webhook=True, skip client startup, no gateway connection"
-      - "Bot ignores messages from other bots (author.bot and not webhook_id)"
-      - "Each agent mapped to a specific channel via CHANNEL_MAP dict"
-      - "GUILD_ID: 1441732155225931869"
-    status: partial
-    notes: "5 webhook-only agents never actually send (webhook_url not implemented in hierarchy_manager); 25 active bots functional"
-
-  - id: IF006
-    name: "Agent → Blockchain Logger on Decision"
-    caller: ai-agent-hierarchy
-    callee: blockchain-logging
-    protocol: in-process async call
-    entry_point: /opt/nexus/agents/hierarchy_manager.py (on_message handler, line ~228)
-    endpoint: "blockchain_logger.log_decision() coroutine"
-    payload:
-      agent_id: "string"
-      task: "message content (truncated to 80 chars in decision string)"
-      reasoning_hash: "SHA256 hex of full reasoning"
-      ect_cost: "integer (from agent system prompt simulation)"
-    response:
-      tx_hash: "hex string or None"
-    constraints:
-      - "Called after LLM generates response, before sending Discord reply"
-      - "Non-blocking: awaited but failure does not prevent Discord reply"
-    status: operational
-
-  # ─────────────────────────────────────────────────────────────────
-  # CAF Orchestrator → LLM Tiers
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF007
-    name: "CAF Orchestrator → LLM Router"
-    caller: caf-orchestrator
-    callee: llm-inference (tiered)
-    protocol: in-process call → synchronous HTTP POST JSON
-    entry_point: /opt/nexus/automation/dev_orchestrator.py:ask_llm
-    endpoint: "routed by llm_router.route_llm_call(role, system, user)"
-    payload:
-      role: "plan|analyze_code|review_code|write_code|execute_bash|summarize|classify|ask_human|verify"
-      system_prompt: string
-      user_prompt: string
-    response:
-      dict: "{tier, text, error?}"
-    constraints:
-      - "Roles plan/analyze_code/review_code/verify/ask_human → prefer Tier1 (ThinkPad)"
-      - "Roles write_code/execute_bash/summarize/classify → prefer Tier2 (nexus-ai2)"
-      - "Tier1 timeout: 300s; Tier2 timeout: 180s; Tier3 timeout: 120s"
-      - "Health cached 60 seconds"
-      - "LLM unavailability causes intent to stay in_progress and retry after RETRY_BACKOFFS=[60,120,300]s"
-    status: partial
-    notes: "Tier1 (ThinkPad 10.0.30.2) in VLAN 30 — blocked by iptables FORWARD DROP from VLAN 10 to VLAN 20; only reachable from nexus-admin directly. Tier2=nexus-ai2 (10.0.20.6) Ollama qwen2.5-coder:7b. Tier3=nexus-master (10.0.20.3) qwen2.5:1.5b subagent"
-
-  - id: IF008
-    name: "CAF → Tier1 LLM (ThinkPad LM Studio)"
-    caller: caf-orchestrator
-    callee: ThinkPad LM Studio
-    protocol: HTTP POST JSON (OpenAI-compatible)
-    entry_point: /opt/nexus/automation/llm_router.py:_call_tier (tier=1)
+  - id: IF101
+    name: "Dev Assistant → Coder LLM (ThinkPad)"
+    caller: dev-assistant-bot
+    callee: llm-inference
+    protocol: "HTTP POST JSON (OpenAI-compatible)"
+    entry_point: "/opt/nexus/agents/llm_router_v2.py → coder tier"
     endpoint: "http://10.0.30.2:1234/v1/chat/completions"
-    payload:
-      model: "qwen2.5-coder-14b-instruct"
-      messages: "[{role, content}]"
-      temperature: per routing table
-      max_tokens: per routing table
-    response:
-      choices[0].message.content: string
-    constraints:
-      - "Timeout: 300 seconds"
-      - "Not a cluster node — VLAN 30, accessible only from nexus-admin (10.0.10.5)"
-      - "Health check: GET /v1/models → 200"
-    status: partial
-    notes: "ThinkPad is dev machine on VLAN 30; CAF runs on nexus-admin (VLAN 10) so routing works. Not always on."
+    model: "qwen/qwen2.5-coder-14b"
+    timeout: 300
+    fallback: "qwen/qwen3.5-35b-a3b on ThinkStation (BROKEN — see G100)"
+    used_for: "Code generation, SEARCH/REPLACE patches, debugging"
+    status: operational
+    notes: "ThinkPad sleep causes endpoint unreachable — disable sleep mode."
 
-  - id: IF009
-    name: "CAF → Tier2 LLM (nexus-ai2 Ollama)"
-    caller: caf-orchestrator
-    callee: llm-inference (Ollama on nexus-ai2)
-    protocol: HTTP POST JSON (OpenAI-compatible)
-    entry_point: /opt/nexus/automation/llm_router.py:_call_tier (tier=2)
+  - id: IF102
+    name: "Dev Assistant → Director LLM (ThinkStation secondary)"
+    caller: dev-assistant-bot
+    callee: llm-inference
+    protocol: "HTTP POST JSON (OpenAI-compatible)"
+    entry_point: "/opt/nexus/agents/llm_router_v2.py → director tier"
+    endpoint: "http://10.0.30.3:1234/v1/chat/completions"
+    model: "qwen2.5-7b-instruct-1m"
+    timeout: 120
+    used_for: "Department decisions, resource allocation, escalation"
+    status: operational
+    notes: "Shares LM Studio port with coordinator — model-routed by LM Studio."
+
+  - id: IF103
+    name: "Dev Assistant → Worker LLM (nexus-ai2 Ollama)"
+    caller: dev-assistant-bot
+    callee: llm-inference
+    protocol: "HTTP POST JSON (OpenAI-compatible via Ollama)"
+    entry_point: "/opt/nexus/agents/llm_router_v2.py → worker tier"
     endpoint: "http://10.0.20.6:11434/v1/chat/completions"
-    payload:
-      model: "qwen2.5-coder:7b"
-      messages: "[{role, content}]"
-      temperature: per routing table
-      max_tokens: per routing table
-    response:
-      choices[0].message.content: string
-    constraints:
-      - "Timeout: 180 seconds"
-      - "nexus-ai2 has Hailo-10H HAT+ but Ollama uses CPU not Hailo"
-      - "Health check: GET /v1/models → 200"
+    model: "llama3.2:1b"
+    timeout: 120
+    fallback: "qwen2.5-7b-instruct-1m on ThinkStation"
+    used_for: "Worker tasks, status reports, simple JSON generation"
     status: operational
-    notes: "Primary workhorse for code writing/execution tasks"
+    notes: "Cross-VLAN: nexus-admin (VLAN 10/20) → nexus-ai2 (VLAN 20). Pi 5 CPU inference."
 
-  - id: IF010
-    name: "CAF → Tier3 LLM (nexus-master Ollama subagent)"
-    caller: caf-orchestrator
-    callee: llm-inference (Ollama on nexus-master)
-    protocol: HTTP POST JSON (OpenAI-compatible)
-    entry_point: /opt/nexus/automation/llm_router.py:_call_tier (tier=3)
-    endpoint: "http://10.0.20.3:11434/v1/chat/completions"
-    payload:
-      model: "qwen2.5:1.5b"
-      messages: "[{role, content}]"
-    response:
-      choices[0].message.content: string
-    constraints:
-      - "Timeout: 120 seconds"
-      - "1.5B model — used only as subagent/fallback, not for complex reasoning"
-    status: partial
-    notes: "Ollama not confirmed running as service on nexus-master; may require manual start"
+  # ════════════════════════════════════════════════════════════════
+  # DEV ASSISTANT → DISCORD
+  # ════════════════════════════════════════════════════════════════
 
-  # ─────────────────────────────────────────────────────────────────
-  # CAF Orchestrator → Discord (HITL)
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF011
-    name: "CAF → Discord Notification (async, non-blocking)"
-    caller: caf-orchestrator
-    callee: discord-comms
-    protocol: in-process call → discord.py WebSocket/REST (threadsafe)
-    entry_point: /opt/nexus/automation/discord_comms.py:send_notification
-    endpoint: "Discord channel (guild 1441732155225931869)"
-    payload:
-      mode: "string key mapping to prefix emoji (e.g. 'error', 'success', 'plan')"
-      message: "string (truncated to 1900 chars)"
-    response: None (fire-and-forget; asyncio.run_coroutine_threadsafe)
-    constraints:
-      - "Silently dropped if Discord bot not connected"
-      - "Schedules on bot event loop — non-blocking from orchestrator perspective"
-      - "Max message length: 2000 Discord chars (message capped at 1900 + prefix)"
+  - id: IF104
+    name: "Dev Assistant → Discord Gateway"
+    caller: dev-assistant-bot
+    callee: "Discord API"
+    protocol: "WebSocket (discord.py library)"
+    entry_point: "/opt/nexus/agents/dev_assistant.py → DevAssistant(discord.Client)"
+    channel: "#agent-chat"
+    guild_id: "1441732155225931869"
+    used_for: "Human-in-the-loop task submission, approval, status, queue management"
     status: operational
+    notes: >
+      Bot token in /opt/nexus/agents/.env. Owner ID used for permission gating.
+      Intents: messages, reactions, message_content. Single-channel operation.
 
-  - id: IF012
-    name: "CAF → Discord HITL Approval (blocking)"
-    caller: caf-orchestrator
-    callee: discord-comms
-    protocol: in-process call → Discord reaction-based approval
-    entry_point: /opt/nexus/automation/discord_comms.py:request_approval
-    entry_point_caller: /opt/nexus/automation/dev_orchestrator.py:~line 512
-    endpoint: "Discord channel (sends message + adds ✅/❌ reactions)"
-    payload:
-      intent_id: string
-      description: "string (truncated to 200 chars)"
-    response:
-      bool: "True if ✅ reaction within 24 hours; False on ❌ or timeout"
-    constraints:
-      - "BLOCKING: uses threading.Event.wait(timeout=86400)"
-      - "Auto-rejects if Discord not connected"
-      - "Reaction must come from non-bot user"
-      - "Called for high-risk or destructive intents per guardrails"
-    status: operational
-    notes: "24-hour timeout means orchestrator thread blocks up to 24h waiting for human"
+  # ════════════════════════════════════════════════════════════════
+  # DEV ASSISTANT → KNOWLEDGE STORE
+  # ════════════════════════════════════════════════════════════════
 
-  - id: IF013
-    name: "CAF → Discord One-shot Reporter"
-    caller: caf-orchestrator
-    callee: discord-comms
-    protocol: in-process call
-    entry_point: /opt/nexus/automation/discord_reporter.py:send_oneshot
-    entry_point_caller: /opt/nexus/automation/dev_orchestrator.py:~line 975
-    endpoint: "Discord channel (single message send)"
-    payload: "formatted approval batch summary for multiple pending intents"
-    response:
-      bool: "True on success"
-    constraints:
-      - "Used for batching approval notifications"
-    status: operational
-
-  # ─────────────────────────────────────────────────────────────────
-  # CAF Orchestrator → ChromaDB
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF014
-    name: "CAF → ChromaDB Memory (remember/recall)"
-    caller: caf-orchestrator
+  - id: IF105
+    name: "Knowledge Layer → ChromaDB"
+    caller: knowledge-layer
     callee: chromadb-knowledge
-    protocol: chromadb Python client (HTTP to localhost:8000)
-    entry_point: /opt/nexus/automation/chroma_memory.py:remember, recall
-    entry_point_caller: /opt/nexus/automation/dev_orchestrator.py (imported as remember, recall)
-    endpoint: "http://localhost:8000 (ChromaDB HTTP server)"
-    payload:
-      remember: "{text: string, meta: dict, collection: 'decisions'|'failures'|'context'}"
-      recall: "{query: string, n: int=5, collection: string}"
-    response:
-      remember: "ChromaDB upsert (void)"
-      recall: "list of matching documents with metadata"
-    constraints:
-      - "ChromaDB data stored on NFS: /mnt/nexus-nas/knowledge/chroma"
-      - "Collections: nexus_decisions, nexus_failures, nexus_context"
-      - "NFS must be mounted for persistence; falls back to in-memory if mount absent"
-    status: partial
-    notes: "NFS mount (/mnt/nexus-nas) requires nexus-storage to be up; ChromaDB itself runs on nexus-master"
-
-  - id: IF015
-    name: "CAF → Context Builder (3-tier context assembly)"
-    caller: caf-orchestrator
-    callee: chromadb-knowledge + blockchain-kernel
-    protocol: in-process + chromadb + Web3 reads
-    entry_point: /opt/nexus/automation/context_builder.py
-    endpoint: "multiple: ChromaDB localhost:8000, world_model.db (/mnt/nexus-nas/knowledge/world_model.db), constitution.json"
-    payload:
-      tier0: "constitution.json (always loaded)"
-      tier1: "ChromaDB semantic search + world_model SQLite queries"
-      tier2: "secondary context (session transcripts, web research)"
-    response:
-      context_packet: "dict assembled for LLM system prompt injection"
-    constraints:
-      - "WORLD_MODEL_PATH must be accessible (NFS dependency)"
-      - "constitution.json: /opt/nexus/automation/constitution.json"
-    status: partial
-    notes: "Context packet passed to planning/execution; ChromaDB and world_model on NFS"
-
-  # ─────────────────────────────────────────────────────────────────
-  # CAF Orchestrator → Git / Subprocess
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF016
-    name: "CAF → Git Branch Isolation"
-    caller: caf-orchestrator
-    callee: local git repository
-    protocol: subprocess (git CLI)
-    entry_point: /opt/nexus/automation/execution_engine.py
-    endpoint: "git CLI on nexus-admin filesystem"
-    payload:
-      branch_name: "auto/{safe_intent_id}-{timestamp}"
-      operations: "checkout -b, add, commit, push (optional)"
-    response:
-      on_success: "branch created, files modified under isolation"
-      on_failure: "rollback to backup copies"
-    constraints:
-      - "MAX_LINES_ADDED=200, MAX_LINES_DELETED=50, MAX_FILES_MODIFIED=5"
-      - "Protected files list from constitution.json blocks modification"
-      - "Rollback: subprocess cp of pre-execution backups"
+    protocol: "HTTP (ChromaDB Python client)"
+    entry_point: "/opt/nexus/agents/knowledge_indexer.py"
+    endpoint: "http://localhost:8000"
+    collection: "dev_assistant_tasks"
+    operations:
+      upsert: "index_task() — stores task outcome with metadata"
+      query: "query_similar_tasks() — semantic search by description"
     status: operational
+    notes: >
+      Singleton client. First call triggers onnxruntime GPU discovery (slow, see G103).
+      All ChromaDB I/O wrapped in asyncio.to_thread to avoid blocking event loop.
 
-  - id: IF017
-    name: "CAF → SSH Remote Execution"
-    caller: caf-orchestrator
-    callee: remote cluster nodes
-    protocol: subprocess (ssh CLI with BatchMode=yes)
-    entry_point: /opt/nexus/automation/dev_orchestrator.py:~line 157
-    endpoint: "ssh -o BatchMode=yes -o ConnectTimeout=10 mhuraibi@{ip} {cmd}"
-    payload:
-      action: "'ssh_command'"
-      ip: "10.0.20.3|10.0.20.4|10.0.20.11|10.0.20.6"
-      cmd: "shell command (shlex.quoted)"
-    response:
-      returncode: int
-      stdout: string
-      stderr: string
-    constraints:
-      - "Timeout: 120 seconds"
-      - "Command filtered through COMMAND_ALLOWLIST/BLOCKLIST in guardrails.py"
-      - "BatchMode=yes: fails immediately if key auth not set up (no password prompt)"
-      - "ConnectTimeout=10 seconds"
-    status: operational
+  # ════════════════════════════════════════════════════════════════
+  # DEV ASSISTANT → BLOCKCHAIN
+  # ════════════════════════════════════════════════════════════════
 
-  - id: IF018
-    name: "CAF → Git Monitor (periodic commit scan)"
-    caller: caf-orchestrator
-    callee: local git repository
-    protocol: in-process (git_monitor module)
-    entry_point: /opt/nexus/automation/dev_orchestrator.py:CAFOrchestrator._handle_git_check
-    endpoint: "git log / git diff via subprocess"
-    payload: "None (periodic poll every GIT_INTERVAL=900 seconds)"
-    response:
-      new_commits: "list of commit hashes"
-      changed_files: "per-commit list"
-    constraints:
-      - "Runs every 15 minutes in the main async event loop"
-    status: operational
-
-  # ─────────────────────────────────────────────────────────────────
-  # libnexus → Blockchain (ResourceManager, ServiceRegistry, MeshRegistry)
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF019
-    name: "libnexus → ResourceManager (node registration/query)"
-    caller: libnexus
-    callee: smart-contracts (ResourceManager)
-    protocol: Web3-transact / Web3-call
-    entry_point: /opt/nexus/libnexus/kernel.py:NexusKernel.register_node, get_node, get_all_nodes
-    endpoint: "http://10.0.20.3:8545 → ResourceManager contract"
-    payload:
-      registerNode: "(hostname, cpu_cores, memory_gb, storage_gb, ai_tops)"
-      getNode: "(wallet_address)"
-      getAllNodes: "()"
-    response:
-      register: "{tx_hash, block}"
-      getNode: "(hostname, cpuCores, memoryGB, storageGB, aiTops, active)"
-      getAllNodes: "[address, ...]"
-    constraints:
-      - "registerNode requires wallet + gas=500000"
-      - "Read calls (getNode, getAllNodes) are free/synchronous"
-    status: operational
-
-  - id: IF020
-    name: "libnexus → ServiceRegistry (service register/query)"
-    caller: libnexus
-    callee: smart-contracts (ServiceRegistry)
-    protocol: Web3-transact / Web3-call
-    entry_point: /opt/nexus/libnexus/kernel.py:NexusKernel.register_service, get_service
-    endpoint: "http://10.0.20.3:8545 → ServiceRegistry 0xbd015B6A2C0E10E1f31b7C50580A2Cc86e3A0dd8"
-    payload:
-      register: "(name: str, config_hash: bytes32)"
-      deregister: "(name: str)"
-      getService: "(name: str, node_address: str)"
-    response:
-      register/deregister: "{tx_hash, block, gas_used}"
-      getService: "{active, config_hash (hex), timestamp}"
-    constraints:
-      - "config_hash must be 32 bytes or '0x' hex string"
-      - "gas=500000 default"
-    status: operational
-
-  - id: IF021
-    name: "libnexus → MeshRegistry (peer register/query)"
-    caller: libnexus
-    callee: smart-contracts (MeshRegistry)
-    protocol: Web3-transact / Web3-call
-    entry_point: /opt/nexus/libnexus/kernel.py:NexusKernel.register_peer, get_peer, get_all_peers
-    endpoint: "http://10.0.20.3:8545 → MeshRegistry 0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F"
-    payload:
-      registerPeer: "(enode_url, wg_public_key, mesh_ip)"
-      getPeer: "(wallet_address)"
-    response:
-      registerPeer: "{tx_hash, block, gas_used}"
-      getPeer: "{enode_url, wg_public_key, mesh_ip, active}"
-      getAllPeers: "[{...peer + wallet}, ...]"
-    constraints:
-      - "get_all_peers(): N+1 queries (getPeerCount + N getPeerAddress + N getPeer)"
-      - "Deployed at block 1717"
-    status: operational
-
-  # ─────────────────────────────────────────────────────────────────
-  # libnexus → IPFS (NexusStorage)
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF022
-    name: "NexusStorage → IPFS HTTP API"
-    caller: libnexus (NexusStorage)
-    callee: ipfs-storage (Kubo 0.32.1 HTTP API)
-    protocol: HTTP POST (Kubo API v0)
-    entry_point: /opt/nexus/libnexus/nexus_storage.py:NexusStorage._ipfs_add, _ipfs_cat, _ipfs_pin
-    endpoint: "http://127.0.0.1:5001/api/v0"
-    payload:
-      add: "POST /api/v0/add multipart/form-data (pin=true)"
-      cat: "POST /api/v0/cat?arg={cid}"
-      pin/add: "POST /api/v0/pin/add?arg={cid}"
-      id: "POST /api/v0/id (health check)"
-    response:
-      add: "{Hash: cid_string}"
-      cat: "raw bytes"
-      pin/add: "{Pins: [cid]}"
-    constraints:
-      - "Uses requests (synchronous) — NOT ipfshttpclient (incompatible with Kubo 0.32.1)"
-      - "Timeout: 300s for add/cat, 120s for pin, 5s for health"
-      - "IPFS_PATH=/opt/nexus/ipfs; private swarm.key required"
-      - "Chunks: 256KB per chunk (CHUNK_SIZE)"
-    status: operational
-    notes: "ipfshttpclient incompatible with Kubo 0.32.1 — direct HTTP API is the intentional workaround"
-
-  - id: IF023
-    name: "NexusStorage → StorageRegistry (metadata on-chain)"
-    caller: libnexus (NexusStorage)
-    callee: smart-contracts (StorageRegistry)
-    protocol: Web3-transact / Web3-call
-    entry_point: /opt/nexus/libnexus/nexus_storage.py:NexusStorage
-    endpoint: "http://10.0.20.3:8545 → StorageRegistry 0xd216DABDAbE314337B4821D29C26FeB52Cb37d27"
-    payload:
-      store: "CID stored as sha256(cid) in bytes32 on-chain"
-      local_index: "full CID persisted in local cid_index.json"
-    response:
-      upload: "{file_id, cid, merkle_root, tx_hash, chunks}"
-      download: "{path, size, verified}"
-    constraints:
-      - "On-chain stores hash of CID (bytes32), not full CID string"
-      - "Full CID lookup requires local cid_index.json"
-      - "Merkle proofs computed locally, root stored on-chain"
-    status: operational
-
-  # ─────────────────────────────────────────────────────────────────
-  # Dashboard → Blockchain
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF024
-    name: "Dashboard → Geth RPC (read-only blockchain queries)"
-    caller: dashboard
-    callee: blockchain-kernel (Geth HTTP RPC)
-    protocol: Web3 HTTP (read-only calls, no transact)
-    entry_point: /opt/nexus/scripts/dashboard.py (or web_dashboard.py)
+  - id: IF106
+    name: "Blockchain Logger → ReasoningLedger Contract"
+    caller: blockchain-logging
+    callee: smart-contracts
+    protocol: "Web3 transact/call (web3.py)"
+    entry_point: "/opt/nexus/agents/blockchain_logger.py"
     endpoint: "http://10.0.20.3:8545"
-    payload:
-      queries: "eth_blockNumber, eth_getBalance, contract.call() for entry counts/peer counts"
-    response:
-      block_number: int
-      balances: "ETH float"
-      entry_counts: int
-    constraints:
-      - "Read-only — no wallet/signer required"
-      - "PoA middleware required: ExtraDataToPOAMiddleware"
+    contract: "ReasoningLedger @ 0x0317451264E1de1A0696A81f6141e72E58686DE4"
+    wallet: "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
+    operations:
+      logReasoning: "agent_id + task summary + SHA256 hash → on-chain entry"
+      getEntry: "Read entry by index"
+      getEntryCount: "Total entries (1170+)"
+      verifyHash: "Compare on-chain reasoning hash with expected"
+    status: operational
+    notes: >
+      Nonce lock (threading.Lock) serializes concurrent writes. Pending retry queue
+      for failed submissions. Web3 calls in thread executor for async compatibility.
+
+  # ════════════════════════════════════════════════════════════════
+  # LIBNEXUS → SMART CONTRACTS
+  # ════════════════════════════════════════════════════════════════
+
+  - id: IF107
+    name: "libnexus → ResourceManager Contract"
+    caller: libnexus
+    callee: smart-contracts
+    protocol: "Web3 transact/call"
+    entry_point: "/opt/nexus/libnexus/kernel.py"
+    endpoint: "http://10.0.20.3:8545"
+    contract: "ResourceManager @ 0x7E7f5e6cd9d7d485eeFa4Ec3Fb211705A3A8c6C6"
+    operations:
+      registerNode: "(hostname, cpu_cores, memory_gb, storage_gb, ai_tops)"
+      getNode: "(wallet_address) → node info"
+      getAllNodes: "() → list of registered addresses"
     status: operational
 
-  # ─────────────────────────────────────────────────────────────────
-  # Mesh / Networking
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF025
-    name: "mesh_discovery → MeshRegistry (peer discovery)"
-    caller: networking (mesh_discovery.py)
-    callee: smart-contracts (MeshRegistry)
-    protocol: Web3-call (read-only)
-    entry_point: /opt/nexus/networking/mesh_discovery.py
-    endpoint: "http://10.0.20.3:8545 → MeshRegistry 0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F"
-    payload:
-      query: "getAllPeers() → list of {enode_url, wg_public_key, mesh_ip, wallet}"
-    response:
-      peers: "[{enode_url, wg_public_key, mesh_ip, wallet, active}]"
-    constraints:
-      - "Read-only — no wallet required for discovery"
-      - "Used to bootstrap BATMAN-adv and WireGuard peer lists"
+  - id: IF108
+    name: "libnexus → ServiceRegistry Contract"
+    caller: libnexus
+    callee: smart-contracts
+    protocol: "Web3 transact/call"
+    entry_point: "/opt/nexus/libnexus/kernel.py"
+    endpoint: "http://10.0.20.3:8545"
+    contract: "ServiceRegistry @ 0xbd015B6A2C0E10E1f31b7C50580A2Cc86e3A0dd8"
+    operations:
+      register_service: "(name, config_hash)"
+      deregister: "(name)"
+      getService: "(name, node_address) → {active, config_hash, timestamp}"
     status: operational
 
-  # ─────────────────────────────────────────────────────────────────
-  # Guardrails (cross-cutting)
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF026
-    name: "CAF Execution Engine → Guardrails (command validation)"
-    caller: caf-orchestrator (execution_engine)
-    callee: automation (guardrails.py)
-    protocol: in-process function call
-    entry_point: /opt/nexus/automation/guardrails.py:check_command, check_file_modification
-    endpoint: "in-process"
-    payload:
-      check_command: "shell command string"
-      check_file_modification: "{filepath, lines_added, lines_deleted}"
-    response:
-      allowed: bool
-      reason: "string if blocked"
-    constraints:
-      - "COMMAND_ALLOWLIST: ~50 approved commands (git, kubectl, systemctl status, etc.)"
-      - "COMMAND_BLOCKLIST: rm -rf, dd, fdisk, reboot, curl|bash, etc."
-      - "File limits: MAX_LINES_ADDED=200, MAX_LINES_DELETED=50, MAX_FILES_MODIFIED=5"
-      - "Secret redaction applied to Discord tokens, API keys, ETH private keys before logging"
-      - "Protected files from constitution.json always blocked"
+  - id: IF109
+    name: "libnexus → MeshRegistry Contract"
+    caller: libnexus
+    callee: smart-contracts
+    protocol: "Web3 transact/call"
+    entry_point: "/opt/nexus/libnexus/kernel.py"
+    endpoint: "http://10.0.20.3:8545"
+    contract: "MeshRegistry @ 0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F"
+    operations:
+      registerPeer: "(enode_url, wg_public_key, mesh_ip)"
+      getPeer: "(wallet_address) → peer info"
+      getAllPeers: "() → list of peers"
     status: operational
 
-  # ─────────────────────────────────────────────────────────────────
-  # Token Economy (simulation only)
-  # ─────────────────────────────────────────────────────────────────
-
-  - id: IF027
-    name: "Token Economy — ECT/RST (simulation in prompts only)"
-    caller: ai-agent-hierarchy
-    callee: token-economy (TokenManager contract)
-    protocol: "NONE — no real contract calls"
-    entry_point: "/opt/nexus/agents/ (various) — ECT budgets appear only in LLM system prompt strings"
-    endpoint: "TokenManager 0x08C96540A286a6b3cDe1E20F77B246E53D238E48 (deployed but uncalled)"
-    payload: "N/A"
-    response: "N/A"
-    constraints:
-      - "TokenManager contract IS deployed on-chain"
-      - "ZERO Python code calls transfer(), burn(), or any TokenManager function"
-      - "ECT values in blockchain_logger: ect_cost parameter passed as integer but sourced from LLM output, not on-chain balance"
-    status: dead
-    notes: "CRITICAL FINDING: Token economy is fully simulated. The blockchain_logger records ect_cost as a string in the decision field but never deducts tokens from any wallet. D031 in decisions.yaml documents this gap."
-
-# ─────────────────────────────────────────────────────────────────
-# Summary
-# ─────────────────────────────────────────────────────────────────
-summary:
-  total_interfaces: 27
-  by_status:
-    operational: 18
-    partial: 6
-    dead: 1
-    planned: 0  # no unimplemented interfaces documented; token economy is the only dead one
-  critical_findings:
-    - "IF027: Token economy (ECT/RST) is simulation in LLM prompts — no on-chain transactions"
-    - "IF007/IF008: Tier1 LLM (ThinkPad VLAN 30) may be unreachable when ThinkPad is off"
-    - "IF014/IF015: ChromaDB and world_model.db on NFS — nexus-storage must be up"
-    - "IF022: IPFS uses direct HTTP API (not ipfshttpclient) — intentional Kubo 0.32.1 workaround"
-    - "IF001: All 30 agents share one BlockchainLogger singleton — nonce lock serializes all on-chain writes"
-  data_flow_summary:
-    agent_decision_path: "Agent receives Discord message → LLM inference (local|HF) → SHA256 hash reasoning → blockchain_logger.log_decision() → ReasoningLedger on-chain → send Discord embed reply"
-    caf_intent_path: "Discord HITL message → dev_orchestrator → context_builder (ChromaDB+constitution) → task_planner → llm_router (Tier1/2/3) → execution_engine (subprocess/ssh/git) → guardrails check → git auto/* branch → Discord notification"
-    storage_path: "upload_file() → chunk 256KB → IPFS add → merkle root → StorageRegistry.storeFile() on-chain"
-    mesh_path: "mesh_discovery() → MeshRegistry.getAllPeers() → bootstrap BATMAN-adv/WireGuard"
+  - id: IF110
+    name: "libnexus → StorageRegistry + IPFS"
+    caller: libnexus
+    callee: "smart-contracts + ipfs-storage"
+    protocol: "Web3 transact/call + IPFS HTTP API"
+    entry_point: "/opt/nexus/libnexus/nexus_storage.py"
+    endpoint: "http://10.0.20.3:8545 (blockchain) + http://localhost:5001 (IPFS)"
+    contract: "StorageRegistry @ 0x859e30a6b752Af6D96d309Dc3a5bECfCfFDe31A6"
+    operations:
+      store_file: "Upload to IPFS → register CID hash on-chain"
+      retrieve_file: "Look up CID on-chain → fetch from IPFS"
+    status: operational
+    notes: "CID index at /opt/nexus/libnexus/cid_index.json. ipfshttpclient replaced with direct HTTP API."

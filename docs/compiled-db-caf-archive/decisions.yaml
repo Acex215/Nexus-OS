@@ -1,0 +1,680 @@
+# decisions.yaml — Architectural Decision Log
+# Generated: 2026-03-09T15:30:00-04:00
+# Method: inferred from code, config, constitution.json, NEXUS_OS_Current_State.md,
+#         change_ledger.md, and MEMORY.md. Every decision verified against live codebase.
+# Total decisions: 36
+
+decisions:
+
+  # ════════════════════════════════════════════════════════════════
+  # BLOCKCHAIN — Consensus and Chain Design
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D001
+    date: "2025-Q4"
+    topic: consensus-algorithm
+    decision: "Clique Proof-of-Authority with 3 validators and Chain ID 123454321"
+    rationale: >
+      PoW is infeasible on Raspberry Pi 5 hardware. PoS requires staking infrastructure.
+      Clique PoA provides instant finality with minimal overhead. 3 validators satisfies
+      N/2+1 = 2 signing threshold for Clique, giving fault tolerance for one validator
+      going offline. Private chain ID 123454321 prevents replay attacks vs public chains.
+    implemented_in:
+      - /opt/nexus/contracts/genesis-fast-test.json
+      - "nexus-master:/opt/nexus/blockchain/genesis.json (remote)"
+    status: active
+    notes: "All 3 validators live at block 1720. 2 peers each. Geth 1.13.15-stable."
+
+  - id: D002
+    date: "2026-02"
+    topic: block-sealing-period
+    decision: "Migrate from period=5 to period=0 (on-demand sealing) via chain reinit"
+    rationale: >
+      period=5 produced 17,280 empty blocks/day (~1,279 MB disk/day at idle),
+      and had 14,204ms mean confirmation time. period=0 seals only on pending
+      transactions, giving ~102ms confirmation, zero empty blocks, zero idle disk
+      growth. Required full chain reinit (clean slate) — not an in-place upgrade.
+    implemented_in:
+      - "nexus-master:/opt/nexus/blockchain/genesis.json (remote)"
+      - /opt/nexus/contracts/genesis-fast-test.json
+    status: active
+    supersedes: "period=5 chain (genesis-original-backup.json archived on nexus-master)"
+    notes: >
+      Current block 1720 reflects post-reinit chain. 19 ReasoningLedger entries
+      re-imported from backup after reinit. All contracts redeployed.
+      constitution.json: "Block period=0 gives on-demand sealing (~102ms confirmation)."
+
+  - id: D003
+    date: "2025-Q4"
+    topic: gas-pricing
+    decision: "Zero gas price on private chain (gasPrice=0, gas limit 30,000,000)"
+    rationale: >
+      Private chain serves internal system calls only. No economic reason for gas fees.
+      Zero fees simplify all contract interaction code (no ETH balance management,
+      no fee estimation). High gas limit accommodates complex contract operations.
+    implemented_in:
+      - /opt/nexus/libnexus/kernel.py
+      - /opt/nexus/agents/blockchain_logger.py
+    status: active
+    notes: "Deployer balance ~999.99 ETH (pre-allocated in genesis). transact() calls omit gasPrice."
+
+  - id: D004
+    date: "2026-02"
+    topic: transaction-signing
+    decision: "Migrate from --allow-insecure-unlock to Clef external signer via IPC"
+    rationale: >
+      Geth deprecated --allow-insecure-unlock in production configs. Clef provides
+      hardware-local key custody with rules.js for auto-approving Clique block signing
+      and known contract transactions. Wallet never exposed to application layer.
+      Python code calls .transact({'from': wallet}) which Geth forwards to Clef via IPC.
+    implemented_in:
+      - /home/mhuraibi/nexus/phase4/security/clef/rules.js
+      - /home/mhuraibi/nexus/phase4/security/clef/clef-wrapper.py
+      - /home/mhuraibi/nexus/phase4/security/clef/migrate_to_clef.sh
+    status: active
+    notes: >
+      Deployed on all 3 validators Feb 2026. Clef --ipcpath takes a DIRECTORY
+      (appends clef.ipc automatically). Password file must be mode 0400.
+      After any rules.js edit: re-attest sha256 + restart clef + geth.
+      4byte-custom.json must list all contract function selectors or signing fails.
+
+  # ════════════════════════════════════════════════════════════════
+  # STORAGE — Data Architecture
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D005
+    date: "2025-Q4"
+    topic: storage-architecture
+    decision: "Blockchain stores metadata only; IPFS stores data"
+    rationale: >
+      Blockchain is designed for small, trustless state — not GB-scale files.
+      IPFS provides content-addressed, deduplicated, distributed file storage.
+      The separation gives fast blockchain operations (small txns), scalable storage,
+      and cryptographic integrity via CID + Merkle proofs on-chain.
+    implemented_in:
+      - /opt/nexus/libnexus/nexus_storage.py
+      - /opt/nexus/contracts/source/StorageRegistry.sol
+      - /opt/nexus/contracts/deployed/StorageRegistry.json
+    status: active
+    notes: >
+      constitution.json: "Blockchain stores metadata. IPFS stores data."
+      Data flow: File → IPFS (CID) → StorageRegistry.registerFile(CID, merkleRoot, ...)
+      IPFS chunk size 256KB. 50MB file = 203 blocks. Retrieved at ~12-33 MB/s cross-node.
+
+  - id: D006
+    date: "2025-Q4"
+    topic: ipfs-isolation
+    decision: "Private IPFS cluster with swarm.key (fully isolated from public IPFS)"
+    rationale: >
+      Public IPFS would expose cluster data, leak topology, and create bandwidth
+      pressure from external peers. Private swarm.key ensures all IPFS traffic
+      stays within the cluster network.
+    implemented_in:
+      - /etc/systemd/system/ipfs.service
+      - /opt/nexus/scripts/setup-ipfs-private.sh
+      - "/opt/nexus/ipfs/swarm.key  # runtime key, not in git"
+    status: active
+    notes: "MDNS disabled, auto relay disabled. 4-node full mesh, 0 public peers."
+
+  - id: D007
+    date: "2026-02"
+    topic: ipfs-client-library
+    decision: "Use IPFS HTTP API directly (requests) instead of ipfshttpclient library"
+    rationale: >
+      ipfshttpclient is not compatible with Kubo 0.32.1 (breaking API changes).
+      Direct HTTP POST to /api/v0/* endpoints is more stable and version-independent.
+    implemented_in:
+      - /opt/nexus/libnexus/nexus_storage.py
+    status: active
+    notes: "nexus_storage.py uses requests.post to http://localhost:5001/api/v0/"
+
+  - id: D008
+    date: "2026-02"
+    topic: shared-storage-location
+    decision: "nexus-storage NFS share at /mnt/nexus-nas as cluster shared filesystem"
+    rationale: >
+      Central NFS share provides a single location for ChromaDB data, world model SQLite,
+      shared logs, LLM models, and agent knowledge that must be accessible from
+      nexus-admin. nexus-storage has 1.8TB HDD — the only node with adequate capacity.
+    implemented_in:
+      - /opt/nexus/automation/context_builder.py
+      - /etc/systemd/system/chromadb.service
+    status: active
+    notes: >
+      NAS subdirs: blockchain/, agents/, backups/, shared/, knowledge/, models/, logs/.
+      world_model.db at /mnt/nexus-nas/knowledge/world_model.db (SQLite, AST-indexed).
+      ChromaDB data at /mnt/nexus-nas/knowledge/chroma (accessed via HTTP localhost:8000).
+
+  # ════════════════════════════════════════════════════════════════
+  # NETWORK — Topology and Resilience
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D009
+    date: "2026-02"
+    topic: vlan-topology
+    decision: "3-VLAN air-gapped topology: VLAN 20 (cluster, no internet), VLAN 10 (admin), VLAN 30 (dev)"
+    rationale: >
+      VLAN 20 (10.0.20.0/24) holds all validator nodes — isolated from internet for security.
+      VLAN 10 (10.0.10.0/24) holds nexus-admin which has internet access for API calls.
+      VLAN 30 (10.0.30.0/24) holds the ThinkPad dev machine, blocked from routing to VLAN 20
+      via iptables on nexus-admin. Prevents ThinkPad from directly reaching validators.
+    implemented_in:
+      - /opt/nexus/automation/constitution.json
+      - /opt/nexus/automation/guardrails.py
+    status: active
+    notes: >
+      constitution.json: "no_internet_from_cluster: Never attempt to route VLAN 20 traffic
+      to internet." iptables FORWARD DROP 10.0.30.0/24→10.0.20.0/24 on nexus-admin.
+      Migration from flat 192.168.8.x network completed Feb 2026.
+
+  - id: D010
+    date: "2026-02"
+    topic: network-resilience
+    decision: "5-level network degradation with automatic layer switching"
+    rationale: >
+      Single-path networking creates a hard dependency. Pi cluster nodes may lose Ethernet
+      temporarily. Degradation chain provides increasingly limited but still functional
+      connectivity: Ethernet (full) → BATMAN-adv WiFi mesh (~50Mbps) → WireGuard overlay
+      (encrypted tunnel) → Sub-GHz RF via Flipper Zero (64B/packet, ~1kbps) → BLE (discovery).
+    implemented_in:
+      - /opt/nexus/networking/degradation_manager.py
+      - /opt/nexus/networking/setup_wireguard.sh
+      - /opt/nexus/networking/setup_mesh.sh
+      - /opt/nexus/networking/flipper_bridge.py
+      - /opt/nexus/networking/rf_relay.py
+      - /opt/nexus/networking/rf_mesh_daemon.py
+    status: partial
+    notes: >
+      WireGuard (Level 3) active on nexus-admin (nexus-mesh, 10.1.0.4/24).
+      BATMAN-adv (Level 2) module loaded but bat0 not active on nexus-admin.
+      RF (Level 4): code complete, no Flipper Zero connected on admin.
+      BLE (Level 5): listed in constitution as "future."
+
+  - id: D011
+    date: "2026-02"
+    topic: mesh-networking-protocol
+    decision: "BATMAN-adv over WiFi IBSS (ad-hoc) at 2.4GHz channel 1 for Layer 2 mesh"
+    rationale: >
+      BATMAN-adv (Better Approach To Mobile Adhoc Networking) provides transparent
+      Layer 2 bridging over WiFi ad-hoc (IBSS) mode without infrastructure AP.
+      All Pi 5 nodes have brcmfmac WiFi supporting IBSS. Mesh IP 10.0.0.X/24.
+    implemented_in:
+      - /opt/nexus/networking/setup_mesh.sh
+    status: partial
+    notes: >
+      batman_adv kernel module loaded on nexus-admin. No bat0 interface active.
+      rfkill must be unblocked before setup. Mesh IPs: master=.1, ai=.2, storage=.3, admin=.4.
+
+  - id: D012
+    date: "2026-02"
+    topic: rf-fallback-hardware
+    decision: "Flipper Zero as Sub-GHz RF bridge (433.92MHz, 64-byte KISS-framed packets)"
+    rationale: >
+      Sub-GHz RF provides last-resort connectivity when all IP paths fail. Flipper Zero
+      provides a programmable software-defined radio accessible via USB serial. 433MHz
+      penetrates walls better than 2.4GHz. KISS framing adapted from SatNOGS.
+      Packet format: 4B magic + 20B sender + 20B recipient + metadata + 18B payload.
+    implemented_in:
+      - /opt/nexus/networking/flipper_bridge.py
+      - /opt/nexus/networking/rf_relay.py
+      - /opt/nexus/networking/rf_mesh_daemon.py
+    status: partial
+    notes: "Code complete. No Flipper Zero connected on nexus-admin. --mock flag for testing."
+
+  - id: D013
+    date: "2026-02"
+    topic: mesh-peer-registration
+    decision: "MeshRegistry smart contract for on-chain WireGuard peer discovery"
+    rationale: >
+      WireGuard peers need public keys, IPs, and enode URLs. Storing these on-chain
+      gives each node a cryptographically verifiable, tamper-resistant peer registry
+      that doesn't depend on a central coordinator. mesh_discovery.py reads events
+      to auto-configure WireGuard when new nodes register.
+    implemented_in:
+      - /opt/nexus/contracts/source/MeshRegistry.sol
+      - /opt/nexus/contracts/deployed/MeshRegistry.json
+      - /opt/nexus/networking/mesh_discovery.py
+    status: operational
+    notes: "Contract at 0x21e5...A26F (block 1717). mesh_discovery.py watches PeerRegistered events."
+
+  # ════════════════════════════════════════════════════════════════
+  # AI AGENTS — Architecture and Hierarchy
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D014
+    date: "2025-Q4"
+    topic: agent-architecture
+    decision: "30 agents in corporate hierarchy: 2 C-Suite + 7 Directors + 21 Workers"
+    rationale: >
+      Corporate hierarchy maps AI agents to technical domains: Compute, Storage, Network,
+      Security, Blockchain, ML, Quantum. Hierarchy provides clear delegation chains
+      (CEO→Director→Worker) and bounded scope per agent. 30 is large enough for real
+      operational coverage, small enough to run on Pi hardware budgets.
+    implemented_in:
+      - /opt/nexus/agents/agent_registry.py
+      - /opt/nexus/agents/hierarchy_manager.py
+    status: active
+    notes: "All 30 agents defined in agent_registry.py (1004 lines). 30 loaded and verified."
+
+  - id: D015
+    date: "2025-Q4"
+    topic: agent-communication-substrate
+    decision: "Discord as the agent communication and coordination layer"
+    rationale: >
+      Discord provides persistent message history, thread support, real-time webhooks,
+      role-based access, and a human-readable audit trail without building custom
+      messaging infrastructure. Guild "The Enterprise" (1441732155225931869) serves
+      as the shared workspace for all 30 agents and human operators.
+    implemented_in:
+      - /opt/nexus/agents/hierarchy_manager.py
+      - /opt/nexus/agents/agent_registry.py
+      - /opt/nexus/automation/discord_comms.py
+    status: active
+    notes: "25 full bots + 5 webhook fallbacks. CAF orchestrator has its own Discord channel."
+
+  - id: D016
+    date: "2025-Q4"
+    topic: agent-bot-split
+    decision: "25 active Discord bots + 5 webhook-fallback agents (not all 30 full bots)"
+    rationale: >
+      Discord imposes bot limits per developer account. Webhook-only agents (no real-time
+      event handling) don't need full bot tokens. This reduces token management overhead
+      while maintaining presence for all 30 agents in Discord.
+    implemented_in:
+      - /opt/nexus/agents/hierarchy_manager.py
+      - /opt/nexus/agents/.env
+    status: active
+    notes: "Quantum Director and others may be webhook-only. Tokens in agents/.env (chmod 600)."
+
+  - id: D017
+    date: "2025-Q4"
+    topic: agent-workflow-framework
+    decision: "LangGraph for agent multi-step reasoning workflows"
+    rationale: >
+      LangGraph provides a typed state machine with explicit nodes and edges for
+      multi-step reasoning. Workflow: gather_context → analyze (leadership) → decide → finalize.
+      Workers skip the analyze step. Each node produces intermediate state that feeds
+      the next, giving structured, auditable reasoning chains.
+    implemented_in:
+      - /opt/nexus/agents/agent_workflow.py
+    status: active
+    notes: >
+      constitution.json: "LangGraph for agent workflows. SmolAgents for narrow execution."
+      SmolAgents: mentioned in constitution but zero smolagents imports found in codebase.
+      LangGraph is the only implemented workflow framework.
+
+  - id: D018
+    date: "2025-Q4"
+    topic: decision-hashing
+    decision: "SHA256 reasoning hash per agent decision, logged to ReasoningLedger on-chain"
+    rationale: >
+      Full LLM decision text can be large and expensive to store on-chain. SHA256 hash
+      provides cryptographic binding between off-chain JSONL decision logs and on-chain
+      records. Anyone with the JSONL can verify the hash matches the chain entry.
+    implemented_in:
+      - /opt/nexus/agents/agent_workflow.py
+      - /opt/nexus/agents/blockchain_logger.py
+      - /opt/nexus/contracts/source/ReasoningLedger.sol
+    status: active
+    notes: >
+      decision_str format: "{agent_id}: {task[:80]} (ect={cost})".
+      reasoning_str: 64-char hex SHA256 of full reasoning chain.
+      Off-chain full text at agents/logs/decisions/{agent_id}.jsonl.
+
+  # ════════════════════════════════════════════════════════════════
+  # LLM INFERENCE — Model Selection and Routing
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D019
+    date: "2026-01"
+    topic: agent-llm-routing
+    decision: "3-tier model selection for agents: Workers=local SmolLM2, Directors=Llama-3.2-3B, C-Suite=Qwen2.5-7B"
+    rationale: >
+      Worker agents handle narrow, repetitive tasks — SmolLM2-1.7B is sufficient and
+      avoids API costs. Directors need broader reasoning — Llama-3.2-3B via HuggingFace.
+      C-Suite (CEO/COO) needs strategic synthesis — Qwen2.5-7B. Local inference
+      first avoids API latency/cost for high-frequency worker calls.
+    implemented_in:
+      - /opt/nexus/agents/llm_client.py
+    status: active
+    notes: >
+      LOCAL_INFERENCE_URL: http://10.0.20.4:8090/v1/chat/completions (nexus-ai).
+      HuggingFace router: https://router.huggingface.co/v1/chat/completions.
+      Rate limit: 28 rpm (token-bucket). Workers: local→HuggingFace fallback.
+      C-Suite/Directors: HuggingFace API directly.
+
+  - id: D020
+    date: "2026-02"
+    topic: local-inference-hardware
+    decision: "llama-server (llama.cpp) on nexus-ai CPU for local worker inference"
+    rationale: >
+      nexus-ai has Hailo-8 AI HAT+ but it is vision-only — cannot run LLMs.
+      llama.cpp provides CPU-optimized inference for ARM64. SmolLM2-1.7B Q4_K_M
+      (~1GB) fits comfortably in nexus-ai's 8GB RAM alongside Geth and IPFS.
+      ~7-9 tok/s generation is acceptable for worker tasks.
+    implemented_in:
+      - /opt/nexus/agents/llm_client.py
+    status: active
+    remote_files:
+      - "/opt/nexus/llm/llama.cpp/build/bin/llama-server (nexus-ai)"
+      - "/etc/systemd/system/local-inference.service (nexus-ai)"
+    notes: >
+      local-inference.service ACTIVE on nexus-ai (verified live). SmolLM2-1.7B
+      Q4_K_M loaded. Note: the constitution.json and MEMORY.md mention Hailo-10H
+      is on nexus-ai2 (10.0.20.6) which runs Ollama qwen2.5-coder:7b for CAF tier 2.
+
+  - id: D021
+    date: "2026-02"
+    topic: caf-llm-routing
+    decision: "CAF orchestrator uses ThinkPad Qwen3.5-35B (Tier 1) and nexus-ai2 Qwen2.5-7B (Tier 2)"
+    rationale: >
+      The CAF orchestrator needs more capable reasoning than SmolLM2. ThinkPad
+      (VLAN 30) runs LM Studio with Qwen3.5-35B when available. nexus-ai2 (VLAN 20)
+      runs Ollama qwen2.5-coder:7b 24/7 as the always-available fallback. This gives
+      maximum capability when ThinkPad is online with guaranteed availability otherwise.
+    implemented_in:
+      - /opt/nexus/automation/dev_orchestrator.py
+      - /opt/nexus/automation/llm_router.py
+    status: active
+    notes: >
+      TIER1_URL: http://10.0.30.2:1234/v1/chat/completions (ThinkPad LM Studio).
+      TIER2_URL: http://10.0.20.6:11434/v1/chat/completions (nexus-ai2 Ollama).
+      Ollama subagent on nexus-master (qwen2.5:1.5b, port 11434) for lightweight tasks.
+      ThinkPad blocked from VLAN 20 by iptables, but CAF on nexus-admin can reach both.
+
+  # ════════════════════════════════════════════════════════════════
+  # CAF ORCHESTRATOR — Autonomous Development Framework
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D022
+    date: "2026-02"
+    topic: caf-architecture
+    decision: "Planner-executor separation: deterministic planning from intent registry, LLM-generated execution plans"
+    rationale: >
+      Having LLM choose WHAT to work on next causes hallucination and scope creep.
+      planning_engine.py selects from intent_registry.yaml deterministically (priority,
+      deps, status). The LLM is only used to decide HOW to execute — generating structured
+      JSON execution plans in task_planner.py. This keeps strategy human-controlled
+      and execution AI-assisted.
+    implemented_in:
+      - /opt/nexus/automation/planning_engine.py
+      - /opt/nexus/automation/task_planner.py
+      - /opt/nexus/automation/intent_registry.yaml
+      - /opt/nexus/automation/dev_orchestrator.py
+    status: active
+    notes: >
+      intent_registry.yaml is a protected file — only update_intent_status() may write it.
+      1240-line registry with P0-P3 priorities. orchestrator.service was running for
+      3d 12h before SIGTERM at 2026-03-09 10:23 EDT.
+
+  - id: D023
+    date: "2026-02"
+    topic: caf-safety
+    decision: "Git branch isolation: all autonomous changes on auto/* branches, never to main"
+    rationale: >
+      Autonomous code changes to main branch would be irreversible and hard to audit.
+      auto/* branches provide a review checkpoint for every CAF-generated change.
+      execution_engine.py creates branch auto/{intent_id}-{timestamp}, makes changes,
+      commits, then returns to main. Allows human review before merging.
+    implemented_in:
+      - /opt/nexus/automation/execution_engine.py
+      - /opt/nexus/automation/guardrails.py
+    status: active
+    notes: >
+      14+ auto/* branches created by CAF visible in git log (ns-004-1-*, rm-001-*, etc.).
+      EXECUTION_POLICIES["git_workflow"]: "All changes on auto/* branches. Never commit to main."
+      File backup to /opt/nexus/backups/auto/ before any modification.
+
+  - id: D024
+    date: "2026-02"
+    topic: caf-memory
+    decision: "Three-tier memory: ChromaDB (semantic, persistent) + SQLite world model (structured) + constitution (always-present)"
+    rationale: >
+      LLM context windows are limited. Three tiers provide: Tier 0 (constitution, ~600 tokens,
+      always injected — identity, principles, topology), Tier 1 (ChromaDB semantic search
+      on code/docs/decisions, ~2000-4000 tokens), Tier 2 (background context, ~1000-2000 tokens).
+      SQLite world model provides structured module/symbol/dependency queries.
+    implemented_in:
+      - /opt/nexus/automation/context_builder.py
+      - /opt/nexus/automation/constitution.json
+      - /opt/nexus/automation/chroma_memory.py
+      - /opt/nexus/automation/indexer.py
+      - /opt/nexus/automation/build_world_model.py
+    status: active
+    notes: >
+      ChromaDB at localhost:8000 (verified live). Collections: code_chunks, docs_chunks,
+      infra_configs, session_transcripts, web_research.
+      world_model.db at /mnt/nexus-nas/knowledge/world_model.db (NFS).
+
+  - id: D025
+    date: "2026-02"
+    topic: caf-human-in-loop
+    decision: "Discord as human-in-the-loop channel: orchestrator requests approval for risky changes"
+    rationale: >
+      Fully autonomous systems that modify their own infrastructure are dangerous.
+      Discord provides a low-friction approval channel — the orchestrator sends a message
+      and waits for human approval before executing service changes or contract deployments.
+      intent_parser.py handles approve/retry/skip/block/pause commands.
+    implemented_in:
+      - /opt/nexus/automation/discord_comms.py
+      - /opt/nexus/automation/discord_reporter.py
+      - /opt/nexus/automation/command_executor.py
+      - /opt/nexus/automation/guardrails.py
+    status: active
+    notes: >
+      guardrails.py: "no_deployment_without_approval" and "no_contract_deployment require
+      Md approval via Discord." DISCORD_TOKEN never logged (guardrail pattern-matched).
+
+  - id: D026
+    date: "2026-02"
+    topic: caf-protected-files
+    decision: "Constitution defines a protected file list that CAF may never autonomously modify"
+    rationale: >
+      Core system files (agent definitions, blockchain code, constitution itself) must remain
+      human-controlled. Auto-modification of these would break the agent hierarchy or chain.
+      guardrails.py loads the list from constitution.json and check_protected_files() is
+      called by execution_engine before every file write.
+    implemented_in:
+      - /opt/nexus/automation/constitution.json
+      - /opt/nexus/automation/guardrails.py
+    status: active
+    notes: >
+      Protected: hierarchy_manager.py, agent_registry.py, agent_workflow.py, blockchain_logger.py,
+      llm_client.py, .env, contracts/source/*.sol, blockchain/genesis*.json,
+      constitution.json, intent_registry.yaml. Hard-coded fallback in guardrails.py if
+      constitution.json is missing.
+
+  - id: D027
+    date: "2026-03"
+    topic: caf-physical-input
+    decision: "Two Pi Pico 2s as HID keyboard + mouse for autonomous physical desktop interaction"
+    rationale: >
+      Some tasks require GUI interaction (e.g., browser-based admin panels). Pi Pico 2s
+      attached via USB serial to nexus-admin present as HID keyboard and mouse. The CAF
+      orchestrator imports hid_controller.py to type text, press keys, move cursor, and
+      click without human involvement.
+    implemented_in:
+      - /opt/nexus/automation/hid_controller.py
+    status: active
+    notes: >
+      Intent ns-002 completed. Picos on /dev/ttyACM*. Auto-detection by PING→PONG:<role>
+      response. Protocol: TYPE:<text>, KEY:<k1>+<k2>, MOVE:<x>,<y>, CLICK:LEFT|RIGHT.
+      hid_controller.py not imported by current dev_orchestrator.py — integration pending.
+
+  # ════════════════════════════════════════════════════════════════
+  # KUBERNETES — Cluster Orchestration
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D028
+    date: "2025-Q4"
+    topic: container-orchestration
+    decision: "K3s (lightweight Kubernetes) instead of full K8s or Docker Swarm"
+    rationale: >
+      Full Kubernetes is too resource-heavy for Pi 5 nodes (8GB RAM each). K3s removes
+      cloud-provider integrations, in-tree storage drivers, and alpha features, fitting
+      in ~512MB RAM on the control plane. Docker Swarm lacks the ecosystem depth needed.
+      K3s flannel CNI provides adequate networking for the cluster.
+    implemented_in:
+      - /etc/systemd/system/k3s-agent.service
+      - /etc/rancher/k3s/config.yaml
+      - /opt/nexus/scripts/deploy-k3s-safe.sh
+    status: active
+    notes: >
+      k3s-agent.service ACTIVE on nexus-admin (role=admin). Control plane at nexus-master.
+      Infrastructure operational. No workloads deployed yet — K3s is the foundation for
+      future containerized NEXUS services.
+
+  # ════════════════════════════════════════════════════════════════
+  # OS IMAGE — Distribution
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D029
+    date: "2026-02"
+    topic: os-image-architecture
+    decision: "Custom pi-gen stage (stage-nexus) on top of Bookworm Lite arm64"
+    rationale: >
+      Pi 500 uses a 16K page-size kernel, which is incompatible with armhf builds.
+      arm64 (aarch64) is required. Bookworm Lite provides a minimal Debian base.
+      pi-gen custom stage allows reproducible, automated OS image builds with NEXUS
+      OS pre-installed (Geth, IPFS, blockchain, networking, first-boot wizard).
+    implemented_in:
+      - /opt/nexus/pi-gen/build.sh
+      - /opt/nexus/pi-gen/stage-nexus/prerun.sh
+      - /opt/nexus/pi-gen/stage-nexus/01-blockchain/01-run-chroot.sh
+      - /opt/nexus/pi-gen/stage-nexus/06-first-boot/files/first_boot_wizard.py
+    status: active
+    notes: >
+      Built image: deploy/image_2026-02-22-nexus-os-lite.zip (748MB).
+      7 stage-nexus subdirs: 00-base-packages through 06-first-boot.
+      stage prerun.sh MUST call copy_previous to inherit rootfs.
+
+  - id: D030
+    date: "2026-02"
+    topic: node-onboarding
+    decision: "Interactive first-boot wizard (Python) for node role assignment"
+    rationale: >
+      New cluster nodes need to know their role (validator/worker/admin), hostname, and
+      blockchain credentials. A first-boot wizard runs once on new images, prompts for
+      configuration, and persists settings — replacing manual post-install configuration.
+    implemented_in:
+      - /opt/nexus/pi-gen/stage-nexus/06-first-boot/files/first_boot_wizard.py
+    status: active
+    notes: "Registered as systemd one-shot service in image. 222 lines."
+
+  # ════════════════════════════════════════════════════════════════
+  # TOKEN ECONOMY — ECT/RST
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D031
+    date: "2025-Q4"
+    topic: token-economy
+    decision: "ECT (Execution Credit Token) and RST (Reputation Stake Token) govern agent resource allocation"
+    rationale: >
+      Token economy creates incentive structure: agents must spend ECT to execute tasks
+      (preventing runaway computation), and RST stake means poor decisions carry
+      reputation consequences. CEO: 1000 ECT/day. Directors: 500 ECT. Workers: 30 ECT.
+    implemented_in:
+      - /opt/nexus/agents/agent_registry.py
+      - /opt/nexus/contracts/deployed/TokenManager.json
+    status: partial
+    notes: >
+      CRITICAL GAP: TokenManager contract deployed at 0x08C9...8E48 but zero Python callers
+      exist. ECT/RST values in agent_registry.py are LLM system prompt simulation parameters
+      — the LLM is told it has a budget, but no actual on-chain token transfers occur.
+      No TokenManager.sol source in repo. AgentGovernance and DecisionQuality similarly
+      deployed but uncalled. Token economy is architectural intent, not runtime behavior.
+
+  # ════════════════════════════════════════════════════════════════
+  # LIBRARY DESIGN — libnexus
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D032
+    date: "2026-01"
+    topic: kernel-abstraction
+    decision: "libnexus provides 'syscall' abstraction: blockchain contract calls replace OS syscalls"
+    rationale: >
+      The core NEXUS OS concept: blockchain IS the kernel. Just as POSIX programs call
+      open()/read()/write(), NEXUS programs call NexusKernel.log_reasoning()/register_node()/
+      register_service(). This abstraction makes blockchain interaction as natural as
+      standard library calls and hides web3 complexity from application code.
+    implemented_in:
+      - /opt/nexus/libnexus/kernel.py
+      - /opt/nexus/libnexus/__init__.py
+    status: active
+    notes: >
+      kernel.py docstring: "In NEXUS OS: programs call kernel via smart contracts."
+      Verified operational: NexusKernel connects to chain, block=1720 confirmed.
+      __init__.py v0.2.0 only exports NexusKernel (NexusStorage accessible via direct import).
+      Despite documentation listing libnexus as "planned", it is fully built and functional.
+
+  # ════════════════════════════════════════════════════════════════
+  # SERVICES — FreedomBox Integration
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D033
+    date: "2026-02"
+    topic: service-management-framework
+    decision: "Adapt FreedomBox Plinth service framework for NEXUS service management"
+    rationale: >
+      FreedomBox has mature service lifecycle management (start/stop/configure/backup).
+      Rather than building from scratch, extract firewall, networks, and storage modules.
+      Replace Django ORM with SQLite, replace Django views with FastAPI.
+    implemented_in:
+      - /opt/nexus/core/service_framework.py
+    status: superseded
+    notes: >
+      OUTCOME: Only core/service_framework.py was successfully adapted (331 lines, operational).
+      The services/ modules (27 files) are DEAD — they still import plinth/django/augeas
+      which are not installed. The clean rewrite (service_framework.py) is the survivor.
+      core/action_utils.py (850 lines) also dead (imports augeas).
+      Superseded by the FastAPI+SQLite pattern in service_framework.py.
+
+  # ════════════════════════════════════════════════════════════════
+  # DESIGN PRINCIPLES — Constitution
+  # ════════════════════════════════════════════════════════════════
+
+  - id: D034
+    date: "2025-Q4"
+    topic: identity-principle
+    decision: "Blockchain IS the kernel — Geth starts before all other services"
+    rationale: >
+      This is the foundational design principle of NEXUS OS. All other services depend
+      on the chain for identity, coordination, and audit. Making Geth a hard dependency
+      (not an optional service) enforces this principle architecturally.
+    implemented_in:
+      - /opt/nexus/automation/constitution.json
+      - /opt/nexus/core/service_framework.py
+    status: active
+    notes: "constitution.json principle 1. ServiceRegistry on-chain anchoring in service_framework.py."
+
+  - id: D035
+    date: "2025-Q4"
+    topic: hardware-identity
+    decision: "Every device = Ethereum wallet. Hardware identity is cryptographic."
+    rationale: >
+      Wallets provide unique, unforgeable identity for each node without a central
+      identity authority. ResourceManager.registerNode() anchors hostname + capabilities
+      to a wallet address. All agent decisions are attributed to the deployer wallet.
+    implemented_in:
+      - /opt/nexus/contracts/source/ResourceManager.sol
+      - /opt/nexus/libnexus/kernel.py
+      - /opt/nexus/scripts/register_nodes.py
+    status: active
+    notes: "constitution.json principle 2. Deployer: 0x817B...958. Validators have their own wallets."
+
+  - id: D036
+    date: "2026-02"
+    topic: planned-but-not-implemented
+    decision: "Temporal binning (8,760 hourly bins), homomorphic encryption, differential privacy listed in constitution"
+    rationale: >
+      Constitution lists these as design principles: temporal binning as universal
+      scheduling abstraction, privacy by design (daily encryption rotation, homomorphic
+      encryption, differential privacy). These represent intended future architecture.
+    implemented_in: []
+    status: planned
+    notes: >
+      Zero code implements any of these. No temporal binning in any Python file.
+      No homomorphic encryption library imported. No differential privacy mechanism.
+      SmolAgents ("SmolAgents for narrow execution" in constitution) also not implemented —
+      only LangGraph exists in the codebase. These are aspirational architecture notes
+      in constitution.json, not active decisions.

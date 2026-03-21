@@ -1,269 +1,400 @@
-# components.yaml — Verified component inventory
-# Generated: 2026-03-09T15:00:00-04:00
-# Generator: Claude Code — cross-referenced code_index.yaml against live filesystem + running services
-# Method: every file path verified with ls/stat; every service verified with systemctl/curl
-# Total components: 15
+# NEXUS OS Compiled Database — Components
+# Generated: 2026-03-21
+# Scope: Dev Assistant pipeline (/opt/nexus/agents/) + shared infrastructure
+# Supersedes: Previous compiled-db generated against CAF (/opt/nexus/automation/)
+#
+# NOTE: The CAF orchestrator (/opt/nexus/automation/dev_orchestrator.py and all
+# automation/ files) is DEPRECATED. It was the first-generation autonomous agent,
+# replaced by the Dev Assistant pipeline after iterating through multiple LLM
+# strategies. CAF files remain on disk (untracked in git) but are not running.
+# All gaps, interfaces, and dependencies in this compiled-db describe the
+# LIVE system only.
 
 components:
 
-  # ────────────────────────────────────────────────────────────────
-  - id: blockchain-kernel
-    name: "Private Ethereum Blockchain (Clique PoA)"
+  # ════════════════════════════════════════════════════════════════
+  # DEV ASSISTANT — Primary Agent Pipeline (LIVE)
+  # ════════════════════════════════════════════════════════════════
+
+  - id: dev-assistant-bot
+    name: "Dev Assistant Discord Bot"
     status: operational
     description: >
-      3-validator Clique PoA chain, Chain ID 123454321, period=0 (28ms confirmation
-      on pending tx). Block 1720+ as of 2026-03-09. All 3 validators sealing with
-      2 peers each. Geth 1.13.15-stable. Deployer wallet 0x817B...958.
+      Human-in-the-loop development assistant operating in Discord #agent-chat.
+      Accepts task descriptions, routes analysis to the coordinator LLM, generates
+      SEARCH/REPLACE patch plans, executes with git branch isolation, and logs
+      everything to blockchain. Supports both interactive (human-driven) and
+      autonomous (queue-driven) modes. Entry point for all development task execution.
     files:
-      # Genesis and config live on validators (/opt/nexus/blockchain/ on nexus-master).
-      # Only the test-chain genesis is present on nexus-admin:
-      - /opt/nexus/contracts/genesis-fast-test.json
-      # Validation + benchmarking scripts (on nexus-admin):
-      - /opt/nexus/scripts/validate-phase1.sh
-      - /opt/nexus/scripts/verify-fast-blocks.py
-      - /opt/nexus/contracts/benchmark_fast.py
-    nodes:
-      - "nexus-master (10.0.20.3) — validator + sealer; Geth datadir /opt/nexus/blockchain"
-      - "nexus-ai (10.0.20.4) — validator + sealer"
-      - "nexus-storage (10.0.20.11) — validator + sealer"
+      - /opt/nexus/agents/dev_assistant.py
+      - /opt/nexus/agents/queue_commands.py
+    key_classes:
+      - "DevAssistant(discord.Client) — main bot, handles on_message routing"
+      - "TaskContext — dataclass tracking per-task state through the pipeline"
+    constants:
+      MAX_STEPS_PER_TASK: 10
+      MAX_CLARIFICATION_ROUNDS: 2
+      MAX_FILE_SIZE: 12000
+    imports:
+      - llm_router_v2.LLMRouter
+      - blockchain_logger.get_blockchain_logger
+      - task_queue.TaskQueue
+      - queue_commands.handle_queue_command
+      - autonomous_loop.AutonomousLoop
+      - task_decomposer.decompose_task
+      - knowledge_planner.get_planning_context
+      - safety_gates.ScopeEnforcer
     dependencies:
-      - "geth 1.13.15 (system package on validators)"
-      - "clef (transaction signer, IPC at /opt/nexus/clef/clef.ipc on each validator)"
-    remote_files_not_listed:
-      - "/opt/nexus/blockchain/genesis.json (nexus-master)"
-      - "/opt/nexus/blockchain/genesis-fast.json (nexus-master)"
-      - "/opt/nexus/blockchain/genesis-original-backup.json (nexus-master)"
-      - "/opt/nexus/blockchain/static-nodes.json (nexus-master)"
-      - "/opt/nexus/blockchain/config.toml (nexus-master — StaticNodes + --config flag)"
-      - "/etc/systemd/system/nexus-geth.service (all validators)"
-      - "/etc/systemd/system/clef.service (all validators)"
-    last_validated: "2026-03-09"
+      - llm-routing
+      - blockchain-logging
+      - task-queue
+      - autonomous-loop
+      - knowledge-layer
+      - safety-layer
+    last_validated: "2026-03-20"
+    tests: "101/101 passing (74 Phase 3 + 27 Phase 4)"
     notes: >
-      Live verification: eth_blockNumber=0x6b8 (1720), net_peerCount=0x2 on all 3 validators.
-      period=0: blocks only produced on pending txns — no activity = height stalls (normal).
-      Clef uses rules.js + masterseed.json; any edit requires re-attest + restart.
-      ExtraDataToPOAMiddleware required for all web3 connections.
+      dev_assistant.py is in PROTECTED_PATHS — cannot be modified by the bot itself.
+      Task states: analyzing → awaiting_clarification → planning → awaiting_approval →
+      executing → done/failed. The system prompt explicitly marks /opt/nexus/automation/
+      as "Old automation (DO NOT MODIFY)".
 
-  # ────────────────────────────────────────────────────────────────
-  - id: smart-contracts
-    name: "NEXUS OS Smart Contracts"
+  # ════════════════════════════════════════════════════════════════
+  # AUTONOMOUS EXECUTION
+  # ════════════════════════════════════════════════════════════════
+
+  - id: autonomous-loop
+    name: "Autonomous Task Execution Loop"
     status: operational
     description: >
-      9 Solidity contracts deployed on the private chain. All addresses verified from
-      deployed/*.json. ReasoningLedger is the primary audit trail. StorageRegistry
-      coordinates IPFS metadata. TokenManager and governance contracts are deployed
-      but have no application-layer callers yet (see token-economy component).
+      Picks tasks from TaskQueue, executes through the dev_assistant pipeline,
+      posts summary reports every 5 tasks, handles sub-task decomposition.
+      Imported by dev_assistant.py; does NOT run its own event loop.
+      Includes safety gate integration, scope enforcement, retry policy,
+      and test validation at each step.
     files:
-      - /opt/nexus/contracts/source/ReasoningLedger.sol
-      - /opt/nexus/contracts/source/ResourceManager.sol
-      - /opt/nexus/contracts/source/StorageRegistry.sol
-      - /opt/nexus/contracts/source/ServiceRegistry.sol
-      - /opt/nexus/contracts/source/MeshRegistry.sol
-      - /opt/nexus/contracts/source/PidRegistry.sol
-      - /opt/nexus/contracts/deployed/ReasoningLedger.json
-      - /opt/nexus/contracts/deployed/ResourceManager.json
-      - /opt/nexus/contracts/deployed/StorageRegistry.json
-      - /opt/nexus/contracts/deployed/ServiceRegistry.json
-      - /opt/nexus/contracts/deployed/MeshRegistry.json
-      - /opt/nexus/contracts/deployed/PidRegistry.json
-      - /opt/nexus/contracts/deployed/AgentGovernance.json
-      - /opt/nexus/contracts/deployed/DecisionQuality.json
-      - /opt/nexus/contracts/deployed/TokenManager.json
-      - /opt/nexus/contracts/scripts/deploy.py
-      - /opt/nexus/contracts/scripts/deploy_pid_registry.py
-      - /opt/nexus/contracts/scripts/deploy_service_registry.py
-      - /opt/nexus/contracts/scripts/deploy_storage_registry.py
-    deployed_addresses:
-      ReasoningLedger:  "0x0317451264E1de1A0696A81f6141e72E58686DE4"
-      ResourceManager:  "0x7E7f5e6cd9d7d485eeFa4Ec3Fb211705A3A8c6C6"
-      StorageRegistry:  "0x859e30a6b752Af6D96d309Dc3a5bECfCfFDe31A6"
-      ServiceRegistry:  "0xbd015B6A2C0E10E1f31b7C50580A2Cc86e3A0dd8"
-      MeshRegistry:     "0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F"
-      PidRegistry:      "0xdE9DC5FB0386Cf92145d36e6d46f2a3FA8b531AA"
-      AgentGovernance:  "0xA4f8CA77065bE462324624083990F58ff1f12207"
-      DecisionQuality:  "0x4198228d18c8435d73E51105b912032f657f7218"
-      TokenManager:     "0x08C96540A286a6b3cDe1E20F77B246E53D238E48"
+      - /opt/nexus/agents/autonomous_loop.py
+    key_classes:
+      - "AutonomousLoop — async loop with start/pause/resume/stop/focus"
+    constants:
+      SUMMARY_INTERVAL: 5
+      TASK_COOLDOWN_SECONDS: 5
+      POLL_INTERVAL_SECONDS: 30
+      MAX_CONSECUTIVE_FAILURES: 3
+    imports:
+      - knowledge_indexer.index_task
+      - safety_gates.SafetyGate
+      - safety_gates.ScopeEnforcer
+      - safety_gates.RetryPolicy
+      - task_logger.log_task
+      - task_logger.read_recent_logs
+      - test_validator.TestValidator
     dependencies:
-      - blockchain-kernel
-    missing_source:
-      - "TokenManager.sol — not in contracts/source/ (deployed but source not committed)"
-      - "AgentGovernance.sol — not in contracts/source/"
-      - "DecisionQuality.sol — not in contracts/source/"
-    last_validated: "2026-03-09"
+      - safety-layer
+      - knowledge-layer
+      - task-queue
+    last_validated: "2026-03-20"
     notes: >
-      Actively called contracts: ReasoningLedger (blockchain_logger.py), StorageRegistry
-      (nexus_storage.py), ServiceRegistry (service_framework.py), MeshRegistry
-      (mesh_discovery.py), ResourceManager (register_nodes.py).
-      Passively deployed (no callers): AgentGovernance, DecisionQuality, TokenManager,
-      PidRegistry. Source for 3 contracts not committed to repo.
+      MAX_CONSECUTIVE_FAILURES=3 pauses the loop but does NOT check if failures
+      share the same root cause (carried forward from CAF gap G038 concept).
 
-  # ────────────────────────────────────────────────────────────────
-  - id: ai-agent-hierarchy
+  - id: task-queue
+    name: "Persistent YAML Task Queue"
+    status: operational
+    description: >
+      Persistent task queue stored as YAML. Tracks task status (pending, in_progress,
+      done, failed), priority, risk level, timestamps. Survives bot restarts.
+      Queue commands exposed via Discord through queue_commands.py.
+    files:
+      - /opt/nexus/agents/task_queue.py
+      - /opt/nexus/agents/task_queue.yaml
+    dependencies: []
+    last_validated: "2026-03-20"
+    notes: "task_queue.yaml is gitignored. Queue commands: show queue, add task, status, show last N, remove, focus, etc."
+
+  - id: task-decomposer
+    name: "Task Decomposition via Coordinator"
+    status: operational
+    description: >
+      Uses the coordinator LLM to break large tasks into ordered sub-tasks
+      with dependency tracking. Called by autonomous_loop when a task is
+      too complex for single-step execution.
+    files:
+      - /opt/nexus/agents/task_decomposer.py
+    dependencies:
+      - llm-routing
+    last_validated: "2026-03-20"
+
+  # ════════════════════════════════════════════════════════════════
+  # LLM ROUTING
+  # ════════════════════════════════════════════════════════════════
+
+  - id: llm-routing
+    name: "4-Tier LLM Router (v2)"
+    status: operational
+    description: >
+      Routes LLM requests to the appropriate hardware tier based on agent ID
+      and task type. 4 tiers with automatic fallback. Includes thinking token
+      stripping for Qwen3.5 models. Async via aiohttp or httpx.
+    files:
+      - /opt/nexus/agents/llm_router_v2.py
+    tiers:
+      coordinator:
+        model: "qwen/qwen3.5-35b-a3b"
+        endpoint: "http://10.0.30.3:1234/v1/chat/completions"
+        hardware: "ThinkStation (VLAN 30)"
+        timeout: 600
+        fallback: "qwen2.5-7b-instruct-1m on same endpoint"
+        agents: ["ceo"]
+        task_types: ["planning", "task_decomp", "code_review", "strategy"]
+      coder:
+        model: "qwen/qwen2.5-coder-14b"
+        endpoint: "http://10.0.30.2:1234/v1/chat/completions"
+        hardware: "ThinkPad (VLAN 30)"
+        timeout: 300
+        fallback: "qwen/qwen3.5-35b-a3b on ThinkStation (WARNING: wrong model for code)"
+        agents: []
+        task_types: ["code_gen", "agent_v2", "debugging", "patch_create"]
+      director:
+        model: "qwen2.5-7b-instruct-1m"
+        endpoint: "http://10.0.30.3:1234/v1/chat/completions"
+        hardware: "ThinkStation (VLAN 30, shared port, model-routed)"
+        timeout: 120
+        fallback: "qwen/qwen3.5-35b-a3b on same endpoint"
+        agents: ["coo", "compute_director", "storage_director", "network_director",
+                 "security_director", "blockchain_director", "ml_director", "quantum_director"]
+        task_types: ["department_decision", "resource_allocation", "escalation"]
+      worker:
+        model: "llama3.2:1b"
+        endpoint: "http://10.0.20.6:11434/v1/chat/completions"
+        hardware: "nexus-ai2 via Ollama (VLAN 20)"
+        timeout: 120
+        fallback: "qwen2.5-7b-instruct-1m on ThinkStation"
+        agents: ["process_scheduler", "load_balancer", "resource_monitor",
+                 "backup_agent", "cache_manager", "flock_federator",
+                 "mesh_coordinator", "vpn_manager", "dns_agent",
+                 "auth_agent", "anomaly_detector", "audit_logger",
+                 "contract_deployer", "token_manager", "consensus_monitor",
+                 "training_coordinator", "inference_server", "dataset_manager",
+                 "qaoa_optimizer", "circuit_builder", "noise_analyzer"]
+        task_types: ["worker_task", "status_report", "simple_json"]
+    dependencies:
+      - llm-inference
+    last_validated: "2026-03-20"
+    notes: >
+      KNOWN ISSUE (Roadmap 4.1): Coder tier falls back to coordinator model
+      (qwen3.5-35b-a3b) when ThinkPad is offline. Coordinator model cannot
+      produce valid SEARCH/REPLACE blocks — 100% failure rate. Fix: pre-flight
+      health check for coder endpoint before task execution.
+
+  # ════════════════════════════════════════════════════════════════
+  # SAFETY & RELIABILITY
+  # ════════════════════════════════════════════════════════════════
+
+  - id: safety-layer
+    name: "Safety Gates, Scope Enforcement, Retry Policy"
+    status: operational
+    description: >
+      Risk-based execution gating (low=auto, medium=60s timeout, high=manual approval).
+      Scope enforcement verifies file edits fall within declared scope.
+      Retry policy with max 2 retries and error context injection.
+      Destructive patch guards (max 10 net deletions, max 20% file shrinkage).
+    files:
+      - /opt/nexus/agents/safety_gates.py
+      - /opt/nexus/agents/safety_config.py
+      - /opt/nexus/agents/health_monitor.py
+      - /opt/nexus/agents/test_validator.py
+    key_classes:
+      - "SafetyGate — risk classification and approval workflow"
+      - "ScopeEnforcer — validates file edits against declared scope"
+      - "RetryPolicy — max retries with error context"
+      - "HealthMonitor — async checks for disk, LLM endpoints, blockchain"
+      - "TestValidator — post-execution pytest runner"
+    config:
+      AUTO_APPROVE_LOW: true
+      MEDIUM_RISK_TIMEOUT: 60
+      HIGH_RISK_TIMEOUT: 0
+      MAX_RETRIES: 2
+      DISK_MIN_FREE_GB: 2.0
+      LLM_HEALTH_TIMEOUT: 10
+    dependencies: []
+    last_validated: "2026-03-20"
+    tests: "74/74 Phase 3 tests passing"
+    notes: >
+      KNOWN ISSUE (Roadmap 4.3): Destructive patch guard threshold (10 lines)
+      too aggressive for docstring replacement tasks. Fix: make configurable
+      via safety_config.py, default to 20.
+
+  # ════════════════════════════════════════════════════════════════
+  # KNOWLEDGE & LEARNING (Phase 4)
+  # ════════════════════════════════════════════════════════════════
+
+  - id: knowledge-layer
+    name: "Knowledge & Learning Pipeline"
+    status: operational
+    description: >
+      Structured task logging (JSONL), ChromaDB semantic indexing, knowledge-informed
+      planning context injection, failure pattern recognition, and change tracking.
+      Closes the learning loop: task outcomes feed back into future planning.
+    files:
+      - /opt/nexus/agents/task_logger.py
+      - /opt/nexus/agents/knowledge_indexer.py
+      - /opt/nexus/agents/knowledge_planner.py
+      - /opt/nexus/agents/failure_analyzer.py
+      - /opt/nexus/agents/change_analyzer.py
+    key_functions:
+      - "task_logger.log_task() — structured JSONL logging of every task outcome"
+      - "knowledge_indexer.index_task() — ChromaDB upsert with async threading"
+      - "knowledge_planner.get_planning_context() — injects similar past tasks into coordinator prompt"
+      - "knowledge_planner.get_failure_warnings() — warns about previously failed similar tasks"
+      - "failure_analyzer.format_failure_report() — categorized failure patterns"
+      - "change_analyzer.format_changes_report() — what changed in last N hours"
+    chromadb:
+      host: "localhost"
+      port: 8000
+      collection: "dev_assistant_tasks"
+      location: "nexus-admin:8000"
+    dependencies:
+      - chromadb-knowledge
+    last_validated: "2026-03-20"
+    tests: "27/27 Phase 4 tests passing"
+    notes: >
+      KNOWN ISSUE (Roadmap 4.4): First ChromaDB client creation triggers
+      onnxruntime GPU discovery (slow on Pi), causing Discord heartbeat warnings.
+      Fix: warm-up call during bot startup. Integration verified live: task logging,
+      ChromaDB upsert, knowledge planner query all working.
+
+  # ════════════════════════════════════════════════════════════════
+  # 30-AGENT DISCORD HIERARCHY (Separate from Dev Assistant)
+  # ════════════════════════════════════════════════════════════════
+
+  - id: agent-hierarchy
     name: "30-Agent Discord Bot Hierarchy"
-    status: partial
+    status: dormant
     description: >
-      30 Discord bots (2 C-Suite + 7 Directors + 21 Workers) deployed via
-      hierarchy_manager.py. Each agent uses LangGraph multi-step reasoning
-      (gather_context→analyze→decide→finalize) with SHA256 reasoning hashes logged
-      on-chain. Code is complete and was running; process is currently down.
+      30 Discord bots (2 C-Suite + 7 Directors + 21 Workers) with LangGraph
+      multi-step reasoning and SHA256 reasoning hashes logged on-chain.
+      Currently NOT running — hierarchy_manager.py process is down.
+      Dev Assistant operates independently of this hierarchy for code tasks.
+      The agent_registry.py is shared: Dev Assistant uses it for tier assignments
+      in llm_router_v2.py.
     files:
       - /opt/nexus/agents/agent_registry.py
       - /opt/nexus/agents/agent_workflow.py
       - /opt/nexus/agents/blockchain_logger.py
-      - /opt/nexus/agents/ceo_bot.py
       - /opt/nexus/agents/hierarchy_manager.py
-      - /opt/nexus/agents/invite_bots.py
       - /opt/nexus/agents/llm_client.py
       - /opt/nexus/agents/verify_system.py
+      - /opt/nexus/agents/invite_bots.py
       - /opt/nexus/agents/.env
     guild:
       id: "1441732155225931869"
       name: "The Enterprise"
-      active_bots: 25
-      webhook_bots: 5
+      registered_bots: 30
     dependencies:
       - llm-inference
       - blockchain-logging
-      - discord-comms
     last_validated: "2026-03-09"
     notes: >
-      hierarchy.pid contained PID 29575 — process is NOT currently running.
-      No systemd service for hierarchy_manager; it runs as a foreground process or
-      under orchestrator supervision. Agent imports verified: agent_registry loads
-      all 30 agents (tested: 'agents loaded: 30'). langgraph confirmed installed.
-      ECT/RST token budgets (e.g. CEO: 1000 ECT/day) are simulation parameters
-      in LLM system prompts — NOT real on-chain transactions.
+      hierarchy.pid shows process NOT running. No systemd service — runs as
+      foreground process. ECT/RST token budgets in agent prompts are simulation
+      parameters, NOT real on-chain transactions. llm_client.py has STALE IP
+      (192.168.8.128 — pre-VLAN). Would need IP update before restarting.
 
-  # ────────────────────────────────────────────────────────────────
-  - id: caf-orchestrator
-    name: "Cognitive Autonomy Framework (CAF) Orchestrator"
-    status: partial
-    description: >
-      Autonomous development orchestrator running on nexus-admin. Implements
-      planner-executor separation: planning_engine selects from intent_registry,
-      task_planner generates JSON execution plans via LLM, execution_engine runs
-      steps locally/via SSH. Includes ChromaDB memory, guardrails, feedback loop,
-      Discord human-in-the-loop, and health monitoring. 1216-line dev_orchestrator.py.
-    files:
-      - /opt/nexus/automation/dev_orchestrator.py
-      - /opt/nexus/automation/planning_engine.py
-      - /opt/nexus/automation/task_planner.py
-      - /opt/nexus/automation/execution_engine.py
-      - /opt/nexus/automation/guardrails.py
-      - /opt/nexus/automation/context_builder.py
-      - /opt/nexus/automation/intent_registry.yaml
-      - /opt/nexus/automation/constitution.json
-      - /opt/nexus/automation/feedback_loop.py
-      - /opt/nexus/automation/failure_analyzer.py
-      - /opt/nexus/automation/health_monitor.py
-      - /opt/nexus/automation/audit_logger.py
-      - /opt/nexus/automation/llm_router.py
-      - /opt/nexus/automation/command_executor.py
-      - /opt/nexus/automation/intent_parser.py
-      - /opt/nexus/automation/persona.py
-      - /opt/nexus/automation/system_queries.py
-      - /opt/nexus/automation/git_monitor.py
-      - /opt/nexus/automation/hid_controller.py
-      - /opt/nexus/automation/proactive_tasks.py
-      - /opt/nexus/automation/subagent_client.py
-      - /opt/nexus/automation/web_research.py
-      - /opt/nexus/automation/discord_comms.py
-      - /opt/nexus/automation/discord_reporter.py
-      - /opt/nexus/automation/build_world_model.py
-      - /opt/nexus/automation/indexer.py
-      - /opt/nexus/automation/chroma_memory.py
-      - /opt/nexus/automation/seed_knowledge.py
-      - /etc/systemd/system/nexus-orchestrator.service
-      - /etc/systemd/system/nexus-reindex.service
-    llm_tiers:
-      tier1: "ThinkPad (10.0.30.2:11434) — Qwen3.5-35B, blocked when offline"
-      tier2: "nexus-ai2 (10.0.20.6:11434) — Qwen2.5-7B, 24/7 fallback"
-    dependencies:
-      - chromadb-knowledge
-      - llm-inference
-      - blockchain-kernel
-    last_validated: "2026-03-09"
-    notes: >
-      nexus-orchestrator.service is ENABLED but currently inactive (dead).
-      Was running for 3d 12h 44min 49s before being SIGTERM'd at 10:23:32 EDT.
-      Mem peak 1.3G (swap: 63.6M) — RAM pressure likely on 2GB admin node.
-      Discord gateway sessions visible in orchestrator.log (last: 09:27 EDT).
-      All automation/ files are UNTRACKED in git — entire CAF not committed.
-      To restart: sudo systemctl start nexus-orchestrator.service
+  # ════════════════════════════════════════════════════════════════
+  # BLOCKCHAIN AUDIT TRAIL
+  # ════════════════════════════════════════════════════════════════
 
-  # ────────────────────────────────────────────────────────────────
-  - id: llm-inference
-    name: "LLM Inference Layer"
-    status: operational
-    description: >
-      Two-tier LLM inference. Tier 1 (agents): local llama-server on nexus-ai
-      (10.0.20.4:8090) running SmolLM2-1.7B Q4_K_M (~1GB, ~7-9 tok/s). Worker
-      agents use local-first with HuggingFace API fallback. CEO/Directors always
-      use HuggingFace. Tier 2 (CAF): nexus-ai2 (10.0.20.6:11434) Qwen2.5-7B via
-      Ollama, ThinkPad Qwen3.5-35B as Tier 1 when available.
-    files:
-      - /opt/nexus/agents/llm_client.py
-      - /opt/nexus/automation/llm_router.py
-      - /opt/nexus/automation/subagent_client.py
-    nodes:
-      - "nexus-ai (10.0.20.4) — Hailo-8 (vision only), llama-server CPU on SmolLM2-1.7B"
-      - "nexus-ai2 (10.0.20.6) — Hailo-10H AI HAT+, Qwen2.5-7B via Ollama"
-      - "ThinkPad (10.0.30.2) — Qwen3.5-35B via Ollama (VLAN 30, offline-capable)"
-    dependencies:
-      - blockchain-kernel
-    remote_files_not_listed:
-      - "/opt/nexus/llm/llama.cpp/build/bin/llama-server (nexus-ai)"
-      - "/opt/nexus/models/SmolLM2-1.7B-Instruct-Q4_K_M.gguf (nexus-ai)"
-      - "/etc/systemd/system/local-inference.service (nexus-ai)"
-    last_validated: "2026-03-09"
-    notes: >
-      Live verification: GET http://10.0.20.4:8090/v1/models returned SmolLM2-1.7B.
-      local-inference.service is ACTIVE on nexus-ai.
-      llama-server confirmed at /opt/nexus/llm/llama.cpp/build/bin/llama-server.
-      Note: nexus-ai Hailo-8 is VISION ONLY — llama-server runs on CPU.
-      nexus-ai2 Hailo-10H (firmware 5.1.1) not yet integrated with Ollama.
-
-  # ────────────────────────────────────────────────────────────────
   - id: blockchain-logging
-    name: "On-Chain Agent Decision Audit Trail"
+    name: "Blockchain Logger (ReasoningLedger)"
     status: operational
     description: >
-      Every agent decision produces a SHA256 reasoning hash. blockchain_logger.py
-      logs a short summary + hash to ReasoningLedger.sol on-chain, creating an
-      immutable audit trail. Full decision text stays off-chain in per-agent JSONL
-      files under agents/logs/decisions/. Web3 calls run in thread executor.
+      Logs agent decisions to ReasoningLedger smart contract on-chain. Each decision
+      produces a SHA256 reasoning hash. Full decision text stays off-chain in JSONL;
+      the on-chain hash proves integrity. Singleton pattern with nonce lock for
+      concurrent access. 1170+ entries logged.
     files:
       - /opt/nexus/agents/blockchain_logger.py
-      - /opt/nexus/contracts/source/ReasoningLedger.sol
-      - /opt/nexus/contracts/deployed/ReasoningLedger.json
+    contract:
+      name: "ReasoningLedger"
+      address: "0x0317451264E1de1A0696A81f6141e72E58686DE4"
+      rpc: "http://10.0.20.3:8545"
+    wallet: "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
     dependencies:
       - blockchain-kernel
       - smart-contracts
-      - ai-agent-hierarchy
+    last_validated: "2026-03-20"
+    notes: >
+      Uses correct VLAN 20 IP (10.0.20.3). Pending retry queue for failed submissions.
+      Web3 calls run in thread executor to avoid blocking asyncio event loop.
+
+  # ════════════════════════════════════════════════════════════════
+  # SHARED INFRASTRUCTURE (Not Dev-Assistant-specific)
+  # ════════════════════════════════════════════════════════════════
+
+  - id: blockchain-kernel
+    name: "Private Ethereum Network (Geth PoA)"
+    status: operational
+    description: >
+      3-validator Clique Proof-of-Authority network. Chain ID 123454321. Period=0
+      (instant blocks on demand). Geth nodes on nexus-master, nexus-ai, nexus-storage.
+      ExtraDataToPOAMiddleware required for all web3 connections.
+    validators:
+      - nexus-master (10.0.20.3)
+      - nexus-ai (10.0.20.4)
+      - nexus-storage (10.0.20.5)
+    chain_id: 123454321
+    block_period: 0
+    dependencies: []
+    last_validated: "2026-03-09"
+
+  - id: smart-contracts
+    name: "NEXUS OS Smart Contracts (9 deployed)"
+    status: operational
+    description: >
+      9 Solidity contracts deployed on the private chain. ReasoningLedger is the
+      primary audit trail. StorageRegistry coordinates IPFS metadata. TokenManager
+      and governance contracts are deployed but have no application-layer callers yet.
+    deployed:
+      ReasoningLedger: "0x0317451264E1de1A0696A81f6141e72E58686DE4"
+      ResourceManager: "0x7E7f5e6cd9d7d485eeFa4Ec3Fb211705A3A8c6C6"
+      StorageRegistry: "0x859e30a6b752Af6D96d309Dc3a5bECfCfFDe31A6"
+      ServiceRegistry: "0xbd015B6A2C0E10E1f31b7C50580A2Cc86e3A0dd8"
+      MeshRegistry: "0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F"
+      PidRegistry: "0xdE9DC5FB0386Cf92145d36e6d46f2a3FA8b531AA"
+      AgentGovernance: "0xA4f8CA77065bE462324624083990F58ff1f12207"
+      DecisionQuality: "0x4198228d18c8435d73E51105b912032f657f7218"
+      TokenManager: "0x08C96540A286a6b3cDe1E20F77B246E53D238E48"
+    missing_source:
+      - "TokenManager.sol — deployed but source not committed"
+      - "AgentGovernance.sol — deployed but source not committed"
+      - "DecisionQuality.sol — deployed but source not committed"
+    files:
+      - /opt/nexus/contracts/source/
+      - /opt/nexus/contracts/deployed/
+      - /opt/nexus/contracts/scripts/deploy.py
+    dependencies:
+      - blockchain-kernel
     last_validated: "2026-03-09"
     notes: >
-      Contract: 0x0317451264E1de1A0696A81f6141e72E58686DE4.
-      Deployer wallet: 0x817B0842B208B76A7665948F8D1A0592F9b1e958.
-      Per-agent JSONL decision logs: /opt/nexus/agents/logs/decisions/{agent_id}.jsonl
-      (tracked in git: ceo.jsonl, coo.jsonl, storage_director.jsonl, compute_worker_3.jsonl).
-      Singleton pattern via get_blockchain_logger()/reset_blockchain_logger().
+      Contracts are IMMUTABLE once deployed. 3 of 9 sources not committed —
+      cannot redeploy without source reconstruction. Actively called:
+      ReasoningLedger (blockchain_logger.py), StorageRegistry (nexus_storage.py),
+      ServiceRegistry (service_framework.py), MeshRegistry (mesh_discovery.py),
+      ResourceManager (register_nodes.py).
 
-  # ────────────────────────────────────────────────────────────────
   - id: libnexus
     name: "NEXUS OS Kernel Interface Library"
     status: operational
     description: >
       Python library providing blockchain syscall abstraction (NexusKernel) and
-      IPFS+blockchain storage coordination (NexusStorage). NexusKernel wraps all
-      smart contract calls: register_node(), log_reasoning(), store_file(),
-      register_service(). NexusStorage coordinates IPFS HTTP API + StorageRegistry
-      metadata. Importable via sys.path; not pip-installed system-wide.
+      IPFS+blockchain storage coordination (NexusStorage). Wraps all smart contract
+      calls. Fully operational despite older documentation listing it as "planned".
     files:
       - /opt/nexus/libnexus/__init__.py
       - /opt/nexus/libnexus/kernel.py
       - /opt/nexus/libnexus/contracts.py
       - /opt/nexus/libnexus/nexus_storage.py
-      - /opt/nexus/libnexus/setup.py
       - /opt/nexus/libnexus/cid_index.json
     dependencies:
       - blockchain-kernel
@@ -271,274 +402,107 @@ components:
       - ipfs-storage
     last_validated: "2026-03-09"
     notes: >
-      KEY FINDING: Fully operational despite all documentation listing it as
-      "planned". Live verification: sys.path.insert(0,'/opt/nexus') + from libnexus
-      import NexusKernel → NexusKernel(rpc_url='http://10.0.20.3:8545') →
-      connected=True, block=1720.
-      __init__.py exports NexusKernel only (not NexusStorage — minor inconsistency
-      with 0.2.0 docstring; NexusStorage still fully functional via direct import).
-      Must import as package (sys.path to /opt/nexus), not as bare module.
-      ipfshttpclient incompatible with Kubo 0.32.1 — nexus_storage.py uses HTTP API
-      directly. CID index: /opt/nexus/libnexus/cid_index.json.
+      Not pip-installed — importers must do sys.path.insert(0, '/opt/nexus').
+      Verified live: NexusKernel connects to chain, block=1720+.
 
-  # ────────────────────────────────────────────────────────────────
   - id: ipfs-storage
-    name: "Private IPFS Cluster + Storage Coordination"
+    name: "Private IPFS Cluster"
     status: operational
     description: >
-      Kubo 0.32.1 private cluster with swarm.key. ipfs.service active on nexus-admin
-      (15G limit). /mnt/nexus-nas mounted and confirmed reachable. Cross-node file
-      distribution verified (test files from all nodes visible on NAS). NexusStorage
-      library coordinates IPFS uploads with StorageRegistry on-chain metadata.
-    files:
-      - /etc/systemd/system/ipfs.service
-      - /opt/nexus/libnexus/nexus_storage.py
-      - /opt/nexus/contracts/source/StorageRegistry.sol
-      - /opt/nexus/contracts/deployed/StorageRegistry.json
-      - /opt/nexus/libnexus/cid_index.json
-      - /opt/nexus/scripts/setup-ipfs-private.sh
-      - /opt/nexus/scripts/test-ipfs-distribution.sh
-    nodes:
-      - "nexus-master (10.0.20.3) — 200G limit; peer 12D3KooWFmWdJWuYt5RLW89qWT3MjNnBbSEw7hKQpGUuMSbXzgFx"
-      - "nexus-ai (10.0.20.4) — 200G limit; peer 12D3KooWFj5VeXvu6Aagr9ehpL3qsmtNBxTzzwkJSaYubauhEGzX"
-      - "nexus-storage (10.0.20.11) — 800G limit; peer 12D3KooWPjmi4v4yEx8WX1Qs3z4xzJoWPqJkkQZ13Khu2q61VmsX"
-      - "nexus-admin (10.0.10.5) — 15G limit; peer 12D3KooWLfCQcQTVDcKUREMoyJzFoNvSRqsjPFMT3KE9FwixUMEk"
+      Kubo 0.32.1 private cluster with swarm key. Cross-node file distribution
+      verified. NFS mount at /mnt/nexus-nas for shared storage.
     dependencies:
       - blockchain-kernel
-      - smart-contracts
     last_validated: "2026-03-09"
-    notes: >
-      Live: ipfs.service ACTIVE, 'ipfs id' returns correct peer ID for nexus-admin.
-      /mnt/nexus-nas confirmed mounted; subdirs: blockchain/, agents/, backups/,
-      shared/, knowledge/, models/, logs/ visible. Test files from all 4 nodes
-      confirmed in NAS: test-from-AI, test-from-nexus-master, test-from-Storage,
-      test-from-Nexus-Admin. IPFS_PATH=/opt/nexus/ipfs.
+    notes: "nexus-admin IPFS had 0 swarm peers at last check — may need re-peering."
 
-  # ────────────────────────────────────────────────────────────────
+  - id: chromadb-knowledge
+    name: "ChromaDB Knowledge Store"
+    status: operational
+    description: >
+      ChromaDB HTTP server on nexus-admin:8000. Used by both the Dev Assistant
+      knowledge layer (dev_assistant_tasks collection) and the older agent hierarchy
+      (nexus_decisions, nexus_failures, nexus_context collections). Data stored
+      on NFS at /mnt/nexus-nas/knowledge/chroma.
+    collections:
+      - dev_assistant_tasks (Dev Assistant Phase 4)
+      - nexus_decisions (agent hierarchy)
+      - nexus_failures (agent hierarchy)
+      - nexus_context (agent hierarchy)
+      - code_chunks (CAF indexer — historical)
+      - docs_chunks (CAF indexer — historical)
+      - infra_configs (CAF indexer — historical)
+      - session_transcripts (CAF indexer — historical)
+      - web_research (CAF indexer — historical)
+    dependencies:
+      - ipfs-storage
+    last_validated: "2026-03-20"
+    notes: "9 total collections. Only dev_assistant_tasks is actively written to by the live system."
+
+  - id: llm-inference
+    name: "LLM Inference Hardware Layer"
+    status: operational
+    description: >
+      Physical LLM inference across ThinkStation, ThinkPad, and Pi cluster.
+      LM Studio on ThinkStation and ThinkPad (VLAN 30). Ollama on nexus-ai2 (VLAN 20).
+      JIT loading OFF on both LM Studio instances.
+    hardware:
+      ThinkStation:
+        ip: "10.0.30.3"
+        port: 1234
+        software: "LM Studio"
+        models: ["qwen/qwen3.5-35b-a3b (coordinator)", "qwen2.5-7b-instruct-1m (director)"]
+        specs: "Core Ultra 9 285 vPro, RTX A1000 8GB, 64GB DDR5"
+      ThinkPad:
+        ip: "10.0.30.2"
+        port: 1234
+        software: "LM Studio"
+        models: ["qwen/qwen2.5-coder-14b (coder)"]
+        specs: "i7-13800H, RTX A1000 Laptop 6GB, 32GB DDR5"
+      nexus-ai2:
+        ip: "10.0.20.6"
+        port: 11434
+        software: "Ollama"
+        models: ["llama3.2:1b (worker)"]
+        specs: "Raspberry Pi 5"
+    dependencies: []
+    last_validated: "2026-03-20"
+    notes: >
+      ThinkPad sleep causes cascading failures (Roadmap known issue).
+      Fix: powercfg /change standby-timeout-ac 0.
+
   - id: k3s-cluster
     name: "K3s Kubernetes Cluster"
-    status: operational
+    status: operational-unused
     description: >
-      K3s v1.34.x cluster. nexus-master (10.0.20.3:6443) as control-plane;
-      nexus-ai, nexus-storage, nexus-admin as workers with node labels. k3s-agent
-      active on nexus-admin (role=admin). No workloads confirmed deployed yet —
-      infrastructure is up, application layer is pending.
-    files:
-      - /etc/systemd/system/k3s-agent.service
-      - /etc/rancher/k3s/config.yaml
-      - /opt/nexus/scripts/deploy-k3s-safe.sh
-      - /opt/nexus/scripts/install-ipfs-cluster.sh
-    nodes:
-      - "nexus-master (10.0.20.3) — k3s control-plane (k3s.service)"
-      - "nexus-ai (10.0.20.4) — worker, role=ai-inference"
-      - "nexus-storage (10.0.20.11) — worker, role=storage"
-      - "nexus-admin (10.0.10.5) — worker, role=admin (k3s-agent.service)"
+      K3s cluster across Pi nodes. Infrastructure is up but no application
+      workloads currently deployed. Placeholder for future container orchestration.
     dependencies:
       - blockchain-kernel
     last_validated: "2026-03-09"
-    notes: >
-      k3s-agent.service ACTIVE on nexus-admin. kubectl not available locally —
-      need to run from nexus-master or set KUBECONFIG. Config at
-      /etc/rancher/k3s/config.yaml with token and node-ip. To fix stale node
-      after IP change: kubectl delete node <name>, restart k3s-agent.
+    notes: "kubectl not available on nexus-admin directly; must SSH to nexus-master."
 
-  # ────────────────────────────────────────────────────────────────
-  - id: discord-comms
-    name: "Discord Communication Layer"
-    status: partial
-    description: >
-      Two separate Discord integrations: (1) CAF orchestrator's discord_comms.py
-      provides human-in-the-loop control channel (approval requests, notifications,
-      command parsing); (2) hierarchy_manager.py runs 25 active agent bots.
-      Both are currently down with orchestrator and hierarchy process stopped.
-    files:
-      - /opt/nexus/automation/discord_comms.py
-      - /opt/nexus/automation/discord_reporter.py
-      - /opt/nexus/automation/command_executor.py
-      - /opt/nexus/automation/intent_parser.py
-      - /opt/nexus/automation/persona.py
-      - /opt/nexus/agents/hierarchy_manager.py
-    dependencies:
-      - caf-orchestrator
-      - ai-agent-hierarchy
-    last_validated: "2026-03-09"
-    notes: >
-      CAF Discord (discord_comms.py): runs as background thread inside orchestrator.
-      Token never logged; thread-safe send_notification() and blocking request_approval().
-      Guild: "The Enterprise" (1441732155225931869).
-      Agent bots: 25 active + 5 webhook-fallback.
-      Both integrations were last active ~09:27 EDT 2026-03-09 (orchestrator RESUME log).
-      Restart: sudo systemctl start nexus-orchestrator.service; run hierarchy_manager.py.
+  # ════════════════════════════════════════════════════════════════
+  # DEPRECATED — CAF Orchestrator (NOT RUNNING)
+  # ════════════════════════════════════════════════════════════════
 
-  # ────────────────────────────────────────────────────────────────
-  - id: chromadb-knowledge
-    name: "ChromaDB Vector Knowledge Base"
-    status: operational
+  - id: caf-orchestrator-DEPRECATED
+    name: "Cognitive Autonomy Framework (CAF) — DEPRECATED"
+    status: deprecated
     description: >
-      ChromaDB HTTP server at localhost:8000, data on nexus-storage NAS at
-      /mnt/nexus-nas/knowledge/chroma. Provides three-tier memory for the CAF
-      orchestrator: decisions, failures, context collections. Also stores code_chunks,
-      docs_chunks, infra_configs, session_transcripts, web_research collections.
+      First-generation autonomous orchestrator. Replaced by Dev Assistant after
+      multiple iterations of LLM strategy changes. All files in /opt/nexus/automation/
+      are untracked in git. The systemd service (nexus-orchestrator.service) is
+      enabled but inactive. DO NOT restart without updating stale IPs and reviewing
+      all automation/ code.
     files:
-      - /etc/systemd/system/chromadb.service
-      - /opt/nexus/automation/chroma_memory.py
-      - /opt/nexus/automation/context_builder.py
-      - /opt/nexus/automation/indexer.py
-      - /opt/nexus/automation/create_collections.py
-      - /opt/nexus/automation/seed_knowledge.py
-      - /etc/systemd/system/nexus-reindex.service
-    dependencies:
-      - ipfs-storage
-    last_validated: "2026-03-09"
-    notes: >
-      Live: chromadb.service ACTIVE. Python heartbeat confirmed (returned timestamp).
-      Data path: /mnt/nexus-nas/knowledge/chroma (NFS from nexus-storage).
-      Build world model: /mnt/nexus-nas/knowledge/world_model.db (SQLite).
-      chromadb.service starts with --host 0.0.0.0 --port 8000 (exposed cluster-wide).
-
-  # ────────────────────────────────────────────────────────────────
-  - id: dashboard
-    name: "NEXUS OS Monitoring Dashboard"
-    status: operational
-    description: >
-      Flask + SocketIO real-time dashboard (812 lines) monitoring blockchain metrics,
-      IPFS stats, storage proofs, syscall intercept data, and system resources across
-      all Pi cluster nodes. Accessible at http://nexus-admin:8880. Uses SSH pool to
-      collect metrics from each node. Separate from the CAF orchestrator.
-    files:
-      - /home/mhuraibi/nexus/phase4/dashboard/dashboard.py
-      - /etc/systemd/system/nexus-dashboard.service
-    dependencies:
-      - blockchain-kernel
-      - ipfs-storage
-    last_validated: "2026-03-09"
-    notes: >
-      nexus-dashboard.service ACTIVE. HTTP GET localhost:8880 returns HTML (confirmed).
-      Source at /home/mhuraibi/nexus/phase4/dashboard/ — NOT in /opt/nexus git repo.
-      Uses /opt/nexus/contracts/.venv python (Flask, flask_socketio, web3, gevent).
-      Collects: blockchain metrics (collect_blockchain), IPFS stats (collect_ipfs),
-      storage proofs (collect_storage_proofs), system resources (collect_system).
-      NOT tracked in git (phase4/ is untracked).
-
-  # ────────────────────────────────────────────────────────────────
-  - id: token-economy
-    name: "ECT/RST Token Economy"
-    status: partial
-    description: >
-      TokenManager contract is deployed at 0x08C9...8E48, but there is NO
-      application-layer code that calls it. ECT (Execution Credit Token) and RST
-      (Reputation Stake Token) budgets appear in agent system prompts as simulation
-      parameters for the LLM — they are NOT real on-chain transactions. The contract
-      exists on-chain but is unused by any Python code in the repo.
-    files:
-      - /opt/nexus/contracts/deployed/TokenManager.json
-      - /opt/nexus/contracts/deployed/AgentGovernance.json
-      - /opt/nexus/contracts/deployed/DecisionQuality.json
-    dependencies:
-      - blockchain-kernel
-      - smart-contracts
-    missing:
-      - "TokenManager.sol — source not committed to repo"
-      - "token_client.py or equivalent — no application-layer caller exists"
-      - "AgentGovernance.sol, DecisionQuality.sol — source not in contracts/source/"
-    last_validated: "2026-03-09"
-    notes: >
-      grep for 'TokenManager' in libnexus/kernel.py: no matches.
-      grep for 'TokenManager' in agents/*.py: matches only in agent_registry.py
-      system prompts (e.g. "Daily budget is 1000 ECT") — these are LLM simulation
-      parameters, not real contract calls. AgentGovernance and DecisionQuality are
-      similarly deployed but uncalled. This component needs an application layer
-      to become operational.
-
-  # ────────────────────────────────────────────────────────────────
-  - id: wireguard-overlay
-    name: "Multi-Layer Network Resilience (WireGuard + BATMAN-adv + RF)"
-    status: partial
-    description: >
-      Three-layer network fallback: WireGuard full-mesh overlay (10.1.0.0/24,
-      port 51820), BATMAN-adv WiFi IBSS mesh (10.0.0.0/24), and Sub-GHz RF
-      fallback via Flipper Zero (433.92MHz, 64B packets). WireGuard is active
-      on nexus-admin (nexus-mesh UP, 10.1.0.4/24). BATMAN-adv module loaded
-      but bat0 interface not active on admin. Degradation manager orchestrates
-      automatic layer switching.
-    files:
-      - /opt/nexus/networking/setup_wireguard.sh
-      - /opt/nexus/networking/setup_mesh.sh
-      - /opt/nexus/networking/degradation_manager.py
-      - /opt/nexus/networking/mesh_discovery.py
-      - /opt/nexus/networking/flipper_bridge.py
-      - /opt/nexus/networking/rf_mesh_daemon.py
-      - /opt/nexus/networking/rf_relay.py
-      - /opt/nexus/networking/degradation_log.json
-      - /opt/nexus/contracts/source/MeshRegistry.sol
-      - /opt/nexus/contracts/deployed/MeshRegistry.json
-    nodes:
-      - "nexus-admin: nexus-mesh UP, 10.1.0.4/24 (batman_adv module loaded, no bat0)"
-      - "nexus-master, nexus-ai, nexus-storage: WireGuard + BATMAN status unverified from here"
-    dependencies:
-      - smart-contracts
-      - blockchain-kernel
-    last_validated: "2026-03-09"
-    notes: >
-      WireGuard: 'ip addr show nexus-mesh' confirms interface UP with 10.1.0.4/24.
-      'wg show' returned no output (empty peer table on admin, or requires root).
-      BATMAN-adv: kernel module loaded ('lsmod | grep batman' = batman_adv 311296).
-      No bat0 interface active on nexus-admin — mesh not configured here.
-      RF layer: Flipper Zero Sub-GHz bridge. No Flipper connected on nexus-admin
-      (rf_mesh_daemon runs with --mock for testing).
-      MeshRegistry contract (0x21e5...A26F, block 1717) used by mesh_discovery.py
-      to register WireGuard peers on-chain.
-      Degradation levels: 1=Ethernet, 2=BATMAN-adv, 3=WireGuard, 4=Sub-GHz RF, 5=BLE.
-
-  # ────────────────────────────────────────────────────────────────
-  - id: services-freedombox
-    name: "FreedomBox-Derived Service Modules"
-    status: dead
-    description: >
-      Three FreedomBox Plinth modules (firewall, networks, storage) extracted and
-      adapted for NEXUS OS. 26 Python files + core/action_utils.py. Cannot function:
-      all import plinth, django, and/or augeas which are not installed on this system.
-      No NEXUS code calls these modules.
-    files:
-      - /opt/nexus/core/action_utils.py
-      - /opt/nexus/services/firewall/__init__.py
-      - /opt/nexus/services/firewall/components.py
-      - /opt/nexus/services/firewall/manifest.py
-      - /opt/nexus/services/firewall/privileged.py
-      - /opt/nexus/services/firewall/tests/__init__.py
-      - /opt/nexus/services/firewall/tests/test_components.py
-      - /opt/nexus/services/firewall/urls.py
-      - /opt/nexus/services/firewall/views.py
-      - /opt/nexus/services/networks/__init__.py
-      - /opt/nexus/services/networks/forms.py
-      - /opt/nexus/services/networks/manifest.py
-      - /opt/nexus/services/networks/privileged.py
-      - /opt/nexus/services/networks/tests/__init__.py
-      - /opt/nexus/services/networks/tests/test_privileged.py
-      - /opt/nexus/services/networks/urls.py
-      - /opt/nexus/services/networks/views.py
-      - /opt/nexus/services/storage/__init__.py
-      - /opt/nexus/services/storage/forms.py
-      - /opt/nexus/services/storage/manifest.py
-      - /opt/nexus/services/storage/privileged.py
-      - /opt/nexus/services/storage/tests/__init__.py
-      - /opt/nexus/services/storage/tests/test_functional.py
-      - /opt/nexus/services/storage/tests/test_storage.py
-      - /opt/nexus/services/storage/udisks2.py
-      - /opt/nexus/services/storage/urls.py
-      - /opt/nexus/services/storage/views.py
+      - /opt/nexus/automation/ (entire directory)
     dependencies: []
-    dead_reason: >
-      python3 -c 'import plinth' → ModuleNotFoundError.
-      python3 -c 'import django' → ModuleNotFoundError.
-      python3 -c 'import augeas' → ModuleNotFoundError.
-      These are FreedomBox runtime dependencies not present on NEXUS OS.
-      core/service_framework.py (operational) was adapted FROM FreedomBox but
-      does NOT import plinth/django — it is a clean rewrite using FastAPI+SQLite.
     last_validated: "2026-03-09"
     notes: >
-      27 dead files total (26 in services/ + core/action_utils.py).
-      All are tracked in git. Options: delete from repo, or implement the
-      FreedomBox stack if web-based service management is desired.
-      core/service_framework.py is the REPLACEMENT for these modules and is
-      fully operational.
+      Contains ~28 Python files, 1216-line dev_orchestrator.py. Had its own
+      llm_router.py (separate from agents/llm_router_v2.py), its own
+      discord_comms.py, its own failure_analyzer.py. Used intent_registry.yaml
+      instead of task_queue.yaml. All automation/ IPs reference pre-VLAN or
+      stale topology. Previous compiled-db diagnostics (gaps G001-G039) described
+      THIS system, not the Dev Assistant.
