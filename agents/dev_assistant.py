@@ -160,6 +160,15 @@ class DevAssistant(discord.Client):
         except Exception as exc:
             log.warning("Startup blockchain log failed: %s", exc)
 
+        # Phase 4B: warm up ChromaDB client to avoid first-call event loop block
+        try:
+            import asyncio
+            from knowledge_indexer import _get_client
+            await asyncio.to_thread(_get_client)
+            log.info("ChromaDB client warmed up")
+        except Exception as exc:
+            log.warning("ChromaDB warm-up failed (non-fatal): %s", exc)
+
     # ── Message handler ───────────────────────────────────────────────────────
 
     async def on_message(self, message: discord.Message) -> None:
@@ -509,10 +518,9 @@ class DevAssistant(discord.Client):
 
         slug = re.sub(r"[^a-z0-9]+", "-", task.description.lower())[:30].strip("-") or "task"
         task.branch_name = f"dev-assistant/{task.task_id}-{slug}"
+        # Always delete stale branch first (idempotent — ignores error if branch doesn't exist)
+        await self._run_git("branch", "-D", task.branch_name)
         rc, _, stderr = await self._run_git("checkout", "-b", task.branch_name)
-        if rc != 0 and "already exists" in stderr:
-            await self._run_git("branch", "-D", task.branch_name)
-            rc, _, stderr = await self._run_git("checkout", "-b", task.branch_name)
         if rc != 0:
             await self.channel.send(f"🔧 ⚠️ Could not create branch: {stderr}")
             await self._rollback()
@@ -626,9 +634,10 @@ class DevAssistant(discord.Client):
             search_lines = search_str.count("\n")
             replace_lines = replace_str.count("\n")
             net_deleted = search_lines - replace_lines
-            if net_deleted > 10:
+            from safety_config import MAX_NET_DELETIONS
+            if net_deleted > MAX_NET_DELETIONS:
                 await self.channel.send(
-                    f"🔧 ⚠️ Patch rejected: would delete {net_deleted} net lines (max 10). Rolling back."
+                    f"🔧 ⚠️ Patch rejected: would delete {net_deleted} net lines (max {MAX_NET_DELETIONS}). Rolling back."
                 )
                 log.warning("Destructive patch rejected: %d net lines deleted", net_deleted)
                 await self._rollback()

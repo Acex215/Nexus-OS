@@ -8,6 +8,8 @@ AUTO_APPROVE_LOW = os.getenv("SAFETY_AUTO_APPROVE_LOW", "true").lower() == "true
 # Retry
 MAX_RETRIES = int(os.getenv("SAFETY_MAX_RETRIES", "2"))
 
+MAX_NET_DELETIONS = int(os.environ.get("SAFETY_MAX_NET_DELETIONS", "20"))
+
 # Health check thresholds
 DISK_MIN_FREE_GB = float(os.getenv("SAFETY_DISK_MIN_FREE_GB", "2.0"))
 LLM_HEALTH_TIMEOUT = int(os.getenv("SAFETY_LLM_HEALTH_TIMEOUT", "10"))

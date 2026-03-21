@@ -163,6 +163,22 @@ class AutonomousLoop:
                 self._consecutive_failures = 0
                 continue
 
+            # Phase 4B: Pre-flight coder health check
+            from llm_router_v2 import TIERS
+            coder_endpoint = TIERS["coder"].endpoint
+            router = __import__('llm_router_v2').LLMRouter()
+            coder_healthy = await router.check_health(coder_endpoint)
+            if not coder_healthy:
+                if not self._paused:
+                    log.warning("Coder endpoint unreachable (%s) — pausing autonomous loop", coder_endpoint)
+                    await self.channel.send(
+                        "⚠️ **Coder endpoint unreachable** — ThinkPad may be offline or asleep. "
+                        "Pausing autonomous execution. Say `resume` after fixing the endpoint."
+                    )
+                    self._paused = True
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                continue
+
             # Pop next task
             task = self.queue.pop_next()
             if task is None:
