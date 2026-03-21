@@ -157,3 +157,27 @@
 17:18:14.011037 version@stat F·[3 1] S·311KiB[237KiB 73KiB] Sc·[0.75 0.00]
 17:18:14.026670 db@janitor F·6 G·0
 17:18:14.026692 db@open done T·31.539277ms
+=============== Mar 20, 2026 (EDT) ===============
+18:39:39.206509 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+18:39:39.209601 version@stat F·[3 1] S·311KiB[237KiB 73KiB] Sc·[0.75 0.00]
+18:39:39.209655 db@open opening
+18:39:39.210068 journal@recovery F·2
+18:39:39.210335 journal@recovery recovering @34
+18:39:39.215104 journal@recovery recovering @52
+18:39:39.227691 memdb@flush created L0@53 N·969 S·62KiB "/F5..PNI,v6477":"/pr..7GY,d6050"
+18:39:39.227734 version@stat F·[4 1] S·373KiB[300KiB 73KiB] Sc·[1.00 0.00]
+18:39:39.271046 memdb@flush created L0@55 N·115 S·17KiB "/F5..PNI,v7155":"/pr..D3K,v7080"
+18:39:39.271295 version@stat F·[5 1] S·391KiB[317KiB 73KiB] Sc·[1.25 0.00]
+18:39:39.275538 db@janitor F·10 G·2
+18:39:39.275562 db@janitor removing manifest-50
+18:39:39.275611 db@janitor removing table-49
+18:39:39.276759 db@open done T·67.072704ms
+18:39:39.278258 table@compaction L0·5 -> L1·1 S·391KiB Q·7158
+18:39:39.314760 table@build created L1@57 N·50 S·6KiB "/F5..43A,v5460":"/pr..D3K,v7080"
+18:39:39.314834 version@stat F·[0 1] S·6KiB[0B 6KiB] Sc·[0.00 0.00]
+18:39:39.326467 table@compaction committed F-5 S-384KiB Ke·0 D·5193 T·48.161796ms
+18:39:39.326585 table@remove removed @55
+18:39:39.326625 table@remove removed @33
+18:39:39.326649 table@remove removed @30
+18:39:39.326675 table@remove removed @27
+18:39:39.326701 table@remove removed @26
