@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "python3",
+      "args": ["/opt/nexus/mcp/nexus_mcp_server.py"],
+      "env": {
+        "GATEWAY_URL": "ws://localhost:8766/ws"
+      }
+    }
+  }
+}
