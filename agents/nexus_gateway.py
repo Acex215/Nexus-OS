@@ -181,7 +181,8 @@ class NexusGateway:
             capabilities = payload.get("capabilities", [])
             models = payload.get("models", [])
             resources = payload.get("resources", {})
-            self.nodes[wallet] = {
+            node_key = wallet or hostname
+            self.nodes[node_key] = {
                 "ws": ws,
                 "hostname": hostname,
                 "capabilities": capabilities,
@@ -190,7 +191,7 @@ class NexusGateway:
                 "last_heartbeat": time.time(),
             }
             client_info["role"] = "node"
-            client_info["wallet"] = wallet
+            client_info["wallet"] = node_key
             client_info["hostname"] = hostname
             log.info("Node registered: %s (%s...) capabilities: %s",
                      hostname, wallet[:10] if wallet else "?", capabilities)

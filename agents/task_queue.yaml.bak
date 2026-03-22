@@ -1,0 +1,928 @@
+tasks:
+- id: task-20260318-210552-1ef35e
+  description: Add health check endpoint to dev_assistant.py
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-18T21:05:52.840672+00:00'
+  started: '2026-03-18T21:07:58.767744+00:00'
+  completed: '2026-03-18T21:08:12.840793+00:00'
+  branch: task/task-20260318-210552-1ef35e
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-210628-a517e9
+  description: Fix cancel during planning phase
+  priority: P1
+  status: failed
+  risk: low
+  created: '2026-03-18T21:06:28.328641+00:00'
+  started: '2026-03-18T21:07:19.921399+00:00'
+  completed: '2026-03-18T21:07:53.759147+00:00'
+  branch: task/task-20260318-210628-a517e9
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-211120-6c29fa
+  description: Add a comment '# Phase 2 health check placeholder' at the top of /opt/nexus/agents/blockchain_logger.py
+  priority: P2
+  status: failed
+  risk: high
+  created: '2026-03-18T21:11:20.518879+00:00'
+  started: '2026-03-18T21:13:06.298906+00:00'
+  completed: '2026-03-18T21:13:54.488154+00:00'
+  branch: task/task-20260318-211120-6c29fa
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-211746-bea0c8
+  description: Add a comment '# Phase 2 health check placeholder' at the top of /opt/nexus/agents/blockchain_logger.py
+  priority: P2
+  status: failed
+  risk: high
+  created: '2026-03-18T21:17:46.980798+00:00'
+  started: '2026-03-18T21:18:12.654371+00:00'
+  completed: '2026-03-18T21:18:58.156714+00:00'
+  branch: task/task-20260318-211746-bea0c8
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-212725-27a702
+  description: Add a comment '# Phase 2 health check placeholder' at the top of /opt/nexus/agents/blockchain_logger.py
+  priority: P2
+  status: done
+  risk: high
+  created: '2026-03-18T21:27:25.684127+00:00'
+  started: '2026-03-18T21:30:59.172549+00:00'
+  completed: '2026-03-18T21:31:46.729501+00:00'
+  branch: dev-assistant/task-20260318-212725-27a702-add-a-comment-phase-2-health-c
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: 11e3a692dee2
+    blockchain_tx: null
+    error: null
+    diffs:
+    - "diff --git a/agents/blockchain_logger.py b/agents/blockchain_logger.py\nindex 4039a17..f9d3840 100644\n--- a/agents/blockchain_logger.py\n\
+      +++ b/agents/blockchain_logger.py\n@@ -1,4 +1,5 @@\n #!/usr/bin/env python3\n+# Phase 2 health check placeholder\n \"\
+      \"\"NEXUS OS Blockchain Logger \u2014 log agent decisions to ReasoningLedger.\n \n Every agent decision produces a SHA256\
+      \ reasoning hash. This module logs a"
+    lines_added: 1
+    lines_removed: 0
+    files_changed: 1
+- id: task-20260318-222129-88634a
+  description: Add a comment '# Phase 3 validated' at the top of /opt/nexus/agents/health_monitor.py
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-18T22:21:29.237254+00:00'
+  started: '2026-03-18T22:35:43.199436+00:00'
+  completed: '2026-03-18T22:37:07.184974+00:00'
+  branch: dev-assistant/task-20260318-222129-88634a-add-a-comment-phase-3-validate
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: 35475f8ed144
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 1
+- id: task-20260318-222156-b4d61a
+  description: Deploy updated ReasoningLedger contract
+  priority: P1
+  status: done
+  risk: high
+  created: '2026-03-18T22:21:56.461011+00:00'
+  started: '2026-03-18T22:35:05.773873+00:00'
+  completed: '2026-03-18T22:35:18.873514+00:00'
+  branch: null
+  parent_id: null
+  sub_tasks:
+  - task-20260318-222156-b4d61a-sub01
+  - task-20260318-222156-b4d61a-sub02
+  - task-20260318-222156-b4d61a-sub03
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-222156-b4d61a-sub01
+  description: Review and validate the updated ReasoningLedger contract code for syntax errors and logical consistency
+  priority: P1
+  status: blocked_human
+  risk: medium
+  created: '2026-03-18T22:35:18.836433+00:00'
+  started: '2026-03-18T22:35:29.057317+00:00'
+  completed: null
+  branch: null
+  parent_id: task-20260318-222156-b4d61a
+  sub_tasks: []
+  depends_on: []
+  affected_files:
+  - contracts/ReasoningLedger.sol
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: human rejected
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-225837-8bf0ae
+  description: Rewrite the blockchain_logger module
+  priority: P1
+  status: done
+  risk: high
+  created: '2026-03-18T22:58:37.129616+00:00'
+  started: '2026-03-18T22:59:00.710787+00:00'
+  completed: '2026-03-18T22:59:18.924733+00:00'
+  branch: null
+  parent_id: null
+  sub_tasks:
+  - task-20260318-225837-8bf0ae-sub01
+  - task-20260318-225837-8bf0ae-sub02
+  - task-20260318-225837-8bf0ae-sub03
+  - task-20260318-225837-8bf0ae-sub04
+  - task-20260318-225837-8bf0ae-sub05
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-225837-8bf0ae-sub01
+  description: Analyze the existing blockchain_logger module to understand its current structure and dependencies.
+  priority: P1
+  status: failed
+  risk: low
+  created: '2026-03-18T22:59:18.867080+00:00'
+  started: '2026-03-18T22:59:29.397569+00:00'
+  completed: '2026-03-18T23:00:12.583620+00:00'
+  branch: task/task-20260318-225837-8bf0ae-sub01
+  parent_id: task-20260318-225837-8bf0ae
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-230207-f2b33e
+  description: Refactor the risk classification logic in queue_commands.py
+  priority: P2
+  status: done
+  risk: medium
+  created: '2026-03-18T23:02:07.970125+00:00'
+  started: '2026-03-18T23:02:10.447627+00:00'
+  completed: '2026-03-18T23:02:22.758835+00:00'
+  branch: null
+  parent_id: null
+  sub_tasks:
+  - task-20260318-230207-f2b33e-sub01
+  - task-20260318-230207-f2b33e-sub02
+  - task-20260318-230207-f2b33e-sub03
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-230207-f2b33e-sub01
+  description: Analyze the current risk classification logic in queue_commands.py to identify all functions and conditions
+    involved.
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-18T23:02:22.712940+00:00'
+  started: '2026-03-18T23:02:32.956173+00:00'
+  completed: '2026-03-18T23:03:27.165218+00:00'
+  branch: task/task-20260318-230207-f2b33e-sub01
+  parent_id: task-20260318-230207-f2b33e
+  sub_tasks: []
+  depends_on: []
+  affected_files:
+  - /path/to/queue_commands.py
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-230207-f2b33e-sub02
+  description: Refactor the identified risk classification logic by extracting helper functions and simplifying conditional
+    branches.
+  priority: P2
+  status: done
+  risk: medium
+  created: '2026-03-18T23:02:22.712968+00:00'
+  started: '2026-03-18T23:03:32.283726+00:00'
+  completed: '2026-03-18T23:03:48.531596+00:00'
+  branch: null
+  parent_id: task-20260318-230207-f2b33e
+  sub_tasks:
+  - task-20260318-230207-f2b33e-sub02-sub01
+  - task-20260318-230207-f2b33e-sub02-sub02
+  - task-20260318-230207-f2b33e-sub02-sub03
+  depends_on: []
+  affected_files:
+  - /path/to/queue_commands.py
+  result:
+    success: true
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-230207-f2b33e-sub03
+  description: Add unit tests to verify the refactored risk classification logic handles all edge cases correctly.
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-18T23:02:22.712975+00:00'
+  started: '2026-03-18T23:03:58.948839+00:00'
+  completed: '2026-03-18T23:05:02.298689+00:00'
+  branch: task/task-20260318-230207-f2b33e-sub03
+  parent_id: task-20260318-230207-f2b33e
+  sub_tasks: []
+  depends_on: []
+  affected_files:
+  - /path/to/test_queue_commands.py
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260318-230207-f2b33e-sub02-sub01
+  description: Analyze the risk classification logic in queue_commands.py to identify complex conditional branches and extractable
+    helper functions.
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-18T23:03:48.450655+00:00'
+  started: '2026-03-19T01:54:19.050293+00:00'
+  completed: '2026-03-19T01:54:20.443460+00:00'
+  branch: task/task-20260318-230207-f2b33e-sub02-sub01
+  parent_id: task-20260318-230207-f2b33e-sub02
+  sub_tasks: []
+  depends_on: []
+  affected_files:
+  - /path/to/queue_commands.py
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: Analysis failed
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-002442-d89ce1
+  description: Rename the _cmd_add_task function to _cmd_enqueue in /opt/nexus/agents/queue_commands.py
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T00:24:42.813365+00:00'
+  started: '2026-03-19T01:54:25.512735+00:00'
+  completed: '2026-03-19T01:54:26.670172+00:00'
+  branch: task/task-20260319-002442-d89ce1
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: Analysis failed
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-015410-e50ede
+  description: Restructure the error handling in /opt/nexus/agents/queue_commands.py
+  priority: P2
+  status: failed
+  risk: medium
+  created: '2026-03-19T01:54:10.784408+00:00'
+  started: '2026-03-19T01:54:31.739214+00:00'
+  completed: '2026-03-19T01:55:34.285994+00:00'
+  branch: task/task-20260319-015410-e50ede
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: Analysis failed
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-021546-199383
+  description: Rename the _cmd_add_task function to _cmd_enqueue in /opt/nexus/agents/queue_commands.py
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-19T02:15:46.437483+00:00'
+  started: '2026-03-19T02:15:52.219609+00:00'
+  completed: '2026-03-19T02:16:50.417582+00:00'
+  branch: dev-assistant/task-20260319-021546-199383-rename-the-cmd-add-task-functi
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: aa77c3f1ce5b
+    blockchain_tx: null
+    error: null
+    diffs:
+    - "diff --git a/agents/queue_commands.py b/agents/queue_commands.py\nindex 1efcae6..f9afe10 100644\n--- a/agents/queue_commands.py\n\
+      +++ b/agents/queue_commands.py\n@@ -164,7 +164,7 @@ def _cmd_show_last(queue, n: int) -> str:\n     return \"\\n\".join(lines)\n\
+      \ \n \n-def _cmd_add_task(queue, description: str, priority: str = \"P2\") -> str:\n+def _cmd_enqueue(queue, description:\
+      \ str, priority: str = \"P2\") -> str:\n     # Infer risk from description keywords\n     risk = \"low\"\n     lower_desc\
+      \ = description.lower()"
+    lines_added: 1
+    lines_removed: 1
+    files_changed: 1
+- id: task-20260319-021850-60547e
+  description: Rewrite the format_report method in health_monitor.py to use Discord embeds instead of plain text
+  priority: P1
+  status: done
+  risk: medium
+  created: '2026-03-19T02:18:50.784589+00:00'
+  started: '2026-03-19T02:18:57.917656+00:00'
+  completed: '2026-03-19T02:19:53.297926+00:00'
+  branch: dev-assistant/task-20260319-021850-60547e-rewrite-the-format-report-meth
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: f145f74378c4
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 1
+- id: task-20260319-023645-fdeb34
+  description: Rewrite the format_report method in health_monitor.py to use Discord embeds
+  priority: P1
+  status: blocked_human
+  risk: medium
+  created: '2026-03-19T02:36:45.740648+00:00'
+  started: '2026-03-19T02:36:47.885235+00:00'
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: human rejected
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-165254-b66c55
+  description: Add a comment to the top of task_logger.py saying "Phase 4 module"
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-19T16:52:54.343366+00:00'
+  started: '2026-03-19T16:52:57.213373+00:00'
+  completed: '2026-03-19T16:54:18.300485+00:00'
+  branch: dev-assistant/task-20260319-165254-b66c55-add-a-comment-to-the-top-of-ta
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: 368c6ee751f2
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 1
+- id: task-20260319-210420-d6bb09
+  description: "Add a module-level docstring to safety_gates.py: \"Phase 3 \u2014 Risk-based approval gates, scope enforcement,\
+    \ and retry policy.\""
+  priority: P2
+  status: executing
+  risk: low
+  created: '2026-03-19T21:04:20.357046+00:00'
+  started: '2026-03-19T21:04:29.109353+00:00'
+  completed: null
+  branch: task/task-20260319-210420-d6bb09
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-211912-75f265
+  description: "Add a module-level docstring to safety_gates.py: \"Phase 3 \u2014 Risk-based approval gates, scope enforcement,\
+    \ and retry policy.\""
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-19T21:19:12.053942+00:00'
+  started: '2026-03-19T21:27:15.797598+00:00'
+  completed: '2026-03-19T21:28:40.587716+00:00'
+  branch: dev-assistant/task-20260319-211912-75f265-add-a-module-level-docstring-t
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: c0110bbbef7b
+    blockchain_tx: null
+    error: null
+    diffs:
+    - "diff --git a/agents/safety_gates.py b/agents/safety_gates.py\nindex d5fbdd9..3a714a4 100644\n--- a/agents/safety_gates.py\n\
+      +++ b/agents/safety_gates.py\n@@ -1,11 +1,4 @@\n-\"\"\"\n-safety_gates.py \u2014 Risk-based execution gates for the\
+      \ NEXUS OS autonomous dev assistant.\n-\n-Classes:\n-    SafetyGate     \u2014 approve/reject tasks by risk level with\
+      \ human override support\n-    ScopeEnforcer  \u2014 verify file edits fall within a task's declared scope\n-    RetryPolicy\
+      \    \u2014 retry failed executions with context-aware prompting\n-\"\"\"\n+\"Phase 3 \u2014 Risk-based approval gates,\
+      \ scope enforcement, and retry policy.\"\n \n from __future__ import annotations"
+    lines_added: 1
+    lines_removed: 8
+    files_changed: 1
+- id: task-20260319-212701-0e8565
+  description: "Add a module-level docstring to safety_gates.py: \"Phase 3 \u2014 Risk-based approval gates, scope enforcement,\
+    \ and retry policy.\""
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-19T21:27:01.312469+00:00'
+  started: '2026-03-19T21:29:15.712163+00:00'
+  completed: '2026-03-19T21:30:24.985628+00:00'
+  branch: dev-assistant/task-20260319-212701-0e8565-add-a-module-level-docstring-t
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: c13175134741
+    blockchain_tx: null
+    error: null
+    diffs:
+    - "diff --git a/agents/safety_gates.py b/agents/safety_gates.py\nindex 3a714a4..c47ca71 100644\n--- a/agents/safety_gates.py\n\
+      +++ b/agents/safety_gates.py\n@@ -31,7 +31,7 @@ _MEDIUM_KEYWORDS = {\n # ---------------------------------------------------------------------------\n\
+      \ \n class SafetyGate:\n-    \"\"\"Approve or reject tasks based on risk level, with optional human override.\"\"\"\n\
+      +    \"\"\"Phase 3 \u2014 Risk-based approval gates, scope enforcement, and retry policy.\"\"\"\n \n     def classify_risk(self,\
+      \ task: dict) -> str:\n         \"\"\"Return the task's risk level."
+    lines_added: 1
+    lines_removed: 1
+    files_changed: 1
+- id: task-20260319-212746-fe255c
+  description: "Add a module-level docstring to health_monitor.py: \"Phase 3 \u2014 Async health checks for disk, LLM endpoints,\
+    \ and blockchain.\""
+  priority: P2
+  status: analyzing
+  risk: high
+  created: '2026-03-19T21:27:46.195626+00:00'
+  started: '2026-03-19T21:31:00.138471+00:00'
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-212910-c98efe
+  description: "Add a module-level docstring to test_validator.py: \"Phase 3 \u2014 Post-execution test discovery and pytest\
+    \ runner.\""
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T21:29:10.657046+00:00'
+  started: '2026-03-19T22:15:40.367265+00:00'
+  completed: '2026-03-19T22:17:14.824737+00:00'
+  branch: task/task-20260319-212910-c98efe
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-212915-908079
+  description: "Add a module-level docstring to knowledge_indexer.py: \"Phase 4 \u2014 ChromaDB indexer for completed task\
+    \ semantic retrieval.\""
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T21:29:15.495633+00:00'
+  started: '2026-03-19T22:17:21.178245+00:00'
+  completed: '2026-03-19T22:18:35.469448+00:00'
+  branch: task/task-20260319-212915-908079
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-212945-6b8716
+  description: "Add a module-level docstring to knowledge_planner.py: \"Phase 4 \u2014 Injects past task context into coordinator\
+    \ planning prompts.\""
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T21:29:45.873611+00:00'
+  started: '2026-03-19T22:18:41.919112+00:00'
+  completed: '2026-03-19T22:19:46.911992+00:00'
+  branch: task/task-20260319-212945-6b8716
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-213055-8bc05c
+  description: "Add a module-level docstring to failure_analyzer.py: \"Phase 4 \u2014 Failure pattern recognition and categorized\
+    \ analysis.\""
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T21:30:55.075997+00:00'
+  started: '2026-03-19T22:26:23.716189+00:00'
+  completed: '2026-03-19T22:27:36.799242+00:00'
+  branch: task/task-20260319-213055-8bc05c
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-213100-a22493
+  description: "Add a module-level docstring to change_analyzer.py: \"Phase 4 \u2014 Git and task log change summaries on\
+    \ demand.\""
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T21:31:00.176656+00:00'
+  started: '2026-03-19T22:27:43.238031+00:00'
+  completed: '2026-03-19T22:28:52.347969+00:00'
+  branch: task/task-20260319-213100-a22493
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221517-b13e53
+  description: "Add a module-level docstring to health_monitor.py: \"Phase 3 \u2014 Async health checks for disk, LLM endpoints,\
+    \ and blockchain.\""
+  priority: P2
+  status: analyzing
+  risk: high
+  created: '2026-03-19T22:15:17.158077+00:00'
+  started: '2026-03-19T22:29:00.539730+00:00'
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221535-2cc1c7
+  description: "Add a module-level docstring to test_validator.py: \"Phase 3 \u2014 Post-execution test discovery and pytest\
+    \ runner.\""
+  priority: P2
+  status: failed
+  risk: low
+  created: '2026-03-19T22:15:35.586853+00:00'
+  started: '2026-03-20T01:15:19.770211+00:00'
+  completed: '2026-03-20T01:18:41.252630+00:00'
+  branch: task/task-20260319-221535-2cc1c7
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: false
+    commit_hash: null
+    blockchain_tx: null
+    error: 'Execution failed (status: failed)'
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221550-3b8470
+  description: "Add a module-level docstring to knowledge_indexer.py: \"Phase 4 \u2014 ChromaDB indexer for completed task\
+    \ semantic retrieval.\""
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-19T22:15:50.741901+00:00'
+  started: '2026-03-20T01:18:47.888560+00:00'
+  completed: '2026-03-20T01:19:29.380164+00:00'
+  branch: dev-assistant/task-20260319-221550-3b8470-add-a-module-level-docstring-t
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: ddea1cf2ec70
+    blockchain_tx: null
+    error: null
+    diffs:
+    - "diff --git a/agents/knowledge_indexer.py b/agents/knowledge_indexer.py\nindex f1cd145..3ac39a2 100644\n--- a/agents/knowledge_indexer.py\n\
+      +++ b/agents/knowledge_indexer.py\n@@ -1,7 +1,4 @@\n-\"\"\"knowledge_indexer.py \u2014 Indexes completed task logs into\
+      \ ChromaDB.\n-\n-Provides semantic retrieval of past tasks during planning (Phase 4).\n-\"\"\"\n+'Phase 4 \u2014 ChromaDB\
+      \ indexer for completed task semantic retrieval.'\n \n import json\n import logging"
+    lines_added: 1
+    lines_removed: 4
+    files_changed: 1
+- id: task-20260319-221606-671ccc
+  description: "Add a module-level docstring to knowledge_planner.py: \"Phase 4 \u2014 Injects past task context into coordinator\
+    \ planning prompts.\""
+  priority: P2
+  status: done
+  risk: low
+  created: '2026-03-19T22:16:06.362495+00:00'
+  started: '2026-03-20T01:19:36.210116+00:00'
+  completed: '2026-03-20T01:20:16.805904+00:00'
+  branch: dev-assistant/task-20260319-221606-671ccc-add-a-module-level-docstring-t
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: true
+    commit_hash: 8ef38a992e5a
+    blockchain_tx: null
+    error: null
+    diffs:
+    - "diff --git a/agents/knowledge_planner.py b/agents/knowledge_planner.py\nindex dff8c0e..484e0c9 100644\n--- a/agents/knowledge_planner.py\n\
+      +++ b/agents/knowledge_planner.py\n@@ -1,8 +1,4 @@\n-\"\"\"knowledge_planner.py \u2014 Formats past task outcomes as\
+      \ LLM planning context.\n-\n-Queries ChromaDB via knowledge_indexer and produces ready-to-inject text blocks\n-for the\
+      \ coordinator LLM prompt (Phase 4).\n-\"\"\"\n+\"Phase 4 \u2014 Injects past task context into coordinator planning\
+      \ prompts.\"\n \n import logging"
+    lines_added: 1
+    lines_removed: 5
+    files_changed: 1
+- id: task-20260319-221616-5a2fa9
+  description: "Add a module-level docstring to failure_analyzer.py: \"Phase 4 \u2014 Failure pattern recognition and categorized\
+    \ analysis.\""
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-19T22:16:16.403111+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221623-913a32
+  description: "Add a module-level docstring to change_analyzer.py: \"Phase 4 \u2014 Git and task log change summaries on\
+    \ demand.\""
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-19T22:16:23.235146+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221629-bd3316
+  description: In task_logger.py, add a function count_total_tasks() that reads the JSONL file and returns the total number
+    of lines. Handle missing file by returning 0.
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-19T22:16:29.900166+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221638-7ee212
+  description: In knowledge_indexer.py, add a function get_collection_count() that returns the number of documents in the
+    dev_assistant_tasks ChromaDB collection. Return 0 on any error.
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-19T22:16:38.165384+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260319-221638-e110b6
+  description: In failure_analyzer.py, add a function get_success_rate(n=50) that reads the last n task logs and returns the
+    success rate as a float between 0.0 and 100.0. Handle empty logs by returning 0.0.
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-19T22:16:38.881386+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0

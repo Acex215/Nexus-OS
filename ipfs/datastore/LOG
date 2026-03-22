@@ -181,3 +181,17 @@
 18:39:39.326649 table@remove removed @30
 18:39:39.326675 table@remove removed @27
 18:39:39.326701 table@remove removed @26
+=============== Mar 22, 2026 (EDT) ===============
+13:06:40.334038 db@close closing
+13:06:40.336285 db@close done T·2.241535ms
+=============== Mar 22, 2026 (EDT) ===============
+13:08:31.593957 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+13:08:31.599582 version@stat F·[0 1] S·6KiB[0B 6KiB] Sc·[0.00 0.00]
+13:08:31.599655 db@open opening
+13:08:31.600858 journal@recovery F·1
+13:08:31.601147 journal@recovery recovering @56
+13:08:31.620841 memdb@flush created L0@58 N·75 S·11KiB "/F5..PNI,v7231":"/pr..D3K,d7164"
+13:08:31.621030 version@stat F·[1 1] S·17KiB[11KiB 6KiB] Sc·[0.25 0.00]
+13:08:31.663559 db@janitor F·5 G·1
+13:08:31.663576 db@janitor removing table-53
+13:08:31.663618 db@open done T·63.950648ms

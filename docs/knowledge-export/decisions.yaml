@@ -1,0 +1,193 @@
+# NEXUS OS Compiled Database — Architectural Decisions
+# Generated: 2026-03-21
+# Scope: Dev Assistant pipeline decisions + key inherited decisions
+#
+# Decision IDs restart at D100 to distinguish from CAF decisions (D001-D024).
+
+decisions:
+
+  # ═══════════════════════════════════════════════════════════════
+  # SYSTEM ARCHITECTURE
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: D100
+    date: "2026-03"
+    topic: architecture
+    decision: "Dev Assistant replaces CAF as the primary autonomous development agent"
+    rationale: >
+      CAF (dev_orchestrator.py, 1216 lines, 28+ automation/ files) accumulated
+      technical debt: stale IPs, duplicated safety functions with divergent logic,
+      no convergence test on failures, no environment probes, all files untracked
+      in git. Multiple LLM strategy changes (ThinkPad couldn't run 35B model,
+      ThinkStation added, model assignments shifted) made incremental CAF fixes
+      impractical. Dev Assistant was built as a clean replacement with lessons
+      learned baked in from the start.
+    status: active
+    notes: >
+      CAF files remain on disk at /opt/nexus/automation/ but are not running.
+      The systemd service (nexus-orchestrator.service) is enabled but inactive.
+      DO NOT restart without comprehensive review.
+
+  - id: D101
+    date: "2026-03"
+    topic: llm-strategy
+    decision: "4-tier LLM hierarchy: Coordinator (35B) / Coder (14B) / Director (7B) / Worker (1B)"
+    rationale: >
+      Right model for the right job. The coordinator (Qwen3.5-35B-A3B) plans tasks
+      but cannot write valid SEARCH/REPLACE code. The coder (Qwen2.5-coder-14B)
+      writes code but lacks planning capability. The director (7B) handles
+      department-level decisions. The worker (1B on Pi) handles simple JSON and
+      status tasks. This separation evolved from the failure of running 35B on
+      ThinkPad (too slow, too much RAM) and the arrival of the ThinkStation.
+    implemented_in:
+      - /opt/nexus/agents/llm_router_v2.py
+    status: active
+
+  - id: D102
+    date: "2026-02"
+    topic: safety
+    decision: "Human-in-the-loop with risk-based auto-approval for low-risk tasks"
+    rationale: >
+      Lesson from CAF: never apply changes autonomously without review for anything
+      beyond trivially safe changes. Low-risk tasks (no deploy/delete/contract/security
+      keywords) can auto-approve. Medium-risk gets 60s human timeout. High-risk
+      requires explicit human approval with no timeout.
+    implemented_in:
+      - /opt/nexus/agents/safety_gates.py
+      - /opt/nexus/agents/safety_config.py
+    status: active
+
+  - id: D103
+    date: "2026-02"
+    topic: safety
+    decision: "SEARCH/REPLACE patches, not full-file rewrites"
+    rationale: >
+      Full-file rewrites are unauditable and risk data loss. SEARCH/REPLACE patches
+      are surgical, diffable, and verifiable. Each patch has a clear before/after.
+      Maximum 10 patches per task enforced.
+    implemented_in:
+      - /opt/nexus/agents/dev_assistant.py
+    status: active
+
+  - id: D104
+    date: "2026-02"
+    topic: safety
+    decision: "Git branch isolation: every task executes on its own branch"
+    rationale: >
+      Same principle as CAF D023 but implemented more reliably. Each task creates
+      a branch, makes changes, and only merges to main on success. Rollback =
+      delete the branch and checkout main. Prevents cascading damage from
+      failed tasks.
+    implemented_in:
+      - /opt/nexus/agents/dev_assistant.py
+    status: active
+    notes: "Known issue: stale branches from prior sessions block re-execution (G101)."
+
+  - id: D105
+    date: "2026-03"
+    topic: knowledge
+    decision: "ChromaDB semantic retrieval for planning context, not raw chat logs"
+    rationale: >
+      Raw chat logs fed to LLMs cause hallucination and context bloat. Structured
+      task outcomes (description, status, error, files, duration) indexed in ChromaDB
+      provide semantic retrieval of relevant past experience. The knowledge_planner
+      injects at most 5 similar past tasks into the coordinator prompt.
+    implemented_in:
+      - /opt/nexus/agents/knowledge_indexer.py
+      - /opt/nexus/agents/knowledge_planner.py
+    status: active
+
+  - id: D106
+    date: "2026-03"
+    topic: infrastructure
+    decision: "LM Studio for ThinkStation/ThinkPad, Ollama for Pi nodes"
+    rationale: >
+      LM Studio provides model-routed multi-model serving on a single port (critical
+      for ThinkStation running both coordinator and director). Ollama is lighter-weight
+      and better suited for Pi 5. Both expose OpenAI-compatible endpoints so
+      llm_router_v2.py uses a single HTTP client pattern for all tiers.
+    implemented_in:
+      - /opt/nexus/agents/llm_router_v2.py
+    status: active
+    notes: "JIT loading OFF required on LM Studio to prevent cold-start delays."
+
+  - id: D107
+    date: "2026-03"
+    topic: llm-strategy
+    decision: "Strip thinking tokens from Qwen3.5 model output"
+    rationale: >
+      Qwen3.5 models produce <think>...</think> blocks that break JSON parsing
+      in downstream consumers. LM Studio stop sequences catch most cases; the
+      strip_thinking_tokens() function in llm_router_v2.py is defense-in-depth.
+    implemented_in:
+      - /opt/nexus/agents/llm_router_v2.py
+    status: active
+
+  - id: D108
+    date: "2026-03"
+    topic: architecture
+    decision: "Persistent YAML task queue survives bot restarts"
+    rationale: >
+      Task state must survive crashes and restarts. YAML is human-readable and
+      editable. SQLite would be more robust for concurrent access but YAML is
+      sufficient for a single-writer system. The queue is gitignored to avoid
+      polluting the repo with transient state.
+    implemented_in:
+      - /opt/nexus/agents/task_queue.py
+    status: active
+
+  - id: D109
+    date: "2026-02"
+    topic: audit
+    decision: "Every task logged to blockchain via ReasoningLedger"
+    rationale: >
+      Immutable audit trail. Each task produces a SHA256 hash of the reasoning/decision
+      text, which is stored on-chain. Full decision text stays off-chain in JSONL files.
+      The on-chain hash proves integrity — you can verify any decision wasn't tampered
+      with by comparing the JSONL content hash against the on-chain entry.
+    implemented_in:
+      - /opt/nexus/agents/blockchain_logger.py
+    status: active
+    notes: "1170+ entries on-chain as of 2026-03-20."
+
+  # ═══════════════════════════════════════════════════════════════
+  # KEY INHERITED DECISIONS (from pre-Dev-Assistant era)
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: D110
+    date: "2026-01"
+    topic: blockchain
+    decision: "Clique Proof-of-Authority with period=0 (instant blocks on demand)"
+    rationale: >
+      PoA is appropriate for a private cluster where all validators are trusted.
+      Period=0 means no empty blocks are produced — blocks only when transactions
+      arrive. This minimizes disk usage and CPU on the Pi nodes while maintaining
+      full Ethereum compatibility.
+    implemented_in:
+      - "Geth genesis.json (3 validators)"
+    status: active
+
+  - id: D111
+    date: "2026-02"
+    topic: networking
+    decision: "3-VLAN architecture: management (10), cluster (20), dev (30)"
+    rationale: >
+      Air-gapped cluster network (VLAN 20) isolates blockchain validators and
+      IPFS from the internet. Dev machines (VLAN 30) have internet access for
+      model downloads and updates. Management (VLAN 10) for admin access.
+      Inter-VLAN routing controlled at the GL.iNet BE9300 router level.
+    status: active
+
+  - id: D112
+    date: "2026-01"
+    topic: storage
+    decision: "Blockchain stores metadata; IPFS stores data"
+    rationale: >
+      Blockchain is expensive per-byte and permanent. IPFS is cheap and
+      content-addressed. The pattern: upload data to IPFS, get CID, store
+      sha256(CID) on-chain via StorageRegistry. This enables the "16GB phone
+      accessing 100GB storage" use case — the phone only needs the blockchain
+      for metadata lookups and IPFS for data retrieval.
+    implemented_in:
+      - /opt/nexus/libnexus/nexus_storage.py
+    status: active

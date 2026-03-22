@@ -618,7 +618,9 @@ class NodeAgent:
         if not prompt:
             return {"status": "error", "result": {"message": "missing args.prompt"}}
         if not model_name:
-            return {"status": "error", "result": {"message": "missing args.model"}}
+            if not self._models:
+                return {"status": "error", "result": {"message": "missing args.model"}}
+            model_name = self._models[0]["name"]
 
         if not self._models:
             return {"status": "error", "result": {"message": "no inference endpoint available"}}

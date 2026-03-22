@@ -10,7 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_DIR="/opt/nexus/agents"
-SERVICE_NAME="nexus-node-agent"
+SERVICE_NAME="node-agent"
 SERVICE_FILE="node-agent.service"
 
 # Files to copy to each node's /opt/nexus/agents/
@@ -123,14 +123,11 @@ for node in "${NODES[@]}"; do
         continue
     fi
 
-    # Add ExecStart extra args if requested (e.g. --no-blockchain)
-    if [[ -n "$EXTRA_ARGS" ]]; then
-        EXEC_LINE="ExecStart=/usr/bin/python3 ${AGENTS_DIR}/node_agent.py ${EXTRA_ARGS}"
-        MODIFIED_SERVICE=$(sed "s|^ExecStart=.*|${EXEC_LINE}|" "$SERVICE_SRC")
-        echo "$MODIFIED_SERVICE" | ssh "$node" "cat > /tmp/${SERVICE_FILE}"
-    else
-        scp -q "$SERVICE_SRC" "${node}:/tmp/${SERVICE_FILE}"
-    fi
+    # Always inject --hostname <dns-name> so Gateway identifies nodes by their
+    # DNS/deploy name rather than the system hostname (which may differ, e.g. "AI" vs "nexus-ai").
+    EXEC_LINE="ExecStart=/usr/bin/python3 ${AGENTS_DIR}/node_agent.py --hostname ${node}${EXTRA_ARGS:+ ${EXTRA_ARGS}}"
+    MODIFIED_SERVICE=$(sed "s|^ExecStart=.*|${EXEC_LINE}|" "$SERVICE_SRC")
+    echo "$MODIFIED_SERVICE" | ssh "$node" "cat > /tmp/${SERVICE_FILE}"
 
     if ! ssh "$node" "sudo mv /tmp/${SERVICE_FILE} /etc/systemd/system/${SERVICE_FILE}"; then
         fail "$node: could not install service file"

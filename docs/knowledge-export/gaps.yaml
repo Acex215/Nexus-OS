@@ -1,0 +1,265 @@
+# NEXUS OS Compiled Database — Gaps & Known Issues
+# Generated: 2026-03-21
+# Scope: Dev Assistant pipeline (/opt/nexus/agents/) + shared infrastructure
+# Source: Roadmap v2.0 (2026-03-20) Section 4 + analysis of codebase
+#
+# Gap IDs restart at G100 to clearly distinguish from the deprecated CAF gaps (G001-G039).
+# CAF gaps are archived — see caf-archived-gaps.yaml if historical reference needed.
+
+gaps:
+
+  # ═══════════════════════════════════════════════════════════════
+  # P0 — FIX BEFORE SOAK TESTING (Phase 4B)
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: G100
+    type: bug
+    severity: P0
+    status: open
+    title: "Coder fallback to coordinator model = 100% code generation failure"
+    description: >
+      When ThinkPad (10.0.30.2) is offline, llm_router_v2.py falls back the coder
+      tier to ThinkStation's qwen3.5-35b-a3b (coordinator model). The coordinator
+      model cannot produce valid SEARCH/REPLACE blocks, causing every code generation
+      task to fail. This is the highest-impact reliability issue.
+    affected_components:
+      - llm-routing
+      - autonomous-loop
+    affected_files:
+      - /opt/nexus/agents/llm_router_v2.py
+      - /opt/nexus/agents/autonomous_loop.py
+    fix: >
+      Add a pre-flight health check in autonomous_loop.py that verifies the coder
+      endpoint specifically before starting task execution. If coder is unreachable,
+      pause the loop and notify via Discord instead of falling back to a non-code model.
+    estimated_effort: "30 minutes"
+    roadmap_ref: "Section 4.1"
+
+  - id: G101
+    type: bug
+    severity: P0
+    status: open
+    title: "Stale branches block task re-execution after prior session failure"
+    description: >
+      Failed tasks leave git branches that block subsequent attempts on the same
+      task ID with `fatal: branch already exists`. The delete-before-create logic
+      exists for retries within a session but not for first attempts after a prior
+      session's failure.
+    affected_components:
+      - dev-assistant-bot
+    affected_files:
+      - /opt/nexus/agents/dev_assistant.py
+    fix: >
+      In _execute(), always run `git branch -D <branch_name> 2>/dev/null` before
+      `git checkout -b <branch_name>`. This is idempotent and safe.
+    estimated_effort: "15 minutes"
+    roadmap_ref: "Section 4.2"
+
+  - id: G102
+    type: configuration
+    severity: P0
+    status: open
+    title: "Destructive patch guard too aggressive for docstring replacement tasks"
+    description: >
+      Tasks that replace multi-line docstrings trigger the 10-line net deletion
+      guard, blocking legitimate edits. The threshold is hardcoded.
+    affected_components:
+      - safety-layer
+    affected_files:
+      - /opt/nexus/agents/safety_gates.py
+      - /opt/nexus/agents/safety_config.py
+    fix: >
+      Make the destructive patch threshold configurable in safety_config.py
+      (env var SAFETY_MAX_NET_DELETIONS, default 20). Update safety_gates.py
+      to read from config.
+    estimated_effort: "20 minutes"
+    roadmap_ref: "Section 4.3"
+
+  - id: G103
+    type: performance
+    severity: P0
+    status: open
+    title: "ChromaDB first-call blocks asyncio event loop, causing Discord heartbeat warnings"
+    description: >
+      First ChromaDB client creation triggers onnxruntime GPU discovery (slow on Pi),
+      blocking the async event loop long enough for Discord to emit heartbeat warnings.
+      Partially addressed with singleton client + asyncio.to_thread, but first call
+      still blocks.
+    affected_components:
+      - knowledge-layer
+    affected_files:
+      - /opt/nexus/agents/knowledge_indexer.py
+    fix: >
+      Add a warm-up call during bot startup (in DevAssistant.on_ready, before the
+      autonomous loop starts): `await asyncio.to_thread(_get_client)`.
+    estimated_effort: "10 minutes"
+    roadmap_ref: "Section 4.4"
+
+  - id: G104
+    type: bug
+    severity: P1
+    status: open
+    title: "Clarification loop fires on autonomous tasks, causing log spam"
+    description: >
+      clarification_rounds is pre-maxed for autonomous tasks, causing "Forcing
+      clear=True" log spam and suboptimal plans when the coordinator genuinely
+      needs clarification.
+    affected_components:
+      - dev-assistant-bot
+    affected_files:
+      - /opt/nexus/agents/dev_assistant.py
+    fix: >
+      Set clarification_rounds = MAX_CLARIFICATION_ROUNDS explicitly at the start
+      of autonomous task execution so the coordinator knows not to ask questions.
+    estimated_effort: "10 minutes"
+    roadmap_ref: "Section 4.5"
+
+  - id: G105
+    type: infrastructure
+    severity: P1
+    status: open
+    title: "No persistent git push credentials on nexus-admin"
+    description: >
+      nexus-admin has no persistent git push credentials. Manual username/password
+      entry required for every push.
+    affected_components:
+      - dev-assistant-bot
+    affected_files: []
+    fix: >
+      Set up SSH key for GitHub on nexus-admin:
+      ssh-keygen -t ed25519 -C "nexus-admin@v2network"
+      Add public key to GitHub deploy keys for Acex215/Nexus-OS.
+      Configure git to use SSH: git remote set-url origin git@github.com:Acex215/Nexus-OS.git
+    estimated_effort: "15 minutes"
+    roadmap_ref: "Section 4.6"
+
+  # ═══════════════════════════════════════════════════════════════
+  # P1 — RELIABILITY IMPROVEMENTS
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: G106
+    type: missing-feature
+    severity: P1
+    status: open
+    title: "No root-cause convergence test on consecutive failures"
+    description: >
+      MAX_CONSECUTIVE_FAILURES=3 pauses the autonomous loop after 3 failures,
+      but does not check if they share the same root cause. The loop could burn
+      through 3 retries on the same unfixable error before pausing. Concept
+      carried forward from CAF gap G038.
+    affected_components:
+      - autonomous-loop
+    affected_files:
+      - /opt/nexus/agents/autonomous_loop.py
+    fix: >
+      Before incrementing _consecutive_failures, compare the current error
+      signature (e.g., error type + affected files) with the previous failure.
+      If identical root cause detected twice in a row, pause immediately and
+      send a specific "repeated failure" notification to Discord.
+    estimated_effort: "1-2 hours"
+
+  - id: G107
+    type: missing-feature
+    severity: P1
+    status: open
+    title: "No environment probe before task planning"
+    description: >
+      The coordinator plans tasks without verifying that required tools are
+      installed (pytest, solcjs, etc.) or that input files exist. This can cause
+      repeated failures on the same missing dependency. Concept carried forward
+      from CAF gap G037.
+    affected_components:
+      - dev-assistant-bot
+    affected_files:
+      - /opt/nexus/agents/dev_assistant.py
+    fix: >
+      After analysis and before planning, run a quick probe: verify declared
+      files exist, check that common tools (pytest, git, python3) are available.
+      Inject probe results into the coordinator prompt.
+    estimated_effort: "1-2 hours"
+
+  # ═══════════════════════════════════════════════════════════════
+  # P2 — TECHNICAL DEBT
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: G108
+    type: stale-code
+    severity: P2
+    status: open
+    title: "llm_client.py has stale pre-VLAN IP (192.168.8.128)"
+    description: >
+      agents/llm_client.py (used by the 30-agent hierarchy, not by Dev Assistant)
+      still references the old flat LAN IP. Would cause failures if the hierarchy
+      is restarted.
+    affected_components:
+      - agent-hierarchy
+    affected_files:
+      - /opt/nexus/agents/llm_client.py
+    fix: "Update LOCAL_INFERENCE_URL to use current VLAN 20 IP (10.0.20.4:8090 or appropriate endpoint)."
+    estimated_effort: "5 minutes"
+
+  - id: G109
+    type: missing-source
+    severity: P2
+    status: open
+    title: "3 smart contract sources not committed to repo"
+    description: >
+      TokenManager.sol, AgentGovernance.sol, and DecisionQuality.sol are deployed
+      on-chain but their Solidity source is not in /opt/nexus/contracts/source/.
+      Cannot redeploy or audit these contracts without source reconstruction.
+    affected_components:
+      - smart-contracts
+    affected_files:
+      - /opt/nexus/contracts/source/
+    fix: "Locate original source files or reconstruct from ABI + deployed bytecode."
+    estimated_effort: "2-4 hours"
+
+  - id: G110
+    type: documentation-drift
+    severity: P2
+    status: open
+    title: "NEXUS_OS_Current_State.md is 34 days stale, describes pre-VLAN flat LAN"
+    description: >
+      Generated 2026-02-15. Describes old 192.168.8.x IPs, omits nexus-ai2,
+      ThinkStation, ThinkPad, K3s, WireGuard, Clef, VLAN topology. The entire
+      document misleads any developer using it as a reference. Carried forward
+      from CAF gap G034.
+    affected_components:
+      - all
+    affected_files:
+      - /opt/nexus/NEXUS_OS_Current_State.md
+    fix: >
+      Rewrite to reflect current 3-VLAN topology, all 7 nodes (5 Pi + 2 workstations),
+      9 deployed contracts, K3s, Clef external signer, WireGuard overlay, period=0 Geth,
+      libnexus as operational, Dev Assistant as the live agent pipeline.
+    estimated_effort: "2-4 hours"
+
+  - id: G111
+    type: documentation-drift
+    severity: P3
+    status: open
+    title: "Old compiled-db describes CAF, not Dev Assistant"
+    description: >
+      The previous compiled-db (components.yaml, gaps.yaml, code_index.yaml,
+      interfaces.yaml, dependencies.yaml, decisions.yaml) was generated against
+      the deprecated CAF orchestrator. This replacement compiled-db supersedes it.
+    affected_components:
+      - all
+    affected_files:
+      - /opt/nexus/docs/compiled-db/
+    fix: "Replace old compiled-db files with this new set. Archive old files to docs/compiled-db/caf-archive/."
+    estimated_effort: "30 minutes"
+
+  - id: G112
+    type: missing-feature
+    severity: P2
+    status: open
+    title: "IPFS swarm peers = 0 on nexus-admin"
+    description: >
+      nexus-admin IPFS uploads succeed locally but have zero redundancy across
+      the cluster. Swarm peers not connected despite swarm key being distributed.
+    affected_components:
+      - ipfs-storage
+    affected_files: []
+    fix: "Re-run IPFS bootstrap: ipfs swarm connect to each peer's multiaddr. Verify with ipfs swarm peers."
+    estimated_effort: "30 minutes"

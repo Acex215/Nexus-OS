@@ -1,0 +1,10 @@
+{
+  "exec": 5,
+  "inference": 10,
+  "storage_pin": 3,
+  "storage_unpin": 1,
+  "storage_cat": 2,
+  "storage_stat": 1,
+  "storage_ls": 1,
+  "health": 0
+}

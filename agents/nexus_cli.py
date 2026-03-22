@@ -139,7 +139,7 @@ async def run(args):
                     if not extra_args:
                         print("Usage: nexus-cli node <hostname> exec \"<command>\"")
                         return 1
-                    node_args = {"cmd": " ".join(extra_args)}
+                    node_args = {"command": " ".join(extra_args)}
                 elif subcmd == "inference":
                     if not extra_args:
                         print("Usage: nexus-cli node <hostname> inference \"<prompt>\"")

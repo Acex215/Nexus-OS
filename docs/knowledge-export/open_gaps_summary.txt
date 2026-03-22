@@ -1,0 +1,14 @@
+Total gaps: 13, Open: 13
+  G100 [P0] Coder fallback to coordinator model = 100% code generation failure
+  G101 [P0] Stale branches block task re-execution after prior session failure
+  G102 [P0] Destructive patch guard too aggressive for docstring replacement tasks
+  G103 [P0] ChromaDB first-call blocks asyncio event loop, causing Discord heartbeat warnings
+  G104 [P1] Clarification loop fires on autonomous tasks, causing log spam
+  G105 [P1] No persistent git push credentials on nexus-admin
+  G106 [P1] No root-cause convergence test on consecutive failures
+  G107 [P1] No environment probe before task planning
+  G108 [P2] llm_client.py has stale pre-VLAN IP (192.168.8.128)
+  G109 [P2] 3 smart contract sources not committed to repo
+  G110 [P2] NEXUS_OS_Current_State.md is 34 days stale, describes pre-VLAN flat LAN
+  G112 [P2] IPFS swarm peers = 0 on nexus-admin
+  G111 [P3] Old compiled-db describes CAF, not Dev Assistant

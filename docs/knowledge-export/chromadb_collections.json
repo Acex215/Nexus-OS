@@ -1,0 +1,120 @@
+[
+  {
+    "name": "code_chunks",
+    "count": 1210,
+    "sample_ids": [
+      "a6a791fb27d8be17",
+      "21ed0fc8b24f2e2b",
+      "327812e518ad3cd6"
+    ],
+    "sample_docs": [
+      "async def _send_decision_embed(message: discord.Message, result: dict, *, tx_hash: str | None = None):\n    \"\"\"Format a workflow result as a rich Discord embed.\"\"\"\n    decision = result[\"decision\"]\n   ",
+      "async def _send_error_embed(message: discord.Message, exc: Exception):\n    embed = discord.Embed(\n        title=\"Error\",\n        description=_trunc(f\"Failed to process request:\\n```{exc}```\", 2048),\n ",
+      "def _trunc(text: str, limit: int) -> str:\n    \"\"\"Truncate text to fit Discord embed field limits.\"\"\"\n    if len(text) <= limit:\n        return text\n    return text[: limit - 3] + \"\u2026\""
+    ]
+  },
+  {
+    "name": "dev_assistant_tasks",
+    "count": 9,
+    "sample_ids": [
+      "log-20260319T165418-a77af6",
+      "log-1773958634-73e7e4",
+      "log-1773958715-3b53f4"
+    ],
+    "sample_docs": [
+      "Add a comment to the top of task_logger.py saying \"Phase 4 module\"\nOutcome: done\nError: none\nFiles: none\nDuration: 81.00218069402035s",
+      "Add a module-level docstring to test_validator.py: \"Phase 3 \u2014 Post-execution test discovery and pytest runner.\"\nOutcome: failed\nError: Execution failed (status: failed)\nFiles: none\nDuration: 94.362779",
+      "Add a module-level docstring to knowledge_indexer.py: \"Phase 4 \u2014 ChromaDB indexer for completed task semantic retrieval.\"\nOutcome: failed\nError: Execution failed (status: failed)\nFiles: none\nDuration:"
+    ]
+  },
+  {
+    "name": "docs_chunks",
+    "count": 86,
+    "sample_ids": [
+      "05ef156abc13c3d0",
+      "0f57137ec327616a",
+      "de146e3fa93625c4"
+    ],
+    "sample_docs": [
+      "# NEXUS OS Discord Bot Invitations\n\nInvite **24 bots** to \"The Enterprise\" (Guild ID: `1441732155225931869`)\n\n**Already invited:** CEO \u2705 | **Remaining:** 24 bots\n\n---",
+      "## Instructions\n\nFor each link below:\n1. Click the link (opens Discord authorization page)\n2. Select **\"The Enterprise\"** from the server dropdown\n3. Click **Authorize**\n4. Complete CAPTCHA if prompte",
+      "### C-Suite (1)\n\n- [ ] **NEXUS COO** (`coo`): [Invite](https://discord.com/oauth2/authorize?client_id=1470129085014348024&permissions=277025770560&integration_type=0&scope=bot)"
+    ]
+  },
+  {
+    "name": "infra_configs",
+    "count": 18,
+    "sample_ids": [
+      "b667d004af5fa2ea",
+      "da390aa3a10111ee",
+      "7a7b7aaec4d506b4"
+    ],
+    "sample_docs": [
+      "[Unit]\nDescription=NEXUS OS Monitoring Dashboard\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nUser=mhuraibi\nGroup=mhuraibi\nWorkingDirectory=/home/mhuraibi/nexus/phase",
+      "[Unit]\nDescription=NEXUS OS Local LLM Inference (llama-server)\nAfter=network-online.target\nWants=network-online.target\nDocumentation=https://github.com/ggml-org/llama.cpp\n\n[Service]\nType=simple\nUser=m",
+      "[Unit]\nDescription=NEXUS OS Clef Signer\nDocumentation=https://geth.ethereum.org/docs/tools/clef\nAfter=network.target\nBefore=nexus-geth.service\n\n[Service]\nType=simple\nUser=mhuraibi\nRestart=always\nResta"
+    ]
+  },
+  {
+    "name": "nexus_context",
+    "count": 203,
+    "sample_ids": [
+      "a91ae9e7688cb19cafb4a4c7f57c076e",
+      "ea1f3ea194d5f86811eadb87e2a2f6fc",
+      "170a6e860ea68fcc7ed54e63d16f0b0e"
+    ],
+    "sample_docs": [
+      "#!/usr/bin/env python3\n\"\"\"NEXUS OS Agent Registry - Complete personality definitions for all 30 agents.\"\"\"\nfrom typing import Dict, Any, List\n\n# Shared context block injected into all prompts\n_CLUSTER",
+      "age (192.168.8.224, 2TB NFS NAS, Geth validator), \"\n    \"nexus-admin (192.168.8.153, dev station). \"\n    \"Blockchain: Chain ID 123454321, Clique PoA, 5s blocks, 3 validators. \"\n    \"All decisions logg",
+      "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n    \"ceo\": {\n        \"agent_id\": \"ceo\",\n        \"display_name\": \"NEXUS CEO\",\n        \"role\": \"ceo\",\n        \"department\": None,\n        \"model\":"
+    ]
+  },
+  {
+    "name": "nexus_decisions",
+    "count": 31,
+    "sample_ids": [
+      "d612a6e3b0f5f9f14c38c5ee4ce5fb31",
+      "8d806522428f4f46968f61abc23441c8",
+      "26696f8ba5fec00252e9b5b4b883ea4a"
+    ],
+    "sample_docs": [
+      "Test memory",
+      "Blockchain IS the kernel. Geth starts before all other services.",
+      "Every device equals an Ethereum wallet. Hardware identity is cryptographic."
+    ]
+  },
+  {
+    "name": "nexus_failures",
+    "count": 16,
+    "sample_ids": [
+      "a9c955a668b3874f8f402cf7e6ded699",
+      "lesson_550aaa7ec52daa6d",
+      "384c9ebbccff7b74c9c8d0a491cb20b5"
+    ],
+    "sample_docs": [
+      "FAILED: Create tool_registry.yaml with expanded tool definitions. step=1, rolled_back=True, error=expect_pattern '^- name:' not matched. ",
+      "Intent: ns-004.1 \u2014 Create tool_registry.yaml with expanded tool definitions\nOutcome: failure\nRoot cause: The execution failed because the expected pattern '^- name:' was not matched in the created YAM",
+      "FAILED: Create tool_registry.yaml with expanded tool definitions. step=1, rolled_back=True, error=expect_pattern \"touch: cannot touch '/opt/nexus/automation/tool_registry.yaml': Permission denied\" not"
+    ]
+  },
+  {
+    "name": "session_transcripts",
+    "count": 329,
+    "sample_ids": [
+      "transcript-d55e004bb728656b",
+      "transcript-35d602a432648ac5",
+      "transcript-96c47bb7080afb02"
+    ],
+    "sample_docs": [
+      "To ensure we have captured the full \"architectural DNA\" from the latest breakthrough session, here is the final distillation of the \"Signal\" from that specific chat, which now serves as the foundation",
+      "Project Evolution: Corrects significant mathematical errors in previous versions (standardizing on 256KB chunks and 50% storage overhead) and pivots from \"marketing claims\" to \"design constraints.\" \n+",
+      "Key Technical Constraints: Mandatory transaction batching (one per file, not per shard) to bypass the 30 tx/s blockchain bottleneck; a 72-hour repair delay window to prevent bandwidth exhaustion from "
+    ]
+  },
+  {
+    "name": "web_research",
+    "count": 0,
+    "sample_ids": [],
+    "sample_docs": []
+  }
+]
