@@ -375,11 +375,18 @@ class NexusGateway:
         app.router.add_get("/health", self._health_handler)
         app.router.add_get("/nodes", self._nodes_handler)
         app.router.add_static("/chat", "/opt/nexus/webchat")
+        app.router.add_get("/dashboard", self._dashboard_redirect)
+        app.router.add_get("/dashboard/", self._dashboard_redirect)
+        app.router.add_static("/dashboard", "/opt/nexus/dashboard/dist")
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
         site = aiohttp.web.TCPSite(runner, self.host, self.http_port)
         await site.start()
         return runner
+
+    async def _dashboard_redirect(self, request):
+        """Redirect bare /dashboard and /dashboard/ to the React app index."""
+        raise aiohttp.web.HTTPFound("/dashboard/index.html")
 
     async def _health_handler(self, request):
         """HTTP GET /health — returns cluster health status."""

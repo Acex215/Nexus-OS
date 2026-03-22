@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Base */
+  --bg-primary: #0a0e17;
+  --bg-secondary: #0f1520;
+  --bg-tertiary: #141c2b;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2332;
+  --bg-elevated: #1e2a3a;
+
+  /* Borders */
+  --border-subtle: #1e293b;
+  --border-default: #2a3548;
+  --border-strong: #3b4c63;
+
+  /* Text */
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+
+  /* Accent colors */
+  --accent-cyan: #06b6d4;
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-amber: #f59e0b;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+
+  /* Status */
+  --status-online: #10b981;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+  --status-offline: #475569;
+  --status-pending: #3b82f6;
+
+  /* Fonts */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* Data table base */
+.data-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.8rem; }
+.data-table th { text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border-default); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
+.data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+.data-table tr:hover { background: var(--bg-card-hover); }
+
+/* Pulse animation for live data */
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.pulse { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* Terminal font for code/log content */
+.terminal { font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
