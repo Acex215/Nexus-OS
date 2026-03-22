@@ -35,6 +35,7 @@ export const getGitBranches = () => api.get('/api/git/branches').then(r => r.dat
 export const getTokenCosts = () => api.get('/api/tokens/costs').then(r => r.data);
 export const getTokenActivity = () => api.get('/api/tokens/activity').then(r => r.data);
 export const getTokenSummary = () => api.get('/api/tokens/summary').then(r => r.data);
+export const getTokenBalances = () => api.get('/api/tokens/balances').then(r => r.data);
 
 // Logs
 export const getLogs = (service, lines = 100) => api.get(`/api/logs/${service}?lines=${lines}`).then(r => r.data);

@@ -667,10 +667,12 @@ async def tokens_activity():
 async def tokens_summary():
     sys.path.insert(0, "/opt/nexus/agents")
     ops_count = 0
+    enforcement_enabled = os.environ.get("ENFORCEMENT_ENABLED", "false").lower() == "true"
     try:
         import importlib
         th = importlib.import_module("token_hooks")
         ops_count = len(th.OPERATION_COSTS)
+        enforcement_enabled = th.ENFORCEMENT_ENABLED
     except Exception:
         pass
 
@@ -682,10 +684,133 @@ async def tokens_summary():
         except Exception:
             pass
 
+    contract_address = None
+    totals = {}
+    registered_nodes = 0
+    try:
+        sys.path.insert(0, "/opt/nexus")
+        from libnexus.token_client import TokenClient
+        tc = TokenClient()
+        contract_address = tc.address
+        totals = tc.get_totals()
+    except Exception:
+        pass
+
+    _, rm = _w3_contract("ResourceManager")
+    if rm:
+        try:
+            registered_nodes = rm.functions.getNodeCount().call()
+        except Exception:
+            pass
+
     return {
-        "enforcement_enabled":      False,
+        "enforcement_enabled":      enforcement_enabled,
         "operations_defined":       ops_count,
         "total_logged_operations":  total_logged,
+        "contract_address":         contract_address,
+        "totals":                   totals,
+        "registered_nodes":         registered_nodes,
+    }
+
+
+@app.get("/api/tokens/balances")
+async def tokens_balances():
+    w3, rm = _w3_contract("ResourceManager")
+    _, tm = _w3_contract("TokenManager")
+    if not rm or not tm:
+        return {"error": "blockchain unreachable", "nodes": [], "totals": {}}
+
+    try:
+        addresses = rm.functions.getAllNodes().call()
+    except Exception as exc:
+        return {"error": f"ResourceManager unavailable: {exc}", "nodes": [], "totals": {}}
+
+    # Build hostname lookup from ResourceManager
+    hostname_map = {}
+    for addr in addresses:
+        try:
+            n = rm.functions.getNode(Web3.to_checksum_address(addr)).call()
+            hostname_map[addr.lower()] = n[0]
+        except Exception:
+            pass
+
+    nodes = []
+    for addr in addresses:
+        try:
+            ect, rst = tm.functions.getBalances(Web3.to_checksum_address(addr)).call()
+            nodes.append({
+                "address":     addr,
+                "hostname":    hostname_map.get(addr.lower(), ""),
+                "ect_balance": ect,
+                "rst_balance": rst,
+            })
+        except Exception:
+            nodes.append({"address": addr, "hostname": hostname_map.get(addr.lower(), ""),
+                          "ect_balance": None, "rst_balance": None})
+
+    totals = {}
+    try:
+        em, es, re_, rs = tm.functions.getTotals().call()
+        totals = {"ect_minted": em, "ect_spent": es, "rst_earned": re_, "rst_slashed": rs}
+    except Exception:
+        pass
+
+    return {"nodes": nodes, "totals": totals}
+
+
+@app.get("/api/tokens/balance/{address}")
+async def tokens_balance_address(address: str):
+    if not HAS_WEB3:
+        return {"error": "web3 not available"}
+    try:
+        addr = Web3.to_checksum_address(address)
+    except Exception:
+        return {"error": f"invalid address: {address}"}
+
+    w3, tm = _w3_contract("TokenManager")
+    if not tm:
+        return {"error": "TokenManager not accessible"}
+
+    try:
+        ect, rst = tm.functions.getBalances(addr).call()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+    # Spending history — last 50 entries
+    spend_history = []
+    try:
+        latest = w3.eth.block_number
+        amounts, task_ids, blocks, timestamps = tm.functions.getSpendingHistory(
+            addr, 0, latest
+        ).call()
+        entries = list(zip(amounts, task_ids, blocks, timestamps))
+        for a, t, b, ts in entries[-50:]:
+            spend_history.append({"amount": a, "task_id": t.hex(), "block": b, "timestamp": ts})
+        spend_history.reverse()
+    except Exception:
+        pass
+
+    # RST history — last 20 entries
+    rst_history = []
+    try:
+        count = tm.functions.getRSTHistoryCount(addr).call()
+        start = max(0, count - 20)
+        for i in range(start, count):
+            amount, reason, block_num, timestamp = tm.functions.getRSTRecord(addr, i).call()
+            rst_history.append({
+                "amount": int(amount), "reason": reason,
+                "block": block_num, "timestamp": timestamp,
+            })
+        rst_history.reverse()
+    except Exception:
+        pass
+
+    return {
+        "address":       addr,
+        "ect_balance":   ect,
+        "rst_balance":   rst,
+        "spend_history": spend_history,
+        "rst_history":   rst_history,
     }
 
 # ---------------------------------------------------------------------------

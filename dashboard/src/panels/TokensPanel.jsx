@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getTokenCosts, getTokenSummary, getTokenActivity } from '../lib/api.js';
+import { usePolling } from '../hooks/usePolling.js';
+import { getTokenCosts, getTokenSummary, getTokenActivity, getTokenBalances } from '../lib/api.js';
 import { formatAddress, formatTime } from '../lib/theme.js';
 import DataTable      from '../components/DataTable.jsx';
 import Badge          from '../components/Badge.jsx';
@@ -65,11 +66,25 @@ function normalizeCosts(data) {
 
 function normalizeActivity(data) {
   if (!data) return [];
-  if (Array.isArray(data))                   return data;
-  if (Array.isArray(data.operations))        return data.operations;
-  if (Array.isArray(data.activity))          return data.activity;
-  if (Array.isArray(data.log))               return data.log;
-  return [];
+  let raw;
+  if (Array.isArray(data))             raw = data;
+  else if (Array.isArray(data.events)) raw = data.events;
+  else if (Array.isArray(data.operations)) raw = data.operations;
+  else if (Array.isArray(data.activity))   raw = data.activity;
+  else if (Array.isArray(data.log))        raw = data.log;
+  else return [];
+  // Normalize on-chain event shape → ActivityLog column shape
+  return raw.map(e => {
+    if (e.type === 'ECTSpent') {
+      return { ...e, operation: 'ECTSpent', requester: e.agent, cost: e.amount,
+               timestamp: e.block, status: 'SPENT' };
+    }
+    if (e.type === 'RSTEarned') {
+      return { ...e, operation: 'RSTEarned', requester: e.agent, cost: e.amount,
+               timestamp: e.block, status: 'EARNED' };
+    }
+    return e;
+  });
 }
 
 // ── Section header ─────────────────────────────────────────────────────────────
@@ -101,7 +116,42 @@ function SectionHeader({ icon: Icon, title, aside }) {
 }
 
 // ── Enforcement banner ─────────────────────────────────────────────────────────
-function EnforcementBanner() {
+function EnforcementBanner({ enforced }) {
+  if (enforced) {
+    return (
+      <div style={{
+        display:      'flex',
+        alignItems:   'flex-start',
+        gap:          '12px',
+        background:   'rgba(34,197,94,0.08)',
+        border:       '1px solid rgba(34,197,94,0.35)',
+        borderLeft:   '3px solid var(--accent-green)',
+        borderRadius: '6px',
+        padding:      '12px 14px',
+      }}>
+        <Shield size={15} style={{ color: 'var(--accent-green)', flexShrink: 0, marginTop: 1 }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize:   '12px',
+            fontWeight: 600,
+            color:      'var(--accent-green)',
+          }}>
+            ECT/RST enforcement is ACTIVE. Operations with insufficient ECT will be blocked.
+          </span>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize:   '11px',
+            color:      'rgba(34,197,94,0.75)',
+            lineHeight: 1.6,
+          }}>
+            Real on-chain balances are checked and spent on every operation.
+            Set ENFORCEMENT_ENABLED=false to switch to logging-only mode.
+          </span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{
       display:      'flex',
@@ -121,7 +171,7 @@ function EnforcementBanner() {
           fontWeight: 600,
           color:      'var(--accent-amber)',
         }}>
-          ECT/RST hooks are active (logging only)
+          ECT/RST running in logging mode (enforcement off)
         </span>
         <span style={{
           fontFamily: 'var(--font-mono)',
@@ -129,8 +179,8 @@ function EnforcementBanner() {
           color:      'rgba(245,158,11,0.75)',
           lineHeight: 1.6,
         }}>
-          Token enforcement is not yet deployed. Operations are tracked but balances
-          are not enforced on-chain. All cost_check() calls currently return ALLOWED.
+          Real on-chain balances are tracked and ECT is spent per operation.
+          Operations are never blocked — set ENFORCEMENT_ENABLED=true to enforce.
         </span>
       </div>
     </div>
@@ -138,13 +188,15 @@ function EnforcementBanner() {
 }
 
 // ── Summary stat row ───────────────────────────────────────────────────────────
-function SummaryStats({ summary }) {
+function SummaryStats({ summary, balances }) {
   if (!summary) return null;
 
-  const ectMinted  = summary.ect_minted  ?? summary.totalECTMinted  ?? summary.total_ect_minted  ?? null;
-  const ectSpent   = summary.ect_spent   ?? summary.totalECTSpent   ?? summary.total_ect_spent   ?? null;
-  const rstEarned  = summary.rst_earned  ?? summary.totalRSTEarned  ?? summary.total_rst_earned  ?? null;
-  const rstSlashed = summary.rst_slashed ?? summary.totalRSTSlashed ?? summary.total_rst_slashed ?? null;
+  // Pull from summary.totals (new shape) or top-level fallbacks
+  const t = summary.totals ?? {};
+  const ectMinted  = t.ect_minted  ?? summary.ect_minted  ?? summary.totalECTMinted  ?? null;
+  const ectSpent   = t.ect_spent   ?? summary.ect_spent   ?? summary.totalECTSpent   ?? null;
+  const rstEarned  = t.rst_earned  ?? summary.rst_earned  ?? summary.totalRSTEarned  ?? null;
+  const rstSlashed = t.rst_slashed ?? summary.rst_slashed ?? summary.totalRSTSlashed ?? null;
 
   const stats = [
     { label: 'ECT Minted',  value: ectMinted,  color: 'var(--accent-amber)'  },
@@ -189,6 +241,97 @@ function SummaryStats({ summary }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Node balances table ────────────────────────────────────────────────────────
+function NodeBalancesTable({ balances, loading }) {
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+        <LoadingSpinner size={13} /> Loading balances…
+      </div>
+    );
+  }
+
+  const nodes = balances?.nodes ?? [];
+  const totals = balances?.totals ?? {};
+
+  if (nodes.length === 0) {
+    return (
+      <div style={{ background: 'var(--bg-card)', borderRadius: '6px', border: '1px solid var(--border-subtle)', padding: '16px' }}>
+        <EmptyState
+          icon={Coins}
+          title="No registered nodes"
+          description="Node balances will appear here once nodes register with ResourceManager."
+        />
+      </div>
+    );
+  }
+
+  const totalEct = nodes.reduce((s, n) => s + (n.ect_balance ?? 0), 0);
+  const totalRst = nodes.reduce((s, n) => s + (n.rst_balance ?? 0), 0);
+
+  const ectColor = (bal) => {
+    if (bal == null) return 'var(--text-dim)';
+    if (bal === 0)   return 'var(--accent-red)';
+    if (bal <= 100)  return 'var(--accent-amber)';
+    return 'var(--accent-green)';
+  };
+
+  const rowBg = (bal) => {
+    if (bal == null || bal > 100) return 'transparent';
+    if (bal === 0)   return 'rgba(239,68,68,0.05)';
+    return 'rgba(245,158,11,0.05)';
+  };
+
+  const cellStyle = { fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '7px 12px' };
+  const hdrStyle  = { ...cellStyle, fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase',
+                      letterSpacing: '0.08em', borderBottom: '1px solid var(--border-subtle)', padding: '8px 12px' };
+
+  return (
+    <div style={{ background: 'var(--bg-card)', borderRadius: '6px', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ ...hdrStyle, textAlign: 'left' }}>Address</th>
+            <th style={{ ...hdrStyle, textAlign: 'left' }}>Hostname</th>
+            <th style={{ ...hdrStyle, textAlign: 'right', width: 110 }}>ECT Balance</th>
+            <th style={{ ...hdrStyle, textAlign: 'right', width: 110 }}>RST Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {nodes.map((n, i) => (
+            <tr key={n.address} style={{ background: rowBg(n.ect_balance), borderTop: i > 0 ? '1px solid var(--border-subtle)' : 'none' }}>
+              <td style={{ ...cellStyle, color: 'var(--text-muted)' }} title={n.address}>
+                {formatAddress(n.address)}
+              </td>
+              <td style={{ ...cellStyle, color: 'var(--text-secondary)' }}>
+                {n.hostname || '—'}
+              </td>
+              <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 600, color: ectColor(n.ect_balance) }}>
+                {n.ect_balance ?? '—'}
+              </td>
+              <td style={{ ...cellStyle, textAlign: 'right', color: 'var(--accent-purple)' }}>
+                {n.rst_balance ?? '—'}
+              </td>
+            </tr>
+          ))}
+          {/* Totals row */}
+          <tr style={{ borderTop: '2px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+            <td style={{ ...cellStyle, color: 'var(--text-dim)', fontStyle: 'italic' }} colSpan={2}>
+              Total ({nodes.length} node{nodes.length !== 1 ? 's' : ''})
+            </td>
+            <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 700, color: 'var(--accent-amber)' }}>
+              {totalEct}
+            </td>
+            <td style={{ ...cellStyle, textAlign: 'right', fontWeight: 700, color: 'var(--accent-purple)' }}>
+              {totalRst}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -575,18 +718,16 @@ function ContractCard({ summary, loading }) {
 // ── Main panel ─────────────────────────────────────────────────────────────────
 export default function TokensPanel() {
   const [costsData,    setCostsData]    = useState(null);
-  const [summaryData,  setSummaryData]  = useState(null);
-  const [activityData, setActivityData] = useState(null);
   const [loading,      setLoading]      = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    Promise.allSettled([
-      getTokenCosts()   .then(d => setCostsData(d))   .catch(() => {}),
-      getTokenSummary() .then(d => setSummaryData(d)) .catch(() => {}),
-      getTokenActivity().then(d => setActivityData(d)).catch(() => {}),
-    ]).finally(() => setLoading(false));
+    getTokenCosts().then(d => setCostsData(d)).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const { data: summaryData }  = usePolling(getTokenSummary,  30000);
+  const { data: activityData } = usePolling(getTokenActivity, 30000);
+  const { data: balancesData, loading: balancesLoading } = usePolling(getTokenBalances, 30000);
 
   const costs    = normalizeCosts(costsData);
   const activity = normalizeActivity(activityData);
@@ -631,12 +772,28 @@ export default function TokensPanel() {
       <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
         {/* Enforcement status banner */}
-        {!enforced && <EnforcementBanner />}
+        <EnforcementBanner enforced={enforced} />
 
-        {/* On-chain totals (if available from summary) */}
+        {/* On-chain totals */}
         <SummaryStats summary={summaryData} />
 
-        {/* Section 1 — Operation Cost Schedule */}
+        {/* Section 1 — Node Balances */}
+        <div>
+          <SectionHeader
+            icon={Coins}
+            title="Node Balances"
+            aside={
+              balancesData?.nodes?.length > 0 && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
+                  {balancesData.nodes.length} node{balancesData.nodes.length !== 1 ? 's' : ''}
+                </span>
+              )
+            }
+          />
+          <NodeBalancesTable balances={balancesData} loading={balancesLoading && !balancesData} />
+        </div>
+
+        {/* Section 2 — Operation Cost Schedule */}
         <div>
           <SectionHeader
             icon={Zap}
@@ -650,7 +807,7 @@ export default function TokensPanel() {
           <CostTable costs={costs} loading={false} />
         </div>
 
-        {/* Section 2 — Token Activity Log */}
+        {/* Section 3 — Token Activity Log */}
         <div>
           <SectionHeader
             icon={Activity}
@@ -663,10 +820,10 @@ export default function TokensPanel() {
               )
             }
           />
-          <ActivityLog activity={activity} loading={loading && !activityData} />
+          <ActivityLog activity={activity} loading={!activityData} />
         </div>
 
-        {/* Section 3 — Token Design Reference */}
+        {/* Section 4 — Token Design Reference */}
         <div>
           <SectionHeader
             icon={Coins}
@@ -675,13 +832,13 @@ export default function TokensPanel() {
           <TokenDesignCards />
         </div>
 
-        {/* Section 4 — Contract Info */}
+        {/* Section 5 — Contract Info */}
         <div>
           <SectionHeader
             icon={Database}
             title="TokenManager Contract"
           />
-          <ContractCard summary={summaryData} loading={loading && !summaryData} />
+          <ContractCard summary={summaryData} loading={!summaryData} />
         </div>
 
       </div>
