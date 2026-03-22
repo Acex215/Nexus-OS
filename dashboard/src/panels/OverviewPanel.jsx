@@ -5,6 +5,7 @@ import {
   getNodes, getTokenSummary, getTrainingStats,
   getTaskHistory, getGitLog, getBlocks,
   logTrainingSession, exportTrainingPairs,
+  getTemporalSummary, getTemporalHeatmap,
 } from '../lib/api.js';
 import { formatTime, NODE_COLORS, COLORS } from '../lib/theme.js';
 import StatCard  from '../components/StatCard.jsx';
@@ -248,6 +249,104 @@ function LogSessionModal({ onClose, onSubmit }) {
   );
 }
 
+// ── Temporal Heat Map ─────────────────────────────────────────────────────────
+
+const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+function cellColor(count) {
+  if (count === 0)   return 'rgba(6,182,212,0.05)';
+  if (count === 1)   return 'rgba(6,182,212,0.2)';
+  if (count <= 5)    return 'rgba(6,182,212,0.5)';
+  if (count <= 10)   return 'rgba(6,182,212,0.8)';
+  return 'rgba(6,182,212,1.0)';
+}
+
+function TemporalHeatmapGrid({ data, summary }) {
+  const [tooltip, setTooltip] = useState(null);
+
+  // Build [day][hour] matrix
+  const matrix = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => ({ task_count: 0, ect_spent: 0 }))
+  );
+  if (Array.isArray(data)) {
+    for (const cell of data) {
+      if (cell.day >= 0 && cell.day < 7 && cell.hour >= 0 && cell.hour < 24) {
+        matrix[cell.day][cell.hour] = cell;
+      }
+    }
+  }
+
+  const cb = summary?.current_bin;
+
+  return (
+    <div style={{ position: 'relative', userSelect: 'none' }}>
+
+      {/* Column headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: '20px repeat(7, 20px)', gap: '2px', marginBottom: '4px' }}>
+        <div />
+        {DAY_LABELS.map((d, i) => (
+          <div key={i} style={{
+            fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-dim)',
+            textAlign: 'center', lineHeight: '14px',
+          }}>{d}</div>
+        ))}
+      </div>
+
+      {/* 24 rows × 7 columns */}
+      {Array.from({ length: 24 }, (_, hour) => (
+        <div key={hour} style={{ display: 'grid', gridTemplateColumns: '20px repeat(7, 20px)', gap: '2px', marginBottom: '2px' }}>
+          <div style={{
+            fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-dim)',
+            lineHeight: '14px', textAlign: 'right', paddingRight: '4px',
+          }}>
+            {hour % 4 === 0 ? String(hour).padStart(2, '0') : ''}
+          </div>
+          {Array.from({ length: 7 }, (_, day) => {
+            const cell     = matrix[day][hour];
+            const isActive = cb && cb.dow === day && cb.hour === hour;
+            return (
+              <div
+                key={day}
+                style={{
+                  width: '20px', height: '14px', borderRadius: '2px',
+                  background: cellColor(cell.task_count),
+                  border: isActive ? '1px solid rgba(6,182,212,0.9)' : '1px solid transparent',
+                  boxSizing: 'border-box', cursor: 'default',
+                }}
+                onMouseEnter={e => {
+                  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                  setTooltip({ day: days[day], hour, task_count: cell.task_count, ect_spent: cell.ect_spent, x: e.clientX, y: e.clientY });
+                }}
+                onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                onMouseLeave={() => setTooltip(null)}
+              />
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{
+          position: 'fixed', left: tooltip.x + 14, top: tooltip.y - 14,
+          background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
+          borderRadius: '6px', padding: '8px 10px', zIndex: 9999,
+          fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)',
+          pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.4)', minWidth: '130px',
+        }}>
+          <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}>
+            {tooltip.day} {String(tooltip.hour).padStart(2, '0')}:00
+          </div>
+          <div>Tasks: <span style={{ color: 'var(--accent-cyan)' }}>{tooltip.task_count}</span></div>
+          {tooltip.ect_spent > 0 && (
+            <div>ECT: <span style={{ color: 'var(--accent-purple)' }}>{tooltip.ect_spent}</span></div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export default function OverviewPanel() {
@@ -263,7 +362,9 @@ export default function OverviewPanel() {
   const { data: trainingData } = usePolling(getTrainingStats,                 60000);
   const { data: histData     } = usePolling(() => getTaskHistory(20),         30000);
   const { data: gitData      } = usePolling(() => getGitLog(10),              60000);
-  const { data: blocksData   } = usePolling(() => getBlocks(5),               15000);
+  const { data: blocksData       } = usePolling(() => getBlocks(5),                    15000);
+  const { data: temporalSummary  } = usePolling(getTemporalSummary,                    30000);
+  const { data: temporalHeatmap  } = usePolling(() => getTemporalHeatmap(2026, 4),    120000);
 
   // Modal / export state
   const [showModal, setShowModal] = useState(false);
@@ -820,6 +921,72 @@ export default function OverviewPanel() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* ── ROW 5: Temporal Binning ── */}
+      <div style={{
+        ...card, padding: '14px 16px',
+        display: 'grid', gridTemplateColumns: '1fr auto', gap: '20px', alignItems: 'start',
+      }}>
+
+        {/* Left: stats + current bin */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <SectionHeader title="Temporal Binning" />
+
+          {/* Totals row */}
+          <div style={{ display: 'flex', gap: '20px' }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
+                Total Assignments
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                {temporalSummary?.total_assignments ?? '—'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>
+                Bins Used
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {temporalSummary?.total_bins_used ?? '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Current bin indicator */}
+          {temporalSummary?.current_bin && (() => {
+            const cb = temporalSummary.current_bin;
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            return (
+              <div style={{
+                background: 'var(--bg-tertiary)', borderRadius: '6px', padding: '10px 12px',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                borderLeft: '2px solid var(--accent-cyan)',
+              }}>
+                <div className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent-cyan)', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>
+                    Active Bin
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {cb.year} W{String(cb.week).padStart(2, '0')} · {days[cb.dow]} {String(cb.hour).padStart(2, '0')}:00
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-dim)', marginTop: '2px' }}>
+                    {cb.bin_id?.slice(0, 18)}…
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Right: heat map */}
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+            Last 4 Weeks · 7 × 24
+          </div>
+          <TemporalHeatmapGrid data={temporalHeatmap?.data} summary={temporalSummary} />
+        </div>
       </div>
 
       {/* ── Log Session Modal ── */}

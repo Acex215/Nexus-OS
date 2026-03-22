@@ -1209,6 +1209,180 @@ async def training_export_raw():
 
 
 # ---------------------------------------------------------------------------
+# TEMPORAL SCHEDULER
+# ---------------------------------------------------------------------------
+
+def _bin_id_from_hex(hex_str: str) -> bytes:
+    """Convert hex string (with or without 0x) to bytes32."""
+    s = hex_str.strip()
+    if s.startswith(("0x", "0X")):
+        s = s[2:]
+    return bytes.fromhex(s.zfill(64))
+
+
+@app.get("/api/temporal/summary")
+async def temporal_summary():
+    w3, ts = _w3_contract("TemporalScheduler")
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable"}
+    if not ts:
+        return {"error": "TemporalScheduler not deployed"}
+    try:
+        total_assignments = ts.functions.totalAssignments().call()
+        total_bins_used   = ts.functions.totalBinsUsed().call()
+        now = datetime.now(timezone.utc)
+        iso_year, iso_week, iso_day = now.isocalendar()
+        dow  = iso_day - 1
+        hour = now.hour
+        bin_id = ts.functions.computeBinId(iso_year, iso_week, dow, hour).call()
+        return {
+            "total_assignments": total_assignments,
+            "total_bins_used":   total_bins_used,
+            "current_bin": {
+                "year":   iso_year,
+                "week":   iso_week,
+                "dow":    dow,
+                "hour":   hour,
+                "bin_id": "0x" + bin_id.hex(),
+            },
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/temporal/heatmap")
+async def temporal_heatmap(year: int = 0, weeks: int = 4):
+    from datetime import timedelta
+    w3, ts = _w3_contract("TemporalScheduler")
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable", "data": []}
+    if not ts:
+        return {"error": "TemporalScheduler not deployed", "data": []}
+
+    weeks = max(1, min(weeks, 52))
+
+    # Build list of (iso_year, iso_week) for the last N weeks ending this week
+    now    = datetime.now(timezone.utc)
+    monday = now - timedelta(days=now.weekday())  # Monday of current week
+    week_list = []
+    for i in range(weeks - 1, -1, -1):
+        d = monday - timedelta(weeks=i)
+        wy, ww, _ = d.isocalendar()
+        week_list.append((wy, ww))
+
+    # Compute all bin IDs: N weeks × 7 days × 24 hours
+    bin_keys = []  # (dow, hour) for aggregation
+    bin_ids  = []  # bytes32 values
+    try:
+        for wy, ww in week_list:
+            for dow in range(7):
+                for hour in range(24):
+                    bid = ts.functions.computeBinId(wy, ww, dow, hour).call()
+                    bin_keys.append((dow, hour))
+                    bin_ids.append(bid)
+    except Exception as exc:
+        return {"error": f"bin ID computation failed: {exc}", "data": []}
+
+    # Batch query all bins at once
+    try:
+        counts, ects = ts.functions.getBinUtilization(bin_ids).call()
+    except Exception as exc:
+        return {"error": f"getBinUtilization failed: {exc}", "data": []}
+
+    # Aggregate across weeks into (dow, hour) buckets
+    agg: dict = {}
+    for (dow, hour), count, ect in zip(bin_keys, counts, ects):
+        key = (dow, hour)
+        if key not in agg:
+            agg[key] = {"task_count": 0, "ect_spent": 0}
+        agg[key]["task_count"] += count
+        agg[key]["ect_spent"]  += ect
+
+    data = []
+    for dow in range(7):
+        for hour in range(24):
+            v = agg.get((dow, hour), {"task_count": 0, "ect_spent": 0})
+            data.append({
+                "day":        dow,
+                "hour":       hour,
+                "task_count": v["task_count"],
+                "ect_spent":  v["ect_spent"],
+            })
+
+    return {
+        "weeks_covered": weeks,
+        "week_range":    [f"{wy}W{ww:02d}" for wy, ww in week_list],
+        "data":          data,
+    }
+
+
+@app.get("/api/temporal/bin/{bin_id}")
+async def temporal_bin(bin_id: str):
+    w3, ts = _w3_contract("TemporalScheduler")
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable"}
+    if not ts:
+        return {"error": "TemporalScheduler not deployed"}
+    try:
+        bid_bytes = _bin_id_from_hex(bin_id)
+    except Exception:
+        return {"error": f"invalid bin_id: {bin_id!r}"}
+    try:
+        year, week, dow, hour, task_count, ect_spent, created_at, exists = \
+            ts.functions.getBin(bid_bytes).call()
+        if not exists:
+            return {"error": "bin not found", "bin_id": bin_id}
+        tasks = ts.functions.getBinTasks(bid_bytes).call()
+        return {
+            "bin_id":         bin_id if bin_id.startswith("0x") else "0x" + bin_id,
+            "year":           year,
+            "week":           week,
+            "day_of_week":    dow,
+            "hour":           hour,
+            "task_count":     task_count,
+            "total_ect_spent":ect_spent,
+            "created_at":     created_at,
+            "exists":         exists,
+            "tasks":          ["0x" + t.hex() for t in tasks],
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/temporal/recent")
+async def temporal_recent(limit: int = 20):
+    w3, ts = _w3_contract("TemporalScheduler")
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable"}
+    if not ts:
+        return {"error": "TemporalScheduler not deployed"}
+    try:
+        total = ts.functions.totalAssignments().call()
+        stop  = max(0, total - limit)
+        assignments = []
+        for i in range(total - 1, stop - 1, -1):
+            bid, task_hash, assigned_by, ect_cost, timestamp = \
+                ts.functions.getAssignment(i).call()
+            year = week = dow = hour = None
+            try:
+                year, week, dow, hour, _, _, _, _ = ts.functions.getBin(bid).call()
+            except Exception:
+                pass
+            assignments.append({
+                "index":       i,
+                "bin_id":      "0x" + bid.hex(),
+                "task_hash":   "0x" + task_hash.hex(),
+                "assigned_by": assigned_by,
+                "ect_cost":    ect_cost,
+                "timestamp":   timestamp,
+                "bin_params":  {"year": year, "week": week, "day_of_week": dow, "hour": hour},
+            })
+        return {"total_assignments": total, "assignments": assignments}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":

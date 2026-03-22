@@ -59,6 +59,17 @@ class NexusKernel:
             abi=mesh_info['abi']
         )
 
+        try:
+            temporal_info = get_contract('TemporalScheduler')
+            self.temporal_scheduler = self.w3.eth.contract(
+                address=temporal_info['address'],
+                abi=temporal_info['abi']
+            )
+        except FileNotFoundError:
+            import logging
+            logging.getLogger(__name__).warning("TemporalScheduler not deployed — temporal_scheduler set to None")
+            self.temporal_scheduler = None
+
     # === Blockchain Queries (Kernel State) ===
 
     def get_block(self, number='latest'):
@@ -337,3 +348,68 @@ class NexusKernel:
             peer['wallet'] = addr
             peers.append(peer)
         return peers
+
+    # === TemporalScheduler System Calls ===
+
+    def _datetime_to_bin_params(self, dt=None):
+        """Convert a datetime to (year, week, dayOfWeek, hour) for bin assignment."""
+        from datetime import datetime, timezone
+        if dt is None:
+            dt = datetime.now(timezone.utc)
+        iso_year, iso_week, iso_day = dt.isocalendar()
+        # isocalendar: Monday=1, Sunday=7. Contract uses Monday=0, Sunday=6.
+        day_of_week = iso_day - 1
+        return (iso_year, iso_week, day_of_week, dt.hour)
+
+    def compute_bin_id(self, year, week, day_of_week, hour):
+        """Compute the bin ID hash without creating the bin."""
+        return self.temporal_scheduler.functions.computeBinId(
+            year, week, day_of_week, hour
+        ).call()
+
+    def assign_task_to_bin(self, task_hash_bytes32, ect_cost=0, dt=None, gas=500000):
+        """Assign a task to the temporal bin for the given datetime (default: now).
+        Returns: {bin_id, tx_hash, block}
+        """
+        year, week, dow, hour = self._datetime_to_bin_params(dt)
+        tx = self.temporal_scheduler.functions.assignTask(
+            year, week, dow, hour, task_hash_bytes32, ect_cost
+        ).transact({'from': self.wallet, 'gas': gas})
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx)
+        bin_id = self.compute_bin_id(year, week, dow, hour)
+        return {
+            'bin_id': '0x' + bin_id.hex(),
+            'year': year, 'week': week, 'day_of_week': dow, 'hour': hour,
+            'tx_hash': tx.hex(), 'block': receipt['blockNumber']
+        }
+
+    def get_bin(self, bin_id_bytes32):
+        """Get bin details."""
+        year, week, dow, hour, task_count, ect_spent, created, exists = \
+            self.temporal_scheduler.functions.getBin(bin_id_bytes32).call()
+        return {
+            'year': year, 'week': week, 'day_of_week': dow, 'hour': hour,
+            'task_count': task_count, 'total_ect_spent': ect_spent,
+            'created_at': created, 'exists': exists
+        }
+
+    def get_bin_task_count(self, bin_id_bytes32):
+        """Get number of tasks in a bin."""
+        return self.temporal_scheduler.functions.getBinTaskCount(bin_id_bytes32).call()
+
+    def get_temporal_totals(self):
+        """Get total assignments and bins used."""
+        return {
+            'total_assignments': self.temporal_scheduler.functions.totalAssignments().call(),
+            'total_bins_used': self.temporal_scheduler.functions.totalBinsUsed().call(),
+        }
+
+    def get_bin_utilization(self, bin_ids):
+        """Batch query bin utilization for heat map generation."""
+        counts, ect = self.temporal_scheduler.functions.getBinUtilization(bin_ids).call()
+        return [{'task_count': c, 'ect_spent': e} for c, e in zip(counts, ect)]
+
+    def get_current_bin_id(self):
+        """Get the bin ID for the current hour."""
+        year, week, dow, hour = self._datetime_to_bin_params()
+        return self.compute_bin_id(year, week, dow, hour)

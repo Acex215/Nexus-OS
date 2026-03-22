@@ -52,3 +52,9 @@ export const execTerminalCommand = (command) => api.post('/api/terminal/exec', {
 export const getTrainingStats    = () => api.get('/api/training/stats').then(r => r.data);
 export const logTrainingSession  = (data) => api.post('/api/training/log', data).then(r => r.data);
 export const exportTrainingPairs = () => api.get('/api/training/export/pairs', { responseType: 'blob' }).then(r => r.data);
+
+// Temporal Binning
+export const getTemporalSummary  = () => api.get('/api/temporal/summary').then(r => r.data);
+export const getTemporalHeatmap  = (year, weeks = 4) => api.get(`/api/temporal/heatmap?year=${year}&weeks=${weeks}`).then(r => r.data);
+export const getTemporalBin      = (binId) => api.get(`/api/temporal/bin/${binId}`).then(r => r.data);
+export const getTemporalRecent   = (limit = 20) => api.get(`/api/temporal/recent?limit=${limit}`).then(r => r.data);

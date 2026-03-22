@@ -39,6 +39,28 @@ PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 DEFAULT_QUEUE_PATH = "/opt/nexus/agents/task_queue.yaml"
 
 
+# ── Temporal binning ───────────────────────────────────────────────────────────
+
+_kernel = None
+
+def _get_kernel():
+    global _kernel
+    if _kernel is None:
+        try:
+            import sys
+            if '/opt/nexus' not in sys.path:
+                sys.path.insert(0, '/opt/nexus')
+            from libnexus.kernel import NexusKernel
+            _kernel = NexusKernel(
+                rpc_url='http://10.0.20.3:8545',
+                wallet='0x817B0842B208B76A7665948F8D1A0592F9b1e958'
+            )
+        except Exception as e:
+            logging.getLogger("task_queue").warning(
+                "Temporal binning unavailable: %s", e)
+    return _kernel
+
+
 # ── Task helpers ──────────────────────────────────────────────────────────────
 
 def _now_iso() -> str:
@@ -148,6 +170,30 @@ class TaskQueue:
         with self._lock:
             data = self._load()
             data["tasks"].append(task)
+
+            # Assign temporal bin (non-blocking, best-effort)
+            try:
+                kernel = _get_kernel()
+                if kernel and kernel.temporal_scheduler:
+                    task_hash = hashlib.sha256(
+                        f"{task['id']}:{task.get('description', '')}".encode()
+                    ).digest()
+                    ect_cost = 0  # Task creation itself is free; operations cost ECT
+                    result = kernel.assign_task_to_bin(task_hash, ect_cost)
+                    task['temporal_bin'] = result['bin_id']
+                    task['temporal_params'] = {
+                        'year': result['year'], 'week': result['week'],
+                        'day_of_week': result['day_of_week'], 'hour': result['hour']
+                    }
+                    log.info(
+                        "Task %s assigned to bin %s (week %d, day %d, hour %d)",
+                        task['id'], result['bin_id'][:16], result['week'],
+                        result['day_of_week'], result['hour']
+                    )
+            except Exception as e:
+                log.warning(
+                    "Temporal bin assignment failed for task %s: %s", task.get('id', '?'), e)
+
             self._save(data)
 
         log.info("Enqueued %s [%s/%s]: %s", tid, priority, risk, description[:80])
