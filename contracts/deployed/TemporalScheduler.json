@@ -1,0 +1,491 @@
+{
+  "address": "0x2c84AD3D3Cb57cF53f906b2B0f717D608B12738D",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint16",
+          "name": "year",
+          "type": "uint16"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "week",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "dayOfWeek",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint8",
+          "name": "hour",
+          "type": "uint8"
+        }
+      ],
+      "name": "BinCreated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "taskHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "assignedBy",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "ectCost",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "TaskAssigned",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint16",
+          "name": "year",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint8",
+          "name": "week",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "dayOfWeek",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "hour",
+          "type": "uint8"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "taskHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "ectCost",
+          "type": "uint256"
+        }
+      ],
+      "name": "assignTask",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "assignments",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "taskHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "assignedBy",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "ectCost",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "binTasks",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "bins",
+      "outputs": [
+        {
+          "internalType": "uint16",
+          "name": "year",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint8",
+          "name": "week",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "dayOfWeek",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "hour",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "taskCount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalECTSpent",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "createdAt",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "exists",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint16",
+          "name": "year",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint8",
+          "name": "week",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "dayOfWeek",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "hour",
+          "type": "uint8"
+        }
+      ],
+      "name": "computeBinId",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "name": "getAssignment",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "taskHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "assignedBy",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "ectCost",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getBin",
+      "outputs": [
+        {
+          "internalType": "uint16",
+          "name": "year",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint8",
+          "name": "week",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "dayOfWeek",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "hour",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "taskCount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalECTSpent",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "createdAt",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "exists",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getBinTaskCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getBinTasks",
+      "outputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "",
+          "type": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "binIds",
+          "type": "bytes32[]"
+        }
+      ],
+      "name": "getBinUtilization",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "taskCounts",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "ectSpent",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint16",
+          "name": "year",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint8",
+          "name": "week",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "dayOfWeek",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint8",
+          "name": "hour",
+          "type": "uint8"
+        }
+      ],
+      "name": "getOrCreateBin",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "binId",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalAssignments",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalBinsUsed",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "block": 1808,
+  "tx_hash": "a2f54a81e9003867c6834ebc06c44fcf259cbb7aaa33bc6785d173b6113c4bd3"
+}
