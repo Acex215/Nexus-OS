@@ -71,6 +71,7 @@
   .msg.event  { border-left-color: var(--yellow);  background: rgba(227,179,65,0.06); }
   .msg.error  { border-left-color: var(--red);     background: rgba(248,81,73,0.08); color: var(--red); }
   .msg.info   { border-left-color: var(--muted);   color: var(--muted); font-size: 12px; }
+  .msg.node   { border-left-color: var(--green);   background: rgba(57,211,83,0.06); }
 
   /* ── Input bar ── */
   #inputbar {
@@ -148,7 +149,7 @@
   </div>
   <div id="messages"></div>
   <div id="inputbar">
-    <textarea id="msg-input" placeholder="Type a task or /status /queue /health …" rows="1"></textarea>
+    <textarea id="msg-input" placeholder="Type a task or /status /queue /health /nodes /node <host> health …" rows="1"></textarea>
     <button id="send-btn" disabled>SEND</button>
   </div>
 </div>
@@ -202,6 +203,39 @@
     if (payload && Object.keys(payload).length) m.payload = payload;
     if (rid) m.request_id = rid;
     return m;
+  }
+
+  function fmtUptime(secs) {
+    if (!secs) return '?';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return h ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function formatHealthResult(r) {
+    if (!r || typeof r !== 'object') return String(r);
+    const cpu  = r.cpu    || {};
+    const mem  = r.memory || {};
+    const disk = r.disk   || {};
+    const svc  = r.services || {};
+    const load = (cpu.load_avg || []).map(x => x.toFixed(2)).join(' ');
+    const svcStr = Object.entries(svc).map(([k,v]) => `${k}:${v ? '✓' : '✗'}`).join('  ');
+    return [
+      `host:  ${r.hostname || '?'}  uptime: ${fmtUptime(r.uptime_seconds)}`,
+      `cpu:   ${cpu.percent || 0}%  (${cpu.cores || '?'} cores)  load: ${load}`,
+      `mem:   ${mem.used_gb || 0}/${mem.total_gb || 0} GB  (${mem.percent || 0}%)`,
+      `disk:  ${disk.used_gb || 0}/${disk.total_gb || 0} GB  (${disk.percent || 0}%)  [${disk.mount || '/'}]`,
+      `svc:   ${svcStr || '—'}`,
+    ].join('\n');
+  }
+
+  function formatExecResult(r) {
+    if (!r || typeof r !== 'object') return String(r);
+    const lines = [];
+    if ('return_code' in r) lines.push(`rc=${r.return_code}  ${r.duration_ms || 0}ms`);
+    if ((r.stdout || '').trim()) lines.push(r.stdout.trimEnd());
+    if ((r.stderr || '').trim()) lines.push(`[stderr]\n${r.stderr.trimEnd()}`);
+    return lines.join('\n') || '(no output)';
   }
 
   // ── Display ───────────────────────────────────────────────────────────────
@@ -291,6 +325,29 @@
         break;
 
       case 'command_response': {
+        // Node list response
+        if (Array.isArray(payload.nodes)) {
+          if (payload.nodes.length === 0) {
+            appendMsg('node', 'NODES', 'No nodes connected.', ts);
+          } else {
+            const lines = payload.nodes.map(n => {
+              const res = n.resources || {};
+              const cap = (n.capabilities || []).join(', ');
+              const mods = (n.models || []).map(m => m.name).join(', ');
+              return `${n.hostname}  wallet=${(n.wallet_address||'').slice(0,12)}…\n` +
+                     `  caps: ${cap||'—'}  models: ${mods||'—'}\n` +
+                     `  cpu=${res.cpu_cores||'?'} cores  mem=${res.memory_gb||'?'}GB  storage=${res.storage_gb||'?'}GB`;
+            });
+            appendMsg('node', 'NODES', lines.join('\n\n'), ts);
+          }
+          break;
+        }
+        // Node command ack (pending)
+        if (payload.status === 'pending') {
+          appendMsg('info', 'NODE', `Command dispatched  [req=${payload.request_id}]`, ts);
+          break;
+        }
+        // Default: task queue / text response
         const text = payload.text
           || (payload.task_id ? `Task queued: ${payload.task_id}  [${payload.status || ''}]` : null)
           || JSON.stringify(payload);
@@ -307,6 +364,30 @@
         const data   = payload.data  || {};
         const detail = Object.entries(data).map(([k,v]) => `${k}: ${v}`).join('  ');
         appendMsg('event', `EVENT:${evName}`, detail || '(no data)', ts);
+        break;
+      }
+
+      case 'node_command_result': {
+        const node   = payload.node    || '?';
+        const cmd    = payload.command || '?';
+        const status = payload.status  || '';
+        const result = payload.result  || {};
+        const label  = `NODE:${node}/${cmd}`;
+        if (status === 'error') {
+          appendMsg('error', label, result.message || 'node error', ts);
+          break;
+        }
+        let body;
+        if (cmd === 'health') {
+          body = formatHealthResult(result);
+        } else if (cmd === 'exec') {
+          body = formatExecResult(result);
+        } else if (cmd === 'inference') {
+          body = result.text || result.response || JSON.stringify(result);
+        } else {
+          body = JSON.stringify(result, null, 2);
+        }
+        appendMsg('node', label, body, ts);
         break;
       }
 
@@ -333,7 +414,8 @@
     if (!text) return;
 
     if (text.startsWith('/')) {
-      const cmd = text.slice(1).toLowerCase().split(/\s+/)[0];
+      const parts = text.slice(1).trim().split(/\s+/);
+      const cmd   = parts[0].toLowerCase();
       switch (cmd) {
         case 'status':
           appendMsg('user', userId, '/status', tsNow());
@@ -347,8 +429,46 @@
           appendMsg('user', userId, '/health', tsNow());
           fetchHealth();
           break;
+        case 'nodes':
+          appendMsg('user', userId, '/nodes', tsNow());
+          sendRaw(makeMsg('node_list', {}, reqId()));
+          break;
+        case 'node': {
+          // /node <hostname> <subcmd> [extra...]
+          if (parts.length < 3) {
+            sysMsg('Usage: /node <hostname> <health|exec|inference|storage> [args…]', 'error');
+            break;
+          }
+          const hostname = parts[1];
+          const subcmd   = parts[2].toLowerCase();
+          const extra    = parts.slice(3).join(' ');
+          let nodeArgs   = {};
+          if (subcmd === 'exec') {
+            if (!extra) { sysMsg('Usage: /node <hostname> exec <command>', 'error'); break; }
+            nodeArgs = { cmd: extra };
+          } else if (subcmd === 'inference') {
+            if (!extra) { sysMsg('Usage: /node <hostname> inference <prompt>', 'error'); break; }
+            nodeArgs = { prompt: extra };
+          } else if (subcmd === 'storage') {
+            const sp = parts.slice(3);
+            if (!sp.length) { sysMsg('Usage: /node <hostname> storage <action> [cid] [path]', 'error'); break; }
+            nodeArgs = { action: sp[0] };
+            if (sp[1]) nodeArgs.cid  = sp[1];
+            if (sp[2]) nodeArgs.path = sp[2];
+          } else if (subcmd !== 'health') {
+            sysMsg(`Unknown node subcommand: ${subcmd}`, 'error');
+            break;
+          }
+          appendMsg('user', userId, text, tsNow());
+          sendRaw(makeMsg('node_command_request', {
+            target_node: hostname,
+            command:     subcmd,
+            args:        nodeArgs,
+          }, reqId()));
+          break;
+        }
         default:
-          sysMsg(`Unknown command: ${text}\nAvailable: /status  /queue  /health`, 'error');
+          sysMsg(`Unknown command: ${text}\nAvailable: /status  /queue  /health  /nodes  /node <host> <subcmd>`, 'error');
       }
     } else {
       appendMsg('user', userId, text, tsNow());
