@@ -1,491 +1,259 @@
 # NEXUS OS — Current System State
 
-**Generated:** 2026-02-15 12:45 UTC
-**Report Version:** 1.0
-**Cluster Uptime:** 17+ hours (hierarchy manager)
+**Last Updated:** 2026-03-23
+**Chain Height:** 1816 blocks
+**Blockchain:** Geth Clique PoA, chain ID 123454321, period=0
 
 ---
 
-## 1. Architecture Summary
+## 1. What Works (with evidence)
 
-NEXUS OS is a hybrid blockchain-native operating system running on a 4-node Raspberry Pi 5 cluster. The architecture separates concerns into three planes:
+### Blockchain (Geth PoA)
+- 3 validators running: nexus-master, nexus-ai, nexus-storage (all `nexus-geth` + `clef` active)
+- Chain height: 1816, period=0 (blocks only on pending tx — expected behavior)
+- Clef signing via IPC on all validators, rules.js auto-approval
+- 1187 ReasoningLedger entries logged
+- 14,024 ECT minted, 320 ECT spent, 414 RST earned, 362 RST slashed
+- Deployer balance: 999.5 ETH, 1000 ECT, 52 RST
 
-- **Blockchain (Control Plane):** Metadata, permissions, coordination, audit trail
-- **IPFS (Data Plane):** Distributed file storage, content addressing, deduplication
-- **AI Agents (Operations Plane):** 30 autonomous agents organized in a corporate hierarchy, coordinating via Discord
+### Smart Contracts (10 deployed)
+| Contract | Address | Source | Notes |
+|---|---|---|---|
+| ReasoningLedger | 0x0317…DE4 | ✅ .sol | 1187 entries |
+| StorageRegistry | 0x859e…A6 | ✅ .sol | |
+| TokenManager | 0x08C9…E48 | ✅ .sol (reconstructed) | Active daily mints |
+| DecisionQuality | 0x4198…218 | ✅ .sol (reconstructed) | 25 decisions evaluated, score=62 |
+| AgentGovernance | 0xA4f8…207 | ❌ no source | Deployed JSON only |
+| ServiceRegistry | 0xbd01…8d8 | ✅ .sol | Block 1709 |
+| MeshRegistry | 0x21e5…E2F | ✅ .sol | 1 peer registered |
+| ResourceManager | (deployed) | ✅ .sol | 0 nodes registered (see Known Issues) |
+| PidRegistry | (deployed) | ✅ .sol | |
+| TemporalScheduler | (deployed) | ✅ .sol | 2 assignments, 2 bins used |
 
-```
-                        ┌──────────────────────────────────────────────┐
-                        │              THE ENTERPRISE                  │
-                        │           (Discord Guild)                    │
-                        │                                              │
-                        │   CEO ─┬─ COO                                │
-                        │        ├─ Compute Director ─── 3 Workers     │
-                        │        ├─ Storage Director ─── 3 Workers     │
-                        │        ├─ Network Director ─── 3 Workers     │
-                        │        ├─ Security Director ── 3 Workers     │
-                        │        ├─ Blockchain Director ─ 3 Workers    │
-                        │        ├─ ML Director ───────── 1 Worker     │
-                        │        └─ Quantum Director                   │
-                        └──────────────────────────────────────────────┘
-                                           │
-                    ┌──────────────────────┼──────────────────────┐
-                    ▼                      ▼                      ▼
-          ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
-          │  nexus-master   │   │    nexus-ai      │   │  nexus-storage  │
-          │  192.168.8.228  │   │  192.168.8.128   │   │  192.168.8.224  │
-          │                 │   │                  │   │                 │
-          │  Geth Validator │◄─►│  Geth Validator  │◄─►│  Geth Validator │
-          │  IPFS Node      │◄─►│  IPFS Node       │◄─►│  IPFS Node      │
-          │  256GB NVMe     │   │  AI HAT+ 26TOPS  │   │  1.8TB HDD      │
-          └────────┬────────┘   └────────┬─────────┘   └────────┬────────┘
-                   │                     │                      │
-                   └─────────────────────┼──────────────────────┘
-                                         │
-                              ┌──────────┴──────────┐
-                              │    nexus-admin       │
-                              │   192.168.8.153      │
-                              │                      │
-                              │   IPFS Node          │
-                              │   Dev Workstation    │
-                              │   Hierarchy Manager  │
-                              │   Pi 500             │
-                              └─────────────────────┘
-```
+### Token Economy
+- Daily ECT mint cycle: `nexus-ect-cycle.timer` fires at 00:05 UTC (active, last ran 2026-03-23)
+- Mints 1000 ECT/node/day via `batchMintECT` or `mintDailyECT`
+- Token enforcement: **OFF** (`NEXUS_TOKEN_ENFORCEMENT` not set)
+- `token_hooks.py` wired to real blockchain calls — logs real balances, spends real ECT
+- Deployer authorized as minter, spender, and RST manager
+
+### IPFS (Kubo 0.32.1)
+- Private cluster with swarm.key
+- 2 peers connected from nexus-admin
+- Repo: 330 objects, ~76 MB, 15 GB limit on admin node
+- Running on all 4 nodes (master, ai, storage, admin)
+
+### Discord Agents
+- `nexus-agent-v2.service`: **active** (autonomous dev assistant)
+- 30 agents defined (2 C-Suite, 7 Directors, 21 Workers)
+- Agent hierarchy managed by `/opt/nexus/agents/hierarchy_manager.py`
+- LLM client supports local-first with HuggingFace API fallback
+
+### Dashboard ("NEXUS Command Center")
+- **Frontend**: Vite + React, served at `http://0.0.0.0:3000` (built production assets)
+- **API**: FastAPI at `http://0.0.0.0:8768`, 35+ endpoints
+- Both `nexus-dashboard.service` and `nexus-dashboard-api.service` **active**
+- All tested API endpoints return HTTP 200:
+  - `/api/config`, `/api/blockchain/summary`, `/api/blockchain/blocks`
+  - `/api/tokens/summary`, `/api/tokens/balances`
+  - `/api/tasks/queue`, `/api/tasks/history`
+  - `/api/agents/status`, `/api/git/log`
+  - `/api/temporal/summary`, `/api/temporal/heatmap`
+  - `/api/health/services`, `/api/knowledge/collections`
+
+### LLM Inference
+- 4-tier router (`llm_router_v2.py`):
+  - **Coordinator**: `qwen3.5-35b-a3b` @ ThinkStation 10.0.30.3:1234 — ✅ healthy
+  - **Coder**: `qwen2.5-coder-14b` @ ThinkPad 10.0.30.2:1234 — ✅ healthy
+  - **Director**: same as coordinator — ✅ healthy
+  - **Worker**: `llama3.2:1b` @ nexus-ai2 10.0.20.6:11434 (Ollama) — ✅ healthy
+- Local inference (nexus-ai): `local-inference.service` **active**, SmolLM2-1.7B @ 10.0.20.4:8090
+
+### Gateway
+- `nexus-gateway.service` **active**, listening on port 8766
+- WebSocket + HTTP protocol for agent communication
+- Dashboard API health check shows gateway error to 10.0.20.1:8766 (see Known Issues)
+
+### Autonomous Loop
+- Pre-flight coder health check before each task iteration
+- Safety gates: risk classification, approval timeouts, retry policy
+- Destructive patch guard: configurable `MAX_NET_DELETIONS=20`, `MAX_SHRINKAGE_PERCENT=0.20`
+- ChromaDB warm-up at startup to avoid heartbeat warnings
+- Test validator runs after execution
+
+### K3s Cluster
+- Master at 10.0.20.3:6443, `k3s.service` **active**
+- Admin node has `k3s-agent.service` **active**, configured as `role=admin`
+- `kubectl` not configured on nexus-admin (kubeconfig missing or expired)
+
+### libnexus
+- `NexusKernel` — full syscall interface covering all 7+ contracts (v0.3.0)
+- `TokenClient` — dedicated ECT/RST client with wallet unlock
+- `NexusStorage` — IPFS upload/download with on-chain CID registration
+- 42 public methods on NexusKernel
 
 ---
 
-## 2. Hardware Configuration
+## 2. What Is Designed But Not Built
 
-### Cluster Nodes
-
-| Node | IP | Hardware | RAM | Storage | Roles |
-|------|----|----------|-----|---------|-------|
-| **nexus-master** | 192.168.8.228 | Raspberry Pi 5 | 8 GB | 256 GB NVMe SSD | Geth validator, IPFS node |
-| **nexus-ai** | 192.168.8.128 | Raspberry Pi 5 | 8 GB | 128 GB SD | Geth validator, IPFS node, AI HAT+ (26 TOPS) |
-| **nexus-storage** | 192.168.8.224 | Raspberry Pi 5 | 4 GB | 128 GB SD + 1.8 TB HDD | Geth validator, IPFS node, primary storage |
-| **nexus-admin** | 192.168.8.153 | Raspberry Pi 500 | 8 GB | 32 GB SD | IPFS node, dev workstation, hierarchy manager |
-
-**Total:** 4 nodes, 28 GB RAM, 2.3 TB raw storage
-**Kernel:** Linux 6.12.62+rpt-rpi-2712 (aarch64)
-
-### Current Resource Usage
-
-| Node | CPU Load | RAM Used | Disk Used | Disk Free |
-|------|----------|----------|-----------|-----------|
-| nexus-master | 0.02 | 1,292 / 8,058 MB (16%) | 10 / 235 GB (5%) | 216 GB |
-| nexus-ai | 0.00 | 810 / 8,062 MB (10%) | 11 / 117 GB (10%) | 102 GB |
-| nexus-storage | 0.00 | 961 / 4,045 MB (24%) | 9 / 117 GB (9%) | 103 GB + 1.8 TB |
-| nexus-admin | 0.60 | 5,880 / 8,058 MB (73%) | 10 / 29 GB (36%) | 18 GB |
+- **AgentGovernance.sol source**: Deployed contract exists but no source recovered yet
+- **ResourceManager node registration**: 0 nodes registered on-chain (nodes run but aren't self-registering)
+- **MeshRegistry**: Only 1 peer registered (should be 4)
+- **BATMAN-adv mesh**: Scripts exist at `/opt/nexus/networking/` but not deployed in production
+- **WireGuard overlay**: Keys generated, scripts exist, not activated
+- **pi-gen custom images**: Image built (748 MB) but not used for provisioning
+- **Token enforcement**: All infrastructure wired but `NEXUS_TOKEN_ENFORCEMENT=false`
+- **Node agents on cluster**: `nexus-node-agent` service **inactive** on all 3 validator nodes
+- **nexus-ai2**: Unreachable via SSH (may be powered off)
+- **ECT burn cycle**: No burn function in TokenManager ABI; daily script only mints
+- **FreedomBox integration**: Source extracted, service framework exists, not activated
 
 ---
 
-## 3. Blockchain Layer
+## 3. Hardware Topology
 
-### Network Configuration
+| Node | IP | VLAN | Role | Storage | Accelerator |
+|---|---|---|---|---|---|
+| nexus-master | 10.0.20.3 | 20 | K3s control-plane, Geth validator | 235G NVMe | — |
+| nexus-ai | 10.0.20.4 | 20 | K3s worker (ai-inference), Geth validator | 128G SD | Hailo-8 (vision only) |
+| nexus-storage | 10.0.20.11 | 20 | K3s worker (storage), Geth validator | 128G SD | — |
+| nexus-ai2 | 10.0.20.6 | 20 | K3s worker, Ollama inference | — | Hailo-10H AI HAT+ |
+| nexus-admin | 10.0.10.5 | 10 | K3s worker (admin), dev/ops (THIS machine) | 32G SD | — |
+| ThinkPad | 10.0.30.2 | 30 | External dev, LM Studio (coder model) | — | — |
+| ThinkStation | 10.0.30.3 | 30 | External dev, LM Studio (coordinator model) | — | — |
 
-| Parameter | Value |
-|-----------|-------|
-| Chain ID | 123454321 |
-| Consensus | Clique Proof of Authority |
-| Block period | 0 (on-demand sealing) |
-| Gas limit | 30,000,000 |
-| Validators | 3 (nexus-master, nexus-ai, nexus-storage) |
-| Network type | Private (isolated from public Ethereum) |
-| Geth version | 1.13.15-stable |
-| Gas price | 0 (free transactions) |
+**Network**: VLAN 20 = validator cluster, VLAN 10 = admin, VLAN 30 = external dev machines.
+iptables on nexus-admin blocks VLAN 30 → VLAN 20 forwarding; allows SSH from ThinkPad.
 
-### Live Metrics
+---
+
+## 4. Deployed Contracts
+
+All on Geth Clique PoA, chain ID 123454321.
+
+| Contract | Address | Block | Source |
+|---|---|---|---|
+| ReasoningLedger | `0x0317451264E1de1A0696A81f6141e72E58686DE4` | early | ✅ |
+| StorageRegistry | `0x859e30a6b752Af6D96d309Dc3a5bECfCfFDe31A6` | — | ✅ |
+| TokenManager | `0x08C96540A286a6b3cDe1E20F77B246E53D238E48` | 1543 | ✅ |
+| DecisionQuality | `0x4198228d18c8435d73E51105b912032f657f7218` | 1544 | ✅ |
+| AgentGovernance | `0xA4f8CA77065bE462324624083990F58ff1f12207` | — | ❌ |
+| ServiceRegistry | `0xbd015B6A2C0E10E1f31b7C50580A2Cc86e3A0dd8` | 1709 | ✅ |
+| MeshRegistry | `0x21e59f66850bbC7333dE62fF5f7d6c2bcaD9A26F` | 1717 | ✅ |
+| ResourceManager | (see deployed JSON) | — | ✅ |
+| PidRegistry | (see deployed JSON) | — | ✅ |
+| TemporalScheduler | (see deployed JSON) | — | ✅ |
+
+Deployer: `0x817B0842B208B76A7665948F8D1A0592F9b1e958`
+Source directory: `/opt/nexus/contracts/source/`
+Deployed ABI+address: `/opt/nexus/contracts/deployed/`
+
+---
+
+## 5. Token Economy Status
 
 | Metric | Value |
-|--------|-------|
-| Current block height | **48** (reset with period=0 migration) |
-| Mean confirmation | ~102ms (3-validator PoA) |
-| Empty blocks/day | 0 (on-demand sealing) |
-| Peer connectivity | 2/2 on all validators |
-| Deployer balance | ~999.99 ETH |
-
-### Chaindata Size
-
-| Node | Chaindata | Notes |
-|------|-----------|-------|
-| nexus-master | 287 MB | Lower — recent chaindata rebuild from test |
-| nexus-ai | 845 MB | Full archive since genesis |
-| nexus-storage | 845 MB | Full archive since genesis |
-
-### Block Time Migration (Completed)
-
-Migrated from `period=5` to `period=0` (on-demand sealing) via clean slate reinit:
-
-| Metric | Before (period=5) | After (period=0) |
-|--------|-------------------|-------------------|
-| Mean confirmation | 14,204 ms | **~102 ms** |
-| Throughput | ~0.07 tx/s effective | **~10 tx/s** |
-| Empty blocks/day | 17,280 (100%) | **0** |
-| Disk growth/day (idle) | ~1,279 MB | **0 MB** |
-
-**Status:** Deployed. 19 ReasoningLedger entries re-imported from backup. All 3 contracts redeployed.
-
-### Deployed Smart Contracts
-
-| # | Contract | Address | Purpose | State |
-|---|----------|---------|---------|-------|
-| 1 | **ReasoningLedger** | `0x0317451264E1de1A0696A81f6141e72E58686DE4` | AI agent decision audit trail | 19 entries |
-| 2 | **ResourceManager** | `0x7E7f5e6cd9d7d485eeFa4Ec3Fb211705A3A8c6C6` | Cluster resource allocation | Operational |
-| 3 | **StorageRegistry** | `0x859e30a6b752Af6D96d309Dc3a5bECfCfFDe31A6` | Distributed storage metadata | Operational |
-
-#### ReasoningLedger Functions
-- `logReasoning(decision, reasoning)` → entryId
-- `getEntry(entryId)` → (agent, timestamp, decision, reasoning, hash)
-- `getEntryCount()` → count
-- `getAgentHistory(agent)` → entryId[]
-
-#### StorageRegistry Functions
-- `registerFile(cid, merkleRoot, fileSize, numChunks)` → fileId
-- `assignChunks(fileId, chunkIndices, storageNodes[][])` → event
-- `submitStorageProof(fileId, chunkIndex, proof)` → valid
-- `getFileMetadata(fileId)` → FileMetadata
-- `getChunkAssignments(fileId)` → ChunkAssignment[]
-- `getUserFiles(owner)` → fileId[]
-- `getStorageCommitment(node)` → bytes
+|---|---|
+| ECT Minted (total) | 14,024 |
+| ECT Spent (total) | 320 |
+| RST Earned (total) | 414 |
+| RST Slashed (total) | 362 |
+| Deployer ECT Balance | 1,000 |
+| Deployer RST Balance | 52 |
+| Enforcement | **OFF** (logging + real blockchain writes, no blocking) |
+| Daily Mint | 1,000 ECT/node via `nexus-ect-cycle.timer` at 00:05 UTC |
+| Registered Nodes | 0 (mint falls back to deployer only) |
 
 ---
 
-## 4. IPFS Layer
-
-### Network Configuration
-
-| Parameter | Value |
-|-----------|-------|
-| IPFS version | Kubo 0.32.1 |
-| Network type | **Private** (swarm.key protected) |
-| Bootstrap peers | 4 (cluster nodes only) |
-| Public IPFS connections | **0** (fully isolated) |
-| MDNS discovery | Disabled |
-| Auto relay | Disabled |
-| Connection limits | Low=20, High=40 (low-power profile) |
-
-### Per-Node IPFS Status
-
-| Node | Objects | Repo Size | Max Capacity | Peers |
-|------|---------|-----------|-------------|-------|
-| nexus-master | 214 | 51.8 MB | 200 GB | 3 |
-| nexus-ai | 10 | 1.1 MB | 200 GB | 3 |
-| nexus-storage | 219 | 51.8 MB | 800 GB | 3 |
-| nexus-admin | 216 | 52.4 MB | 15 GB | 3 |
-
-### Peer Connectivity Matrix
-
-| From \ To | master | ai | storage | admin |
-|-----------|:---:|:---:|:---:|:---:|
-| **master** | — | Y | Y | Y |
-| **ai** | Y | — | Y | Y |
-| **storage** | Y | Y | — | Y |
-| **admin** | Y | Y | Y | — |
-
-### IPFS Peer IDs
-
-| Node | Peer ID |
-|------|---------|
-| nexus-master | `12D3KooWFmWdJWuYt5RLW89qWT3MjNnBbSEw7hKQpGUuMSbXzgFx` |
-| nexus-ai | `12D3KooWFj5VeXvu6Aagr9ehpL3qsmtNBxTzzwkJSaYubauhEGzX` |
-| nexus-storage | `12D3KooWPjmi4v4yEx8WX1Qs3z4xzJoWPqJkkQZ13Khu2q61VmsX` |
-| nexus-admin | `12D3KooWLfCQcQTVDcKUREMoyJzFoNvSRqsjPFMT3KE9FwixUMEk` |
-
-### Measured Performance
-
-| Operation | Speed |
-|-----------|-------|
-| Add 1 MB file | 123 ms |
-| Retrieve 1 MB (cross-node) | 263–336 ms |
-| Add 50 MB file | 2,423 ms (~20 MB/s) |
-| Retrieve 50 MB (cross-node) | 1,474–4,114 ms (~12–33 MB/s) |
-| Chunk size | 256 KB |
-| 50 MB file chunks | 203 blocks |
-
----
-
-## 5. AI Agent Hierarchy
-
-### Overview
-
-| Level | Count | LLM Model | ECT Budget |
-|-------|-------|-----------|------------|
-| C-Suite (CEO, COO) | 2 | Qwen/Qwen2.5-7B-Instruct | 100 |
-| Directors | 7 | meta-llama/Llama-3.2-3B-Instruct | 50 |
-| Workers | 21 | meta-llama/Llama-3.2-1B-Instruct | 30 |
-| **Total** | **30** | | |
-
-### Agent Roster
-
-| Department | Director | Workers |
-|------------|----------|---------|
-| **C-Suite** | CEO, COO | — |
-| **Compute** | Compute Director | Process Scheduler, Load Balancer, Resource Monitor |
-| **Storage** | Storage Director | Backup Agent, Cache Manager, FLock Federator |
-| **Network** | Network Director | Mesh Coordinator, VPN Manager, DNS Agent |
-| **Security** | Security Director | Auth Agent, Anomaly Detector, Audit Logger |
-| **Blockchain** | Blockchain Director | Contract Deployer, Token Manager, Consensus Monitor |
-| **ML** | ML Director | Training Coordinator |
-| **Quantum** | Quantum Director | — |
-
-### Discord Integration
+## 6. Temporal Binning Status
 
 | Metric | Value |
-|--------|-------|
-| Guild | "The Enterprise" (ID: 1441732155225931869) |
-| Active bot tokens | 25 |
-| Webhook fallback | 5 |
-| Hierarchy manager | Running (PID 29575, uptime 17h+) |
-| Channel categories | 11 |
-| Total channels | 34+ |
+|---|---|
+| Total Assignments | 2 |
+| Total Bins Used | 2 |
+| Current Bin | Week 13, Tuesday, hour 1 UTC |
+| Contract | TemporalScheduler (deployed) |
+| Dashboard Panel | `/api/temporal/summary` and `/api/temporal/heatmap` — working |
 
-### Blockchain Integration
-
-Every AI agent decision is:
-1. Processed through the agent's LLM
-2. SHA-256 hashed (reasoning chain)
-3. Logged to ReasoningLedger on-chain
-4. Recorded in local JSONL decision logs
-5. Displayed in Discord with tx hash in embed footer
-
-**21 on-chain decision entries** logged to date.
+Temporal binning is deployed and functional but underutilized — only 2 tasks assigned.
 
 ---
 
-## 6. Storage Architecture
+## 7. Node Agent Status
 
-### Data Flow
+| Node | `nexus-node-agent` | `nexus-geth` | `clef` | `ipfs` |
+|---|---|---|---|---|
+| nexus-master | **inactive** | active | active | active |
+| nexus-ai | **inactive** | active | active | active |
+| nexus-storage | **inactive** | active | active | active |
+| nexus-ai2 | unreachable | — | — | — |
+| nexus-admin | n/a (runs agent-v2) | n/a | n/a | active |
 
-```
-Upload:
-  File → Split into 256KB chunks → IPFS add → CID
-    └→ StorageRegistry.registerFile(CID, merkleRoot, size, chunks)
-    └→ StorageRegistry.assignChunks(fileId, indices, nodes[][])
-    └→ Blockchain stores metadata ONLY (CID, Merkle root, node assignments)
-    └→ IPFS distributes actual data across cluster
-
-Download:
-  fileId → StorageRegistry.getFileMetadata() → CID
-    └→ IPFS cat/get(CID) → parallel retrieval from multiple nodes
-    └→ Verify against Merkle root
-    └→ Return reassembled file
-```
-
-### Design Principle
-
-> **Blockchain stores metadata. IPFS stores data.** This separation ensures fast blockchain operations (small tx), scalable storage (IPFS handles GB-scale files), content deduplication, and cryptographic integrity verification.
-
-### Storage Capacity
-
-| Node | Role | IPFS Allocation | Available Disk |
-|------|------|-----------------|---------------|
-| nexus-master | Validator + Store | 200 GB | 216 GB |
-| nexus-ai | Validator + Store | 200 GB | 102 GB |
-| nexus-storage | **Primary Storage** | 800 GB | 1.8 TB (HDD) + 103 GB (SD) |
-| nexus-admin | Dev + Store | 15 GB | 18 GB |
-| **Total** | | **1.215 TB** | **~2.2 TB raw** |
+Node agents were deployed (Tier 3 commit) but are not running on any cluster node.
+The autonomous agent (`nexus-agent-v2.service`) runs on nexus-admin and is **active**.
 
 ---
 
-## 7. Services & Processes
+## 8. Dashboard Status
 
-### systemd Services
+**Services**: `nexus-dashboard.service` (port 3000) + `nexus-dashboard-api.service` (port 8768)
 
-| Service | nexus-master | nexus-ai | nexus-storage | nexus-admin |
-|---------|:---:|:---:|:---:|:---:|
-| `nexus-geth` | active | active | active | N/A |
-| `ipfs` | active | active | active | active |
+| Panel / Endpoint | Status | Notes |
+|---|---|---|
+| Blockchain Summary | ✅ 200 | Block height, tx count |
+| Blockchain Blocks | ✅ 200 | Recent blocks |
+| Token Summary | ✅ 200 | Totals, enforcement flag |
+| Token Balances | ✅ 200 | Per-address balances |
+| Task Queue | ✅ 200 | Active task list |
+| Task History | ✅ 200 | Completed tasks |
+| Agent Status | ✅ 200 | 5 entries (LLM tier health) |
+| Git Log | ✅ 200 | Recent commits |
+| Temporal Summary | ✅ 200 | Bin stats |
+| Temporal Heatmap | ✅ 200 | Utilization grid |
+| Health Services | ✅ 200 | systemd service states |
+| Knowledge Collections | ✅ 200 | ChromaDB collections |
+| Nodes (via gateway) | ⚠️ error | Gateway at 10.0.20.1:8766 unreachable |
 
-### Per-Process Resource Usage
-
-| Process | Node | CPU | Memory |
-|---------|------|-----|--------|
-| Geth | nexus-master | 0.9% | 124 MB |
-| Geth | nexus-ai | 0.6% | 133 MB |
-| Geth | nexus-storage | 0.8% | 137 MB |
-| IPFS | nexus-master | 0.2% | 64 MB |
-| IPFS | nexus-ai | 0.2% | 56 MB |
-| IPFS | nexus-storage | 0.2% | 61 MB |
-| IPFS | nexus-admin | 0.1% | 56 MB |
-| Hierarchy Manager | nexus-admin | 0.0% | 137 MB |
-
-**Total cluster process overhead:** ~5% CPU, ~768 MB RAM across 4 nodes.
-
----
-
-## 8. Network Topology
-
-### Port Map
-
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 30303 | TCP/UDP | Geth P2P (blockchain sync) |
-| 8545 | TCP | Geth HTTP RPC |
-| 4001 | TCP | IPFS Swarm (file transfer) |
-| 5001 | TCP | IPFS API |
-| 8080 | TCP | IPFS Gateway |
-| 22 | TCP | SSH (cluster management) |
-
-### Network Addresses
-
-```
-192.168.8.0/24 (Private LAN)
-├── 192.168.8.228  nexus-master
-├── 192.168.8.128  nexus-ai
-├── 192.168.8.224  nexus-storage
-└── 192.168.8.153  nexus-admin
-
-10.42.x.0/24 (WireGuard VPN overlay, also active)
-├── 10.42.0.x  nexus-master
-├── 10.42.1.x  nexus-ai
-└── 10.42.3.x  nexus-storage
-```
+The `/api/nodes` and `/api/health` endpoints fail because they proxy through the gateway
+which tries to reach `10.0.20.1:8766` — this IP doesn't exist (should be `10.0.10.5:8766`
+or `localhost:8766`). Direct dashboard API endpoints that don't need the gateway all work.
 
 ---
 
-## 9. File System Layout
+## 9. Known Issues
 
-```
-/opt/nexus/
-├── agents/
-│   ├── hierarchy_manager.py      # 30-agent orchestrator
-│   ├── ceo_bot.py                # Standalone CEO bot
-│   ├── agent_registry.py         # Agent definitions (30 agents)
-│   ├── agent_workflow.py         # LLM-based decision workflow
-│   ├── blockchain_logger.py      # On-chain decision logging
-│   ├── llm_client.py             # HuggingFace inference client
-│   ├── .env                      # Bot tokens (25 active + 5 webhook)
-│   ├── verify_system.py          # 5-point health check
-│   ├── test_delegation.py        # CEO→Director→Worker chain test
-│   └── logs/
-│       ├── hierarchy.log         # Bot connection/message logs
-│       └── decisions/            # Per-agent JSONL decision logs
-│
-├── blockchain/                   # On validator nodes
-│   ├── genesis.json              # Active genesis (period=0)
-│   ├── genesis-fast.json         # Optimized genesis (period=0)
-│   ├── genesis-original-backup.json
-│   ├── geth/                     # Chaindata
-│   ├── keystore/                 # Wallet keystore
-│   └── password.txt              # Wallet password
-│
-├── contracts/
-│   ├── source/
-│   │   ├── ReasoningLedger.sol
-│   │   ├── ResourceManager.sol
-│   │   └── StorageRegistry.sol
-│   ├── deployed/
-│   │   ├── ReasoningLedger.json  # ABI + address
-│   │   ├── ResourceManager.json
-│   │   └── StorageRegistry.json
-│   ├── scripts/
-│   │   ├── deploy.py
-│   │   ├── deploy_storage_registry.py
-│   │   └── test_storage_registry.py
-│   └── .venv/                    # Python virtualenv (web3, solcx, etc.)
-│
-├── ipfs/                         # IPFS data directory
-│   ├── config                    # IPFS node config
-│   ├── swarm.key                 # Private network key
-│   └── datastore/                # Block storage
-│
-├── scripts/
-│   ├── install-ipfs-cluster.sh
-│   ├── setup-ipfs-private.sh
-│   ├── test-ipfs-distribution.sh
-│   └── verify-fast-blocks.py
-│
-└── NEXUS_OS_Current_State.md     # This file
-```
+1. **Gateway proxy IP wrong**: Dashboard API tries to reach gateway at `10.0.20.1:8766` — no such host. Gateway listens on `0.0.0.0:8766` on nexus-admin (10.0.10.5). Affects `/api/nodes` and `/api/health`.
+
+2. **Node agents inactive**: `nexus-node-agent.service` is inactive on all 3 validator nodes. Heartbeat/metrics pipeline not running.
+
+3. **ResourceManager empty**: 0 nodes registered on-chain. Nodes have never called `registerNode()`. Daily ECT mint falls back to deployer-only.
+
+4. **MeshRegistry sparse**: Only 1 peer registered (should be 4 nodes).
+
+5. **nexus-ai2 unreachable**: SSH times out to 10.0.20.6. May be powered off or network issue. Ollama endpoint (11434) shows healthy from dashboard health check — may be intermittent.
+
+6. **kubectl not working on admin**: kubeconfig not set up on nexus-admin despite k3s-agent running. Cannot manage cluster from this node.
+
+7. **AgentGovernance.sol**: No source recovered. Only deployed JSON exists.
+
+8. **DecisionQuality score low**: Current deployer score is 62 (below reward threshold of 75). 21/25 successes, avg impact 7.4.
+
+9. **Token enforcement off**: All wiring complete but enforcement disabled. Switching on requires ensuring all active agents have sufficient ECT budgets.
+
+10. **No ECT burn function**: TokenManager has `ECTBurned` event but no public burn method. ECT accumulates indefinitely.
 
 ---
 
-## 10. What Works Now
+## 10. Next Steps
 
-### Operational (Verified)
-
-- [x] Private Ethereum blockchain (Clique PoA, 3 validators, synced)
-- [x] 3 smart contracts deployed and functional
-- [x] AI agent decision logging to blockchain (21 entries)
-- [x] 30-agent hierarchy running on Discord (25 bots + 5 webhooks)
-- [x] CEO → Director → Worker delegation chain (tested end-to-end)
-- [x] IPFS private cluster (4 nodes, full mesh, swarm.key protected)
-- [x] Distributed file storage with content addressing
-- [x] Cross-node file replication (add on any node, retrieve from any)
-- [x] Pin management and garbage collection
-- [x] StorageRegistry: file registration, chunk assignment, storage proofs
-- [x] systemd services for Geth and IPFS (auto-start on boot)
-- [x] Zero gas fees (private chain)
-- [x] Comprehensive test suites for all components
-
-### Tested But Not Deployed
-
-- [x] Period=0 on-demand sealing (~102ms confirmation, ~10 tx/s)
-
-### Planned / In Progress
-
-- [x] Cluster-wide block time migration (period=5 → period=0)
-- [ ] Erasure coding for storage redundancy
-- [ ] `libnexus` Python library (unified API for storage operations)
-- [ ] End-to-end encrypted file upload/download pipeline
-- [ ] AI agent integration with StorageRegistry
-- [ ] Storage proof verification (Merkle proofs)
-- [ ] Automated replication policies
-- [ ] IPFS cluster pinning service
-
----
-
-## 11. Key Credentials & Configuration
-
-| Item | Location |
-|------|----------|
-| Deployer wallet | `0x817B0842B208B76A7665948F8D1A0592F9b1e958` (unlocked on Geth) |
-| Wallet keystore | `/opt/nexus/blockchain/keystore/` |
-| Wallet password | `/opt/nexus/blockchain/password.txt` |
-| Bot tokens | `/opt/nexus/agents/.env` |
-| IPFS swarm key | `/opt/nexus/ipfs/swarm.key` |
-| Contract ABIs | `/opt/nexus/contracts/deployed/*.json` |
-| Python venv | `/opt/nexus/contracts/.venv/` |
-| Geth service | `/etc/systemd/system/nexus-geth.service` |
-| IPFS service | `/etc/systemd/system/ipfs.service` |
-
----
-
-## 12. Operational Commands
-
-### Quick Health Check
-```bash
-# Blockchain
-/opt/nexus/contracts/.venv/bin/python3 /opt/nexus/scripts/verify-fast-blocks.py
-
-# Agents
-/opt/nexus/contracts/.venv/bin/python3 /opt/nexus/agents/verify_system.py
-
-# IPFS
-bash /opt/nexus/scripts/test-ipfs-distribution.sh
-```
-
-### Start/Stop Services
-```bash
-# Geth (on validators)
-sudo systemctl start|stop|restart nexus-geth
-
-# IPFS (on all nodes)
-sudo systemctl start|stop|restart ipfs
-
-# Hierarchy manager
-cd /opt/nexus/agents
-nohup /opt/nexus/contracts/.venv/bin/python3 hierarchy_manager.py >> logs/hierarchy.log 2>&1 &
-```
-
-### Deploy a Contract
-```bash
-cd /opt/nexus/contracts
-solcjs --abi --bin source/ContractName.sol
-.venv/bin/python3 scripts/deploy.py
-```
-
----
-
-*End of NEXUS OS Status Report*
+1. **Fix gateway proxy IP** — update dashboard API config to use `localhost:8766` or `10.0.10.5:8766`
+2. **Activate node agents** — start `nexus-node-agent.service` on master/ai/storage, debug why inactive
+3. **Register nodes on-chain** — call `registerNode()` for each validator to populate ResourceManager
+4. **Register mesh peers** — call `registerPeer()` for all 4 nodes in MeshRegistry
+5. **Recover AgentGovernance.sol** — reverse-engineer from deployed ABI (same pattern as TokenManager/DecisionQuality)
+6. **Fix nexus-ai2** — investigate connectivity, ensure Ollama stays up
+7. **Configure kubectl on admin** — copy kubeconfig from master or set `KUBECONFIG`
+8. **Enable token enforcement** — set `NEXUS_TOKEN_ENFORCEMENT=true` after confirming agent ECT budgets
+9. **Populate temporal bins** — wire task execution to `assignTask()` calls
+10. **Activate mesh networking** — deploy BATMAN-adv + WireGuard from existing scripts

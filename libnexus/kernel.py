@@ -1,7 +1,10 @@
 """NEXUS OS Kernel Interface - Blockchain System Calls"""
+import logging
 from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 from .contracts import get_contract
+
+log = logging.getLogger("nexus.kernel")
 
 
 class NexusKernel:
@@ -59,6 +62,28 @@ class NexusKernel:
             abi=mesh_info['abi']
         )
 
+        # StorageRegistry
+        storage_info = get_contract('StorageRegistry')
+        self.storage_registry = self.w3.eth.contract(
+            address=storage_info['address'],
+            abi=storage_info['abi']
+        )
+
+        # TokenManager
+        token_info = get_contract('TokenManager')
+        self.token_manager = self.w3.eth.contract(
+            address=token_info['address'],
+            abi=token_info['abi']
+        )
+
+        # DecisionQuality
+        dq_info = get_contract('DecisionQuality')
+        self.decision_quality = self.w3.eth.contract(
+            address=dq_info['address'],
+            abi=dq_info['abi']
+        )
+
+        # TemporalScheduler (optional — may not be deployed yet)
         try:
             temporal_info = get_contract('TemporalScheduler')
             self.temporal_scheduler = self.w3.eth.contract(
@@ -66,8 +91,7 @@ class NexusKernel:
                 abi=temporal_info['abi']
             )
         except FileNotFoundError:
-            import logging
-            logging.getLogger(__name__).warning("TemporalScheduler not deployed — temporal_scheduler set to None")
+            log.warning("TemporalScheduler not deployed — temporal_scheduler set to None")
             self.temporal_scheduler = None
 
     # === Blockchain Queries (Kernel State) ===
@@ -135,6 +159,10 @@ class NexusKernel:
     def get_entry_count(self):
         """Total reasoning entries logged"""
         return self.reasoning.functions.getEntryCount().call()
+
+    def get_reasoning_count(self):
+        """Alias for get_entry_count."""
+        return self.get_entry_count()
 
     # === ResourceManager System Calls ===
 
@@ -278,15 +306,66 @@ class NexusKernel:
         }
 
     # === MeshRegistry System Calls ===
+    #
+    # Contract fields are repurposed for mesh discovery:
+    #   enodeUrl  → "ip:port"
+    #   wgPubKey  → comma-separated capabilities
+    #   meshIP    → raw IP address
 
-    def register_peer(self, enode_url, wg_public_key, mesh_ip, gas=500000):
+    def register_peer(self, wallet, ip, port, capabilities_list=None, gas=500000):
         """
-        Register this node as a mesh peer on-chain.
+        Register a mesh peer on-chain.
+
+        The transaction is sent from self.wallet (the deployer / authorized
+        signer).  The contract records msg.sender as the peer address, so
+        self.wallet must match *wallet* or be an admin that re-registers on
+        behalf of itself.  For discovered peers whose wallet differs from
+        self.wallet, the data is still stored under self.wallet's slot —
+        call with the discovering node's own wallet context.
 
         Args:
-            enode_url: Geth enode URL for blockchain peering
-            wg_public_key: WireGuard public key
-            mesh_ip: BATMAN-adv mesh IP (10.0.0.X) or WireGuard IP (10.1.0.X)
+            wallet: Peer wallet address (used as 'from' if it equals self.wallet,
+                    otherwise stored in the enodeUrl field for reference)
+            ip: Peer IP address
+            port: Peer port number
+            capabilities_list: List of capability strings (e.g. ["compute", "storage"])
+            gas: Gas limit
+
+        Returns:
+            dict: Transaction receipt with tx_hash, block, gas_used
+        """
+        if not self.wallet:
+            raise ValueError("Wallet address required for transactions")
+
+        enode_field = f"{ip}:{port}"
+        caps_field = ",".join(capabilities_list) if capabilities_list else ""
+
+        tx_hash = self.mesh_registry.functions.registerPeer(
+            enode_field, caps_field, ip
+        ).transact({
+            'from': self.wallet,
+            'gas': gas
+        })
+
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {
+            'tx_hash': tx_hash.hex(),
+            'block': receipt['blockNumber'],
+            'gas_used': receipt['gasUsed']
+        }
+
+    def update_peer(self, wallet, ip, port, gas=500000):
+        """
+        Update a peer's IP/port by re-registering.
+
+        The contract overwrites the existing entry for msg.sender, so this
+        is effectively an upsert.  Capabilities are preserved by reading
+        the current entry first.
+
+        Args:
+            wallet: Peer wallet address (currently must equal self.wallet)
+            ip: New IP address
+            port: New port number
             gas: Gas limit
 
         Returns:
@@ -295,8 +374,16 @@ class NexusKernel:
         if not self.wallet:
             raise ValueError("Wallet address required for transactions")
 
+        # Preserve existing capabilities
+        existing = self.get_peer(wallet)
+        caps_field = existing.get("capabilities", "")
+        if isinstance(caps_field, list):
+            caps_field = ",".join(caps_field)
+
+        enode_field = f"{ip}:{port}"
+
         tx_hash = self.mesh_registry.functions.registerPeer(
-            enode_url, wg_public_key, mesh_ip
+            enode_field, caps_field, ip
         ).transact({
             'from': self.wallet,
             'gas': gas
@@ -317,21 +404,34 @@ class NexusKernel:
             wallet_address: Peer's wallet (defaults to self.wallet)
 
         Returns:
-            dict: {enode_url, wg_public_key, mesh_ip, active}
+            dict: {wallet, ip, port, capabilities, active}
         """
         addr = wallet_address or self.wallet
         if not addr:
             raise ValueError("No address provided")
 
-        enode_url, wg_pub, mesh_ip, active = self.mesh_registry.functions.getPeer(
-            addr
-        ).call()
+        enode_field, caps_field, mesh_ip, active = \
+            self.mesh_registry.functions.getPeer(addr).call()
+
+        # Parse ip:port from enode_field
+        if ":" in enode_field:
+            ip, port_str = enode_field.rsplit(":", 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                ip, port = mesh_ip or enode_field, 8766
+        else:
+            ip = mesh_ip or enode_field
+            port = 8766
+
+        capabilities = [c for c in caps_field.split(",") if c] if caps_field else []
 
         return {
-            'enode_url': enode_url,
-            'wg_public_key': wg_pub,
-            'mesh_ip': mesh_ip,
-            'active': active
+            'wallet': addr,
+            'ip': ip,
+            'port': port,
+            'capabilities': capabilities,
+            'active': active,
         }
 
     def get_peer_count(self):
@@ -339,15 +439,32 @@ class NexusKernel:
         return self.mesh_registry.functions.getPeerCount().call()
 
     def get_all_peers(self):
-        """Get all registered mesh peers."""
+        """Get all registered mesh peers as a list of dicts."""
         count = self.get_peer_count()
         peers = []
         for i in range(count):
             addr = self.mesh_registry.functions.getPeerAddress(i).call()
             peer = self.get_peer(addr)
-            peer['wallet'] = addr
             peers.append(peer)
         return peers
+
+    def remove_peer(self, wallet, gas=500000):
+        """
+        Remove a mesh peer from the registry.
+
+        NOTE: The current MeshRegistry contract does not expose a removePeer
+        function.  This method raises NotImplementedError until the contract
+        is upgraded.  As a workaround, peers are evicted from the in-memory
+        PeerStore after PEER_STALE_AFTER seconds.
+
+        Args:
+            wallet: Peer wallet address to remove
+            gas: Gas limit (unused)
+        """
+        raise NotImplementedError(
+            "MeshRegistry contract does not have a removePeer function. "
+            "Peer eviction is handled by the discovery service's staleness timer."
+        )
 
     # === TemporalScheduler System Calls ===
 
@@ -413,3 +530,192 @@ class NexusKernel:
         """Get the bin ID for the current hour."""
         year, week, dow, hour = self._datetime_to_bin_params()
         return self.compute_bin_id(year, week, dow, hour)
+
+    def get_temporal_stats(self):
+        """Alias for get_temporal_totals — matches syscall naming convention."""
+        return self.get_temporal_totals()
+
+    def get_current_temporal_bin(self):
+        """Get the bin ID bytes32 for the current hour."""
+        return self.get_current_bin_id()
+
+    # === TokenManager System Calls ===
+
+    def get_token_totals(self):
+        """Get system-wide token totals: ECT minted/spent, RST earned/slashed."""
+        ect_minted, ect_spent, rst_earned, rst_slashed = \
+            self.token_manager.functions.getTotals().call()
+        return {
+            'ect_minted': ect_minted,
+            'ect_spent': ect_spent,
+            'rst_earned': rst_earned,
+            'rst_slashed': rst_slashed,
+        }
+
+    def get_ect_balance(self, agent_address):
+        """Get ECT balance for an agent."""
+        return self.token_manager.functions.ectBalances(agent_address).call()
+
+    def get_rst_balance(self, agent_address):
+        """Get RST balance for an agent."""
+        return self.token_manager.functions.rstBalances(agent_address).call()
+
+    def get_token_balances(self, agent_address):
+        """Get both ECT and RST balances."""
+        ect, rst = self.token_manager.functions.getBalances(agent_address).call()
+        return {'ect': ect, 'rst': rst}
+
+    def mint_ect(self, agent_address, amount, gas=500000):
+        """Mint ECT for an agent. Caller must be authorized minter."""
+        if not self.wallet:
+            raise ValueError("Wallet address required for transactions")
+        tx_hash = self.token_manager.functions.mintDailyECT(
+            agent_address, amount
+        ).transact({'from': self.wallet, 'gas': gas})
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {
+            'tx_hash': tx_hash.hex(),
+            'block': receipt['blockNumber'],
+            'gas_used': receipt['gasUsed']
+        }
+
+    def spend_ect(self, agent_address, amount, task_id_bytes32, gas=500000):
+        """Spend ECT for a task."""
+        if not self.wallet:
+            raise ValueError("Wallet address required for transactions")
+        tx_hash = self.token_manager.functions.spendECT(
+            agent_address, amount, task_id_bytes32
+        ).transact({'from': self.wallet, 'gas': gas})
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {
+            'tx_hash': tx_hash.hex(),
+            'block': receipt['blockNumber'],
+            'gas_used': receipt['gasUsed']
+        }
+
+    def earn_rst(self, agent_address, amount, reason, gas=500000):
+        """Award RST to an agent."""
+        if not self.wallet:
+            raise ValueError("Wallet address required for transactions")
+        tx_hash = self.token_manager.functions.earnRST(
+            agent_address, amount, reason
+        ).transact({'from': self.wallet, 'gas': gas})
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {
+            'tx_hash': tx_hash.hex(),
+            'block': receipt['blockNumber'],
+            'gas_used': receipt['gasUsed']
+        }
+
+    def slash_rst(self, agent_address, amount, reason, gas=500000):
+        """Slash RST from an agent."""
+        if not self.wallet:
+            raise ValueError("Wallet address required for transactions")
+        tx_hash = self.token_manager.functions.slashRST(
+            agent_address, amount, reason
+        ).transact({'from': self.wallet, 'gas': gas})
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {
+            'tx_hash': tx_hash.hex(),
+            'block': receipt['blockNumber'],
+            'gas_used': receipt['gasUsed']
+        }
+
+    # === DecisionQuality System Calls ===
+
+    def submit_decision_outcome(self, decision_id, success, impact, gas=500000):
+        """Submit outcome for a reasoning decision.
+
+        Args:
+            decision_id: ReasoningLedger entry ID
+            success: whether the decision was successful
+            impact: 0-10 impact score
+            gas: Gas limit
+
+        Returns:
+            dict: Transaction receipt
+        """
+        if not self.wallet:
+            raise ValueError("Wallet address required for transactions")
+        tx_hash = self.decision_quality.functions.submitOutcome(
+            decision_id, success, impact
+        ).transact({'from': self.wallet, 'gas': gas})
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        return {
+            'tx_hash': tx_hash.hex(),
+            'block': receipt['blockNumber'],
+            'gas_used': receipt['gasUsed']
+        }
+
+    def get_quality_score(self, agent_address):
+        """Calculate quality score for an agent.
+
+        Returns:
+            dict: {score, window_used, successes, avg_impact}
+        """
+        score, window_used, successes, avg_impact = \
+            self.decision_quality.functions.calculateQualityScore(agent_address).call()
+        return {
+            'score': score,
+            'window_used': window_used,
+            'successes': successes,
+            'avg_impact': avg_impact,
+        }
+
+    def get_agent_quality_summary(self, agent_address):
+        """Get full agent quality summary.
+
+        Returns:
+            dict: {total_decisions, success_count, impact_sum, last_eval_block, current_score}
+        """
+        total, success_count, impact_sum, last_eval, score = \
+            self.decision_quality.functions.getAgentSummary(agent_address).call()
+        return {
+            'total_decisions': total,
+            'success_count': success_count,
+            'impact_sum': impact_sum,
+            'last_eval_block': last_eval,
+            'current_score': score,
+        }
+
+    def get_decision_outcome(self, decision_id):
+        """Get outcome for a specific decision.
+
+        Returns:
+            dict: {submitted, success, impact, submitter, timestamp}
+        """
+        submitted, success, impact, submitter, timestamp = \
+            self.decision_quality.functions.getOutcome(decision_id).call()
+        return {
+            'submitted': submitted,
+            'success': success,
+            'impact': impact,
+            'submitter': submitter,
+            'timestamp': timestamp,
+        }
+
+    # === StorageRegistry System Calls ===
+
+    def get_storage_entry(self, cid_hash):
+        """Query a storage entry by CID hash (bytes32)."""
+        return self.storage_registry.functions.getEntry(cid_hash).call()
+
+    # === Convenience: enriched node list ===
+
+    def get_all_nodes_detail(self):
+        """Get all registered nodes as a list of dicts with full specs."""
+        addresses = self.resources.functions.getAllNodes().call()
+        nodes = []
+        for addr in addresses:
+            hostname, cpu, mem, storage, ai_tops, active = \
+                self.resources.functions.getNode(addr).call()
+            nodes.append({
+                'wallet': addr,
+                'hostname': hostname,
+                'cpu_cores': cpu,
+                'memory_gb': mem,
+                'storage_gb': storage,
+                'ai_tops': ai_tops,
+                'active': active,
+            })
+        return nodes

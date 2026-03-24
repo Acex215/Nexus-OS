@@ -69,6 +69,20 @@ class BlockchainLogger:
 
     # ── Core: log decision on-chain ───────────────────────────────────
 
+    def _get_time_source(self) -> tuple:
+        """Get authoritative timestamp and source name from TimeAuthority."""
+        try:
+            import sys
+            if '/opt/nexus/modules' not in sys.path:
+                sys.path.insert(0, '/opt/nexus/modules')
+            from time_authority import get_time_authority
+            ta = get_time_authority()
+            auth_time = ta.get_authoritative_time()
+            return auth_time.isoformat(), ta.last_source
+        except Exception:
+            from datetime import datetime, timezone
+            return datetime.now(timezone.utc).isoformat(), "local"
+
     def _log_decision_sync(
         self,
         agent_id: str,
@@ -82,10 +96,16 @@ class BlockchainLogger:
         The contract computes its own keccak256 entryHash from the two
         strings; we pass the SHA256 reasoning_hash as the "reasoning"
         field so it is permanently recorded.
+
+        Includes authoritative timestamp source in the reasoning field
+        for forensic verification.
         """
+        # Get authoritative time and source
+        auth_ts, ts_source = self._get_time_source()
+
         # Build decision string: "agent_id: task_summary (ECT cost)"
         decision_str = f"{agent_id}: {task[:80]} (ect={ect_cost})"
-        reasoning_str = reasoning_hash  # 64-char hex SHA256
+        reasoning_str = f"{reasoning_hash}|timestamp_source:{ts_source}|ts:{auth_ts}"
 
         with self._nonce_lock:
             try:

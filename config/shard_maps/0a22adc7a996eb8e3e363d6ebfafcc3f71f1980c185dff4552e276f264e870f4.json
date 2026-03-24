@@ -1,0 +1,31 @@
+{
+  "file_id": "0x1d14d1407795f5f1c3b27c8add6c20a4fa5e9158c4c704826d2c3f8b2221d643",
+  "merkle_root": "0x1e3778806f69e0c163d432aba8b7c11d3d1030de3540148960b89fa2b3b06ab3",
+  "metadata": {
+    "file_hash": "0a22adc7a996eb8e3e363d6ebfafcc3f71f1980c185dff4552e276f264e870f4",
+    "chunk_size": 3013,
+    "total_size": 30128,
+    "encrypted_size": 30128,
+    "key_id": "0a22adc7a996eb8e3e363d6ebfafcc3f71f1980c185dff4552e276f264e870f4",
+    "data_shards": 10,
+    "parity_shards": 5,
+    "file_name": "nexus_erasure_test.bin"
+  },
+  "shard_cids": {
+    "0": "QmdA8j9bNEQRdVUx2cbR94w14Qb7CR8xwijJnz8GF8tCLn",
+    "1": "QmXQEgMdJADwAsa93TLR81EEz8imxTYckSDNeCtS6CxqVi",
+    "2": "QmbsLGUu1n32jbqUPntUjmVmEu82zwnS3vEYAzvYMTZKc6",
+    "3": "QmbfrpuR1nUftKBs94FMZjwE5buRdSyTXqgLJyvTTf4KjC",
+    "4": "QmWyXfGmAJyzFLaMcZgpRrqhtgBCv8DQrT1rPGZvvJMk7d",
+    "5": "QmavbDhBfLGVEsJLorvQWoBvXjzh9f4uooZATVH4J93jwh",
+    "6": "QmUEQL4WZjNSofmxgc6W13U98kfhMsL2EjTkJvbcu8sfbK",
+    "7": "Qmd179ZT9TZeV6w9iZYijVQvoHnpx8zfa8QEUJuQnjvQhe",
+    "8": "QmZAsnggxw1grcH6z2isqNgFR3qYQw7uTbm7nxDWoVBrKx",
+    "9": "QmZEX3zUquFXNXPCBrq8E8oADMSk9piQywfti7xguiysaZ",
+    "10": "QmZcSVVxazE5CFnw4vi6PtRDxWrDkm3bdMvaBPy9CUMDrv",
+    "11": "QmQ8fzcJU57fnhMzo97nAaWAzJaJMEAJSBdUE1hqw7qAiw",
+    "12": "QmRVYxy19ZsCEuGAvdpGV8vhV4sSFJa1bvYjCLv4GKRT2z",
+    "13": "QmfBVVn5xHCCrDJMgyxUq4LeCHXeeuMQrmHiZAz2fbmgJS",
+    "14": "QmVyaNzGXX8xV9xYFUKybBDwCK4o2mYBdrJ3bL3ZQwagrB"
+  }
+}

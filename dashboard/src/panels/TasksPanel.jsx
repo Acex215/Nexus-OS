@@ -1,498 +1,191 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { usePolling }    from '../hooks/usePolling.js';
+import { useState, useEffect, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling.js';
 import { getTaskQueue, getTaskHistory, submitTask } from '../lib/api.js';
-import { formatTime }    from '../lib/theme.js';
-import StatCard          from '../components/StatCard.jsx';
-import Badge             from '../components/Badge.jsx';
-import SearchInput       from '../components/SearchInput.jsx';
-import LoadingSpinner    from '../components/LoadingSpinner.jsx';
-import EmptyState        from '../components/EmptyState.jsx';
-import { ListTodo, CheckCircle, XCircle, Clock, ChevronDown, ChevronRight, RefreshCw, Send, AlertTriangle } from 'lucide-react';
+import { formatTime } from '../lib/theme.js';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function truncate(str, n) {
-  if (!str) return '—';
-  return str.length > n ? str.slice(0, n) + '…' : str;
+function StatusBadge({ status }) {
+  const s = (status || '').toLowerCase();
+  if (s === 'done' || s === 'completed' || s === 'success') return <span style={{ background: '#dcfce7', color: '#166534', fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', padding: '2px 8px', borderRadius: '20px' }}>Completed</span>;
+  if (s === 'failed') return <span style={{ background: 'rgba(158,63,78,0.1)', color: '#9e3f4e', fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', padding: '2px 8px', borderRadius: '20px' }}>Failed</span>;
+  if (s === 'executing' || s === 'running') return <span style={{ background: '#dbeafe', color: '#1d4ed8', fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', padding: '2px 8px', borderRadius: '20px' }}>Executing</span>;
+  return <span style={{ background: '#dde4e5', color: '#5a6061', fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.02em', padding: '2px 8px', borderRadius: '20px' }}>Pending</span>;
 }
 
-function formatDuration(ms) {
-  if (ms == null || isNaN(ms)) return '—';
-  // history stores duration_seconds, queue may store ms
-  const s = ms > 1000 ? ms / 1000 : ms;
-  if (s < 1)   return `${Math.round(ms)}ms`;
-  if (s < 60)  return `${s.toFixed(1)}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
-}
-
-const PRIORITY_VARIANT = { P1: 'error', P2: 'warning', P3: 'default', high: 'error', medium: 'warning', low: 'default' };
-const STATUS_VARIANT   = {
-  pending:       'default',
-  executing:     'info',
-  running:       'info',
-  completed:     'success',
-  done:          'success',
-  failed:        'error',
-  blocked_human: 'warning',
-};
-
-function statusVariant(s) { return STATUS_VARIANT[s?.toLowerCase()] ?? 'default'; }
-function priorityVariant(p) { return PRIORITY_VARIANT[p] ?? 'default'; }
-
-function isRecent24h(ts) {
-  if (!ts) return false;
-  const t = typeof ts === 'number' ? ts * 1000 : new Date(ts).getTime();
-  return Date.now() - t < 86400000;
-}
-
-// ── Toast ─────────────────────────────────────────────────────────────────────
-function Toast({ msg, type, onDone }) {
-  useEffect(() => {
-    const id = setTimeout(onDone, 3000);
-    return () => clearTimeout(id);
-  }, [onDone]);
-  const bg = type === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)';
-  const border = type === 'error' ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)';
-  const color  = type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)';
-  return (
-    <div style={{
-      position:   'fixed', bottom: '24px', right: '24px', zIndex: 9999,
-      background: bg, border: `1px solid ${border}`, borderRadius: '8px',
-      padding:    '12px 18px', color, fontFamily: 'var(--font-mono)', fontSize: '13px',
-      boxShadow:  '0 4px 20px rgba(0,0,0,0.4)',
-    }}>{msg}</div>
-  );
-}
-
-// ── Submit form ───────────────────────────────────────────────────────────────
-function AddTaskRow({ onSubmitted }) {
-  const [desc,     setDesc]     = useState('');
-  const [priority, setPriority] = useState('P2');
-  const [loading,  setLoading]  = useState(false);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!desc.trim()) return;
-    setLoading(true);
-    try {
-      await submitTask(desc.trim(), priority);
-      setDesc('');
-      onSubmitted('success');
-    } catch {
-      onSubmitted('error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-      <input
-        value={desc}
-        onChange={e => setDesc(e.target.value)}
-        placeholder="Describe the task…"
-        style={{
-          flex:        '1 1 260px',
-          background:  'var(--bg-tertiary)',
-          border:      '1px solid var(--border-default)',
-          borderRadius:'6px',
-          padding:     '7px 12px',
-          color:       'var(--text-primary)',
-          fontFamily:  'var(--font-mono)',
-          fontSize:    '12px',
-          outline:     'none',
-        }}
-      />
-      <select
-        value={priority}
-        onChange={e => setPriority(e.target.value)}
-        style={{
-          background:   'var(--bg-tertiary)',
-          border:       '1px solid var(--border-default)',
-          borderRadius: '6px',
-          padding:      '7px 10px',
-          color:        'var(--text-secondary)',
-          fontFamily:   'var(--font-mono)',
-          fontSize:     '12px',
-          cursor:       'pointer',
-          outline:      'none',
-        }}
-      >
-        <option value="P1">P1 — Urgent</option>
-        <option value="P2">P2 — Normal</option>
-        <option value="P3">P3 — Low</option>
-      </select>
-      <button
-        type="submit"
-        disabled={loading || !desc.trim()}
-        style={{
-          background:   loading ? 'var(--bg-elevated)' : 'var(--accent-cyan)',
-          border:       'none',
-          borderRadius: '6px',
-          padding:      '7px 16px',
-          color:        loading ? 'var(--text-muted)' : '#0a0e17',
-          fontFamily:   'var(--font-mono)',
-          fontSize:     '12px',
-          fontWeight:   600,
-          cursor:       loading || !desc.trim() ? 'not-allowed' : 'pointer',
-          display:      'flex',
-          alignItems:   'center',
-          gap:          '6px',
-          opacity:      !desc.trim() ? 0.5 : 1,
-          transition:   'background 0.15s',
-        }}
-      >
-        {loading ? <LoadingSpinner size={14} /> : <Send size={13} />}
-        Submit
-      </button>
-    </form>
-  );
-}
-
-// ── Queue row (expandable) ────────────────────────────────────────────────────
-function QueueRow({ task, cols }) {
-  return (
-    <tr>
-      {cols.map(col => (
-        <td key={col.key}>
-          {col.render ? col.render(task[col.key], task) : (task[col.key] ?? '—')}
-        </td>
-      ))}
-    </tr>
-  );
-}
-
-// ── History row (expandable) ──────────────────────────────────────────────────
-function HistoryRow({ entry, colCount }) {
-  const [open, setOpen] = useState(false);
-  const failed = !entry.success;
-
-  return (
-    <>
-      <tr
-        onClick={() => setOpen(o => !o)}
-        style={{
-          cursor:     'pointer',
-          background: failed ? 'rgba(239,68,68,0.04)' : undefined,
-        }}
-      >
-        <td style={{ paddingRight: 0 }}>
-          {open
-            ? <ChevronDown size={12} style={{ color: 'var(--accent-cyan)' }} />
-            : <ChevronRight size={12} style={{ color: 'var(--text-dim)' }} />}
-        </td>
-        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>
-          {entry.id ? entry.id.slice(-8) : '—'}
-        </td>
-        <td style={{ maxWidth: '320px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-            {truncate(entry.description, 60)}
-          </span>
-        </td>
-        <td><Badge text={entry.status ?? 'unknown'} variant={statusVariant(entry.status)} /></td>
-        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-          {formatDuration(entry.duration_seconds)}
-        </td>
-        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>
-          {entry.branch ?? '—'}
-        </td>
-        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>
-          {entry.timestamp ? formatTime(entry.timestamp) : '—'}
-        </td>
-      </tr>
-      {open && (
-        <tr style={{ background: 'var(--bg-tertiary)' }}>
-          <td colSpan={colCount} style={{ padding: '14px 20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-              {entry.description && (
-                <div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Description</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{entry.description}</div>
-                </div>
-              )}
-
-              {entry.error && (
-                <div>
-                  <div style={{ fontSize: '10px', color: 'var(--accent-red)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Error</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent-red)', background: 'rgba(239,68,68,0.06)', padding: '8px 10px', borderRadius: '4px', lineHeight: 1.5 }}>
-                    {entry.error}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-                {entry.commit_hash && (
-                  <div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Commit</div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--accent-cyan)' }}>{entry.commit_hash.slice(0, 12)}</span>
-                  </div>
-                )}
-                {entry.files_changed != null && (
-                  <div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Files</div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      {entry.files_changed} changed
-                      {entry.lines_added   != null ? ` +${entry.lines_added}`   : ''}
-                      {entry.lines_removed != null ? ` -${entry.lines_removed}` : ''}
-                    </span>
-                  </div>
-                )}
-                {entry.blockchain_tx && (
-                  <div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '3px' }}>Tx</div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--accent-purple)' }}>{entry.blockchain_tx.slice(0, 12)}…</span>
-                  </div>
-                )}
-              </div>
-
-              {Array.isArray(entry.affected_files) && entry.affected_files.length > 0 && (
-                <div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Affected Files</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {entry.affected_files.map((f, i) => (
-                      <span key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px' }}>{f}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {entry.plan_summary && (
-                <div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Plan</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{entry.plan_summary}</div>
-                </div>
-              )}
-
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-// ── Main panel ────────────────────────────────────────────────────────────────
 export default function TasksPanel() {
-  const { data: queueData, loading: queueLoading, refresh: refreshQueue } = usePolling(getTaskQueue, 10000);
+  const [queue, setQueue] = useState(null);
+  const [history, setHistory] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [taskInput, setTaskInput] = useState('');
+  const [priority, setPriority] = useState('P2');
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [history,        setHistory]        = useState(null);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [search,         setSearch]         = useState('');
-  const [statusFilter,   setStatusFilter]   = useState('all');
-  const [toast,          setToast]          = useState(null);
-
-  const loadHistory = useCallback(() => {
-    setHistoryLoading(true);
-    getTaskHistory(100)
-      .then(data => setHistory(Array.isArray(data) ? data : []))
-      .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false));
+  const fetchData = useCallback(async () => {
+    try {
+      const [q, h] = await Promise.allSettled([getTaskQueue(), getTaskHistory(100)]);
+      if (q.status === 'fulfilled') setQueue(q.value);
+      if (h.status === 'fulfilled') setHistory(h.value);
+    } catch (e) { console.error('Tasks fetch:', e); }
+    setLoading(false);
   }, []);
 
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+  usePolling(fetchData, 10000);
 
-  function showToast(type) {
-    setToast({ type, msg: type === 'error' ? 'Failed to submit task.' : 'Task submitted!' });
-    if (type === 'success') refreshQueue();
-  }
+  const handleSubmit = async () => {
+    if (!taskInput.trim() || submitting) return;
+    setSubmitting(true);
+    try { await submitTask(taskInput.trim(), priority); setTaskInput(''); fetchData(); } catch (e) { console.error('Submit:', e); }
+    setSubmitting(false);
+  };
 
-  // ── Derive stats ─────────────────────────────────────────────────────────
-  const queuePayload = queueData?.payload ?? queueData ?? {};
-  const queue        = queuePayload.queue ?? queuePayload.tasks ?? [];
-  const queueArr     = Array.isArray(queue) ? queue : Object.values(queue);
+  const queueList = Array.isArray(queue) ? queue : (queue?.tasks || queue?.pending || []);
+  const historyList = Array.isArray(history) ? history : (history?.tasks || []);
+  const pending = queueList.filter(t => t.status === 'pending' || !t.status).length;
+  const executing = queueList.filter(t => t.status === 'executing' || t.status === 'running').length;
+  const completed24h = historyList.filter(t => t.success || t.status === 'done').length;
+  const failed24h = historyList.filter(t => t.status === 'failed' || t.success === false).length;
+  const successRate = historyList.length > 0 ? ((completed24h / historyList.length) * 100).toFixed(1) + '%' : '—';
 
-  const pendingCount   = queueArr.filter(t => ['pending', 'queued'].includes(t.status?.toLowerCase())).length;
-  const executingCount = queueArr.filter(t => ['executing', 'running'].includes(t.status?.toLowerCase())).length;
-
-  const histArr   = history ?? [];
-  const recent    = histArr.filter(e => isRecent24h(e.timestamp));
-  const completed = recent.filter(e => ['done', 'completed'].includes(e.status?.toLowerCase())).length;
-  const failed24  = recent.filter(e => e.status?.toLowerCase() === 'failed').length;
-  const total24   = recent.length;
-  const rate      = total24 > 0 ? Math.round((completed / total24) * 100) : null;
-
-  // ── Queue columns ─────────────────────────────────────────────────────────
-  const queueCols = [
-    {
-      key: 'id', label: 'ID',
-      render: v => <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>{v ? String(v).slice(-8) : '—'}</span>,
-    },
-    {
-      key: 'description', label: 'Description',
-      render: v => <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>{truncate(v, 60)}</span>,
-    },
-    {
-      key: 'priority', label: 'Priority',
-      render: v => v ? <Badge text={v} variant={priorityVariant(v)} /> : '—',
-    },
-    {
-      key: 'status', label: 'Status',
-      render: v => {
-        const executing = ['executing', 'running'].includes(v?.toLowerCase());
-        return (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            {executing && <span className="pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-blue)', display: 'inline-block' }} />}
-            <Badge text={v ?? 'unknown'} variant={statusVariant(v)} />
-          </span>
-        );
-      },
-    },
-    {
-      key: 'created_at', label: 'Created',
-      render: v => <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-dim)' }}>{v ? formatTime(v) : '—'}</span>,
-    },
-  ];
-
-  // ── History filter ────────────────────────────────────────────────────────
-  const histFiltered = histArr.filter(e => {
-    const matchSearch = !search || (e.description ?? '').toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all'
-      || (statusFilter === 'pending'   && ['pending', 'queued'].includes(e.status?.toLowerCase()))
-      || (statusFilter === 'completed' && ['done', 'completed'].includes(e.status?.toLowerCase()))
-      || (statusFilter === 'failed'    && e.status?.toLowerCase() === 'failed');
-    return matchSearch && matchStatus;
+  const filtered = historyList.filter(t => {
+    if (filter === 'completed' && t.status !== 'done' && !t.success) return false;
+    if (filter === 'failed' && t.status !== 'failed' && t.success !== false) return false;
+    if (filter === 'pending' && t.status !== 'pending') return false;
+    if (search && !(t.description || '').toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
   });
 
-  const HIST_COL_COUNT = 7;
-
-  const filterBtnStyle = (active) => ({
-    background:   active ? 'var(--bg-elevated)' : 'none',
-    border:       `1px solid ${active ? 'var(--border-strong)' : 'var(--border-subtle)'}`,
-    borderRadius: '5px',
-    color:        active ? 'var(--text-primary)' : 'var(--text-dim)',
-    fontFamily:   'var(--font-mono)',
-    fontSize:     '11px',
-    padding:      '4px 10px',
-    cursor:       'pointer',
-    transition:   'background 0.15s, border-color 0.15s',
-  });
+  const S = {
+    card: { background: '#ffffff', border: '1px solid rgba(173,179,180,0.15)', borderRadius: '6px', padding: '20px' },
+    label: { fontFamily: "'Space Grotesk',sans-serif", fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#5a6061', marginBottom: '8px' },
+    value: { fontFamily: "'JetBrains Mono',monospace", fontSize: '28px', fontWeight: 600, color: '#2d3435' },
+    th: { padding: '16px 24px', fontFamily: "'Space Grotesk',sans-serif", fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#5a6061' },
+    td: { padding: '16px 24px' },
+    mono13: { fontFamily: "'JetBrains Mono',monospace", fontSize: '13px', color: '#5a6061' },
+    body14: { fontFamily: "'Inter',sans-serif", fontSize: '14px', color: '#2d3435' },
+  };
 
   return (
-    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-      {/* ── Stats + Submit ── */}
-      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', flex: '1 1 500px' }}>
-          <StatCard label="Pending"      value={queueLoading ? '…' : pendingCount}   icon={Clock}        accentColor="var(--accent-blue)" />
-          <StatCard label="Executing"    value={queueLoading ? '…' : executingCount} icon={RefreshCw}    accentColor="var(--accent-cyan)" />
-          <StatCard label="Completed 24h" value={historyLoading ? '…' : completed}   icon={CheckCircle}  accentColor="var(--accent-green)" />
-          <StatCard label="Failed 24h"   value={historyLoading ? '…' : failed24}     icon={XCircle}      accentColor="var(--accent-red)" />
-          <StatCard label="Success Rate" value={historyLoading ? '…' : (rate ?? '—')} unit={rate != null ? '%' : ''} icon={ListTodo} accentColor={rate == null ? 'var(--accent-cyan)' : rate >= 80 ? 'var(--accent-green)' : rate >= 50 ? 'var(--accent-amber)' : 'var(--accent-red)'} />
+    <div style={{ maxWidth: '1440px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '40px' }}>
+        <div style={{ width: '4px', height: '48px', background: '#0c0f0f', borderRadius: '100px', alignSelf: 'center' }} />
+        <div>
+          <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '22px', fontWeight: 800, color: '#0c0f0f', lineHeight: 1.2 }}>Tasks</h1>
+          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '13px', color: '#5a6061', letterSpacing: '0.02em' }}>Task queue management · Priority routing</p>
         </div>
       </div>
 
-      {/* ── Add Task ── */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: '8px', padding: '16px', border: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-          Submit Task
-        </div>
-        <AddTaskRow onSubmitted={showToast} />
+      {/* Stat Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px', marginBottom: '32px' }}>
+        <div style={S.card}><p style={S.label}>Pending</p><p style={S.value}>{pending}</p></div>
+        <div style={S.card}><p style={S.label}>Executing</p><p style={{...S.value, display: 'flex', alignItems: 'center', gap: '8px'}}>{String(executing).padStart(2, '0')}{executing > 0 && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block', animation: 'pulse-dot 1.5s ease-in-out infinite' }} />}</p></div>
+        <div style={S.card}><p style={S.label}>Completed 24h</p><p style={S.value}>{completed24h.toLocaleString()}</p></div>
+        <div style={S.card}><p style={S.label}>Failed 24h</p><p style={{...S.value, color: failed24h > 0 ? '#9e3f4e' : '#2d3435'}}>{String(failed24h).padStart(2, '0')}</p></div>
+        <div style={S.card}><p style={S.label}>Success Rate</p><p style={{...S.value, color: '#059669'}}>{successRate}</p></div>
       </div>
 
-      {/* ── Active Queue ── */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Active Queue
-            {queueArr.length > 0 && <span style={{ marginLeft: '8px', color: 'var(--accent-cyan)' }}>{queueArr.length}</span>}
-          </span>
-          {queueLoading && <LoadingSpinner size={13} />}
-        </div>
-
-        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-          {queueArr.length === 0 ? (
-            <EmptyState icon={ListTodo} title="Queue is empty" description="Submit a task above or wait for agents to queue work." />
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {queueCols.map(c => <th key={c.key}>{c.label}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {queueArr.map((task, i) => <QueueRow key={task.id ?? i} task={task} cols={queueCols} />)}
-              </tbody>
-            </table>
-          )}
+      {/* Submit Task */}
+      <div style={{...S.card, padding: '24px', marginBottom: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'}}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '12px', color: '#5a6061', display: 'block', marginBottom: '8px' }}>New Instruction</label>
+            <input value={taskInput} onChange={e => setTaskInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSubmit()} placeholder="Describe the task..." style={{ width: '100%', padding: '12px 16px', borderRadius: '6px', border: 'none', background: '#f2f4f4', fontFamily: "'Inter',sans-serif", fontSize: '14px', outline: 'none', color: '#2d3435' }} />
+          </div>
+          <div style={{ width: '180px' }}>
+            <label style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '12px', color: '#5a6061', display: 'block', marginBottom: '8px' }}>Priority</label>
+            <select value={priority} onChange={e => setPriority(e.target.value)} style={{ width: '100%', padding: '12px 16px', borderRadius: '6px', border: 'none', background: '#f2f4f4', fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px', outline: 'none', cursor: 'pointer' }}>
+              <option value="P0">P0 — Critical</option>
+              <option value="P1">P1 — High</option>
+              <option value="P2">P2 — Normal</option>
+              <option value="P3">P3 — Low</option>
+            </select>
+          </div>
+          <button onClick={handleSubmit} disabled={submitting} style={{ padding: '12px 32px', borderRadius: '6px', border: 'none', background: '#0c0f0f', color: '#9c9d9d', fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', opacity: submitting ? 0.5 : 1 }}>Submit</button>
         </div>
       </div>
 
-      {/* ── Task History ── */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Task History
-            {histArr.length > 0 && <span style={{ marginLeft: '8px', color: 'var(--text-muted)' }}>{histArr.length}</span>}
-          </span>
-
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {['all', 'pending', 'completed', 'failed'].map(f => (
-              <button key={f} style={filterBtnStyle(statusFilter === f)} onClick={() => setStatusFilter(f)}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
+      {/* Active Queue */}
+      <div style={{ marginBottom: '32px' }}>
+        <h3 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '14px', fontWeight: 600, color: '#5a6061', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '16px' }}>≡</span> Active Queue
+        </h3>
+        {queueList.length === 0 ? (
+          <div style={{ background: '#f2f4f4', border: '1px dashed rgba(173,179,180,0.3)', borderRadius: '6px', height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'rgba(90,96,97,0.4)' }}>
+            <span style={{ fontSize: '36px', marginBottom: '8px' }}>📦</span>
+            <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px' }}>Queue is empty</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {queueList.slice(0, 5).map((t, i) => (
+              <div key={i} style={{...S.card, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={S.body14}>{t.description || t.task_id || '—'}</span>
+                <StatusBadge status={t.status || 'pending'} />
+              </div>
             ))}
           </div>
+        )}
+      </div>
 
-          <div style={{ flex: 1, minWidth: '180px', maxWidth: '280px' }}>
-            <SearchInput value={search} onChange={setSearch} placeholder="Filter by description…" />
-          </div>
-
-          <button
-            onClick={loadHistory}
-            disabled={historyLoading}
-            style={{
-              background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '5px',
-              color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '11px',
-              padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-              opacity: historyLoading ? 0.5 : 1,
-            }}
-          >
-            <RefreshCw size={11} />
-            {historyLoading ? 'Loading…' : 'Refresh'}
-          </button>
+      {/* History Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', background: '#ebeeef', padding: '4px', borderRadius: '6px' }}>
+          {['all', 'pending', 'completed', 'failed'].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+              fontFamily: "'Space Grotesk',sans-serif", fontSize: '13px', fontWeight: 500, textTransform: 'capitalize',
+              background: filter === f ? '#ffffff' : 'transparent',
+              color: filter === f ? '#0c0f0f' : '#5a6061',
+              boxShadow: filter === f ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+            }}>{f}</button>
+          ))}
         </div>
-
-        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-          {historyLoading && histArr.length === 0 ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '24px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-              <LoadingSpinner size={16} /> Loading history…
-            </div>
-          ) : histFiltered.length === 0 ? (
-            <EmptyState
-              icon={search || statusFilter !== 'all' ? AlertTriangle : CheckCircle}
-              title={search || statusFilter !== 'all' ? 'No matching tasks' : 'No task history yet'}
-              description={search ? `No tasks match "${search}"` : undefined}
-            />
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '24px' }}></th>
-                    <th>ID</th>
-                    <th>Description</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Branch</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {histFiltered.map((entry, i) => (
-                    <HistoryRow key={entry.id ?? i} entry={entry} colCount={HIST_COL_COUNT} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#adb3b4', fontSize: '18px' }}>⌕</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search history..." style={{ paddingLeft: '36px', paddingRight: '16px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid rgba(173,179,180,0.15)', background: '#ffffff', fontFamily: "'Inter',sans-serif", fontSize: '13px', outline: 'none', width: '260px' }} />
         </div>
       </div>
 
-      {/* ── Toast ── */}
-      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-
+      {/* History Table */}
+      <div style={{...S.card, padding: 0, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'rgba(242,244,244,0.5)' }}>
+              <th style={{...S.th, textAlign: 'left'}}>ID</th>
+              <th style={{...S.th, textAlign: 'left'}}>Description</th>
+              <th style={{...S.th, textAlign: 'left'}}>Status</th>
+              <th style={{...S.th, textAlign: 'left'}}>Duration</th>
+              <th style={{...S.th, textAlign: 'left'}}>Branch</th>
+              <th style={{...S.th, textAlign: 'right'}}>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.slice(0, 20).map((t, i) => (
+              <tr key={t.id || i}
+                style={{ borderBottom: '1px solid #ebeeef', transition: 'background 0.1s', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(242,244,244,0.3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <td style={{...S.td, ...S.mono13}}>{(t.task_id || t.id || '').slice(0, 8)}...</td>
+                <td style={{...S.td, ...S.body14, maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{t.description || '—'}</td>
+                <td style={S.td}><StatusBadge status={t.success ? 'done' : (t.status || 'pending')} /></td>
+                <td style={{...S.td, ...S.mono13}}>{t.duration ? `${Math.round(t.duration)}s` : '--'}</td>
+                <td style={{...S.td, ...S.mono13}}>{t.branch || '—'}</td>
+                <td style={{...S.td, fontFamily: "'Inter',sans-serif", fontSize: '13px', color: '#5a6061', textAlign: 'right'}}>{formatTime(t.timestamp)}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 && !loading && (
+              <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', fontFamily: "'Inter',sans-serif", fontSize: '13px', color: '#5a6061' }}>No tasks found</td></tr>
+            )}
+          </tbody>
+        </table>
+        {filtered.length > 0 && (
+          <div style={{ padding: '16px 24px', background: 'rgba(242,244,244,0.3)', borderTop: '1px solid #ebeeef', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '12px', color: '#5a6061' }}>Showing {Math.min(filtered.length, 20)} of {filtered.length} entries</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

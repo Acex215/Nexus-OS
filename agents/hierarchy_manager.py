@@ -9,8 +9,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +22,17 @@ from dotenv import load_dotenv
 from agent_registry import AGENT_REGISTRY, get_agent, get_token_env_key
 from agent_workflow import NexusAgentWorkflow
 from blockchain_logger import get_blockchain_logger
+from token_hooks import cost_check
+
+# ECT costs per agent tier (used for pre-flight budget check)
+_TIER_ECT_COSTS = {
+    "coordinator": 50,   # C-Suite decisions
+    "director": 20,      # Director decisions
+    "worker": 5,         # Worker tasks
+}
+
+# Shared wallet until per-agent wallets are created
+_SHARED_WALLET = "0x817B0842B208B76A7665948F8D1A0592F9b1e958"
 
 # ── Logging ───────────────────────────────────────────────────────────
 
@@ -99,6 +112,161 @@ _PRIORITY_LABELS = {
     1: "Low", 2: "Medium", 3: "High", 4: "Urgent", 5: "Critical",
 }
 
+# ── Delegation ECT costs per tier ────────────────────────────────────
+
+_DELEGATION_ECT = {
+    "coordinator": 50,
+    "director": 20,
+    "worker": 5,
+}
+
+# Reverse map: channel name → agent_id  (built from AGENT_CHANNEL_MAP at module level)
+_CHANNEL_TO_AGENT: dict[str, str] = {}
+
+# Map department name (as LLM returns it) → director agent_id
+_DEPT_TO_DIRECTOR = {
+    "compute":    "compute_director",
+    "storage":    "storage_director",
+    "network":    "network_director",
+    "security":   "security_director",
+    "blockchain": "blockchain_director",
+    "ml":         "ml_director",
+    "quantum":    "quantum_director",
+}
+
+
+def _resolve_delegate(name: str) -> str | None:
+    """Resolve a delegates_to name to an agent_id.
+
+    Accepts: agent_id directly ("storage_director"), department name
+    ("Storage"), or display-style ("storage-director").
+    """
+    lower = name.lower().replace("-", "_")
+    # Exact agent_id match
+    if lower in AGENT_CHANNEL_MAP:
+        return lower
+    # Department name → director
+    if lower in _DEPT_TO_DIRECTOR:
+        return _DEPT_TO_DIRECTOR[lower]
+    # Fuzzy: strip "_director" / "_worker_N" and try department
+    for dept, agent_id in _DEPT_TO_DIRECTOR.items():
+        if dept in lower:
+            return agent_id
+    return None
+
+
+class DelegationRouter:
+    """Tracks delegation chains and routes tasks between agents."""
+
+    DELEGATION_TIMEOUT = 60  # seconds
+
+    def __init__(self):
+        self.chains: dict[str, list[str]] = {}  # chain_id → [agent_ids]
+        self.pending: dict[str, asyncio.Future] = {}  # chain_id → response future
+        self._lock = asyncio.Lock()
+        self._log = logging.getLogger("delegation")
+
+    async def delegate(
+        self,
+        *,
+        chain_id: str | None,
+        sender_id: str,
+        sender_tier: str,
+        target_id: str,
+        task: str,
+        manager: "HierarchyManager",
+    ) -> dict | None:
+        """Route a task to target_id's Discord channel and wait for response.
+
+        Returns the target's workflow result, or None on timeout.
+        """
+        target_bot = manager.bots.get(target_id)
+        if not target_bot or not target_bot.channel:
+            self._log.warning("Cannot delegate to %s — no channel", target_id)
+            return None
+
+        target_tier = target_bot.config.get("tier", "worker")
+
+        # ECT cost: sender pays their tier cost, target pays theirs
+        sender_cost = _DELEGATION_ECT.get(sender_tier, 5)
+        target_cost = _DELEGATION_ECT.get(target_tier, 5)
+        total_cost = sender_cost + target_cost
+
+        # Build or extend chain
+        async with self._lock:
+            if chain_id is None:
+                chain_id = uuid.uuid4().hex[:12]
+                self.chains[chain_id] = [sender_id]
+            self.chains[chain_id].append(target_id)
+
+        self._log.info(
+            "Delegation [%s]: %s → %s (cost=%d ECT)",
+            chain_id, sender_id, target_id, total_cost,
+        )
+
+        # Post delegated task to target's channel
+        delegation_msg = (
+            f"**Delegated from {sender_id}** (chain `{chain_id}`):\n{task}"
+        )
+        try:
+            await target_bot.channel.send(delegation_msg)
+        except Exception as exc:
+            self._log.error("Failed to send delegation to #%s: %s",
+                            target_bot.channel_name, exc)
+            return None
+
+        # Wait for the target's workflow to process and respond
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        async with self._lock:
+            self.pending[chain_id] = future
+
+        try:
+            result = await asyncio.wait_for(future, timeout=self.DELEGATION_TIMEOUT)
+            result["ect_cost"] = total_cost
+            return result
+        except asyncio.TimeoutError:
+            self._log.warning(
+                "Delegation timeout [%s]: %s did not respond in %ds",
+                chain_id, target_id, self.DELEGATION_TIMEOUT,
+            )
+            return None
+        finally:
+            async with self._lock:
+                self.pending.pop(chain_id, None)
+
+    async def complete(self, chain_id: str, result: dict):
+        """Called when a delegated agent finishes — resolves the waiting future."""
+        async with self._lock:
+            future = self.pending.get(chain_id)
+        if future and not future.done():
+            future.set_result(result)
+
+    async def log_chain(self, chain_id: str, total_ect: int):
+        """Log a completed delegation chain to ReasoningLedger."""
+        chain = self.chains.pop(chain_id, [])
+        if not chain:
+            return
+        task_summary = f"delegation_chain:{','.join(chain)}"
+        reasoning_hash = ""
+        try:
+            import hashlib
+            payload = json.dumps({"chain_id": chain_id, "agents": chain}, sort_keys=True)
+            reasoning_hash = hashlib.sha256(payload.encode()).hexdigest()
+        except Exception:
+            pass
+        try:
+            bc = get_blockchain_logger()
+            await bc.log_decision(
+                agent_id=chain[0],
+                task=task_summary[:100],
+                reasoning_hash=reasoning_hash,
+                ect_cost=total_ect,
+            )
+            self._log.info("Chain [%s] logged on-chain: %s, %d ECT", chain_id, chain, total_ect)
+        except Exception as exc:
+            self._log.warning("Chain [%s] blockchain log failed: %s", chain_id, exc)
+
+
 # ── Decision log directory ────────────────────────────────────────────
 
 DECISION_LOG_DIR = Path("/opt/nexus/agents/logs/decisions")
@@ -135,7 +303,7 @@ def _log_decision(agent_id: str, result: dict, tx_hash: str | None = None):
 class NexusAgentBot:
     """Wraps a discord.Client for a single agent in the hierarchy."""
 
-    def __init__(self, agent_id: str):
+    def __init__(self, agent_id: str, manager: "HierarchyManager | None" = None):
         self.agent_id = agent_id
         self.config = get_agent(agent_id)
         self.display_name = self.config["display_name"]
@@ -146,6 +314,7 @@ class NexusAgentBot:
         self.workflow: NexusAgentWorkflow | None = None
         self.channel: discord.TextChannel | None = None
         self.client: discord.Client | None = None
+        self.manager: "HierarchyManager | None" = manager
         self.ready = asyncio.Event()
         self._log = logging.getLogger(f"bot.{agent_id}")
 
@@ -203,11 +372,28 @@ class NexusAgentBot:
             if len(content) < 3:
                 return
 
+            # Check if this message is a delegated task completing
+            # (sent by another bot with the delegation prefix)
+            chain_id = self._extract_chain_id(content)
+
             self._log.info(
                 "Message from %s: %s",
                 message.author.display_name, content[:120],
             )
             try:
+                # Pre-flight ECT budget check
+                tier = self.config.get("tier", "worker")
+                ect_cost = _TIER_ECT_COSTS.get(tier, 5)
+                allowed, _ = cost_check(_SHARED_WALLET, "exec", _SHARED_WALLET)
+                if not allowed:
+                    await message.reply(
+                        f"⚠️ **{self.display_name}**: Insufficient ECT budget "
+                        f"for this operation ({ect_cost} ECT required). Deferring."
+                    )
+                    self._log.warning("ECT budget check failed for %s (tier=%s, cost=%d)",
+                                      self.agent_id, tier, ect_cost)
+                    return
+
                 async with message.channel.typing():
                     result = await self.workflow.process_message(content)
                 # Log to blockchain (non-blocking — failures queued for retry)
@@ -225,6 +411,18 @@ class NexusAgentBot:
 
                 _log_decision(self.agent_id, result, tx_hash=tx_hash)
                 await self._send_embed(message, result, tx_hash=tx_hash)
+
+                # If this was a delegated task, complete the chain
+                if chain_id and self.manager:
+                    await self.manager.delegation_router.complete(chain_id, result)
+
+                # Route delegation if the response has delegates_to
+                delegates = result.get("delegates_to", [])
+                if delegates and self.manager:
+                    await self._handle_delegation(
+                        result, delegates, content, chain_id,
+                    )
+
             except Exception as exc:
                 self._log.error("Workflow error: %s", exc, exc_info=True)
                 await self._send_error(message, exc)
@@ -243,6 +441,60 @@ class NexusAgentBot:
         if self.client and not self.client.is_closed():
             await self.client.close()
             self._log.info("Stopped %s", self.display_name)
+
+    @staticmethod
+    def _extract_chain_id(content: str) -> str | None:
+        """Extract chain_id from a delegation message prefix."""
+        # Format: "**Delegated from ...**  (chain `<id>`):\n..."
+        m = re.search(r"\(chain `([a-f0-9]+)`\)", content)
+        return m.group(1) if m else None
+
+    async def _handle_delegation(
+        self,
+        result: dict,
+        delegates: list[str],
+        original_task: str,
+        chain_id: str | None,
+    ):
+        """Route task to each delegate and handle timeout escalation."""
+        router = self.manager.delegation_router
+        tier = self.config.get("tier", "worker")
+        total_chain_ect = result.get("ect_cost", 0)
+
+        for delegate_name in delegates:
+            target_id = _resolve_delegate(delegate_name)
+            if not target_id:
+                self._log.warning("Cannot resolve delegate: %s", delegate_name)
+                continue
+
+            task_text = result.get("decision", {}).get("decision", original_task)
+            del_result = await router.delegate(
+                chain_id=chain_id,
+                sender_id=self.agent_id,
+                sender_tier=tier,
+                target_id=target_id,
+                task=task_text,
+                manager=self.manager,
+            )
+
+            if del_result is None:
+                # Timeout — escalate back to this agent's channel
+                timeout_msg = (
+                    f"⏱️ **Delegation timeout**: {target_id} did not respond "
+                    f"within {router.DELEGATION_TIMEOUT}s for task: {task_text[:200]}"
+                )
+                if self.channel:
+                    try:
+                        await self.channel.send(timeout_msg)
+                    except Exception as exc:
+                        self._log.error("Failed to post timeout notice: %s", exc)
+            else:
+                total_chain_ect += del_result.get("ect_cost", 0)
+
+        # Log completed chain to ReasoningLedger
+        final_chain_id = chain_id or (list(router.chains.keys()) or [None])[-1]
+        if final_chain_id:
+            await router.log_chain(final_chain_id, total_chain_ect)
 
     async def _send_embed(self, message: discord.Message, result: dict, *, tx_hash: str | None = None):
         """Send a formatted decision embed."""
@@ -359,12 +611,17 @@ class HierarchyManager:
 
     def __init__(self):
         self.bots: dict[str, NexusAgentBot] = {}
+        self.delegation_router = DelegationRouter()
         self._shutdown = asyncio.Event()
         self._health_task: asyncio.Task | None = None
         self._heartbeat_channel: discord.TextChannel | None = None
 
         for agent_id in AGENT_REGISTRY:
-            self.bots[agent_id] = NexusAgentBot(agent_id)
+            self.bots[agent_id] = NexusAgentBot(agent_id, manager=self)
+
+        # Build reverse channel→agent map
+        for aid, ch_name in AGENT_CHANNEL_MAP.items():
+            _CHANNEL_TO_AGENT[ch_name] = aid
 
     async def start_all(self):
         """Launch all bots concurrently with staggered starts."""
@@ -513,6 +770,25 @@ class HierarchyManager:
             )
         except Exception:
             embed.add_field(name="Blockchain", value="Unavailable", inline=False)
+
+        # Token economy stats
+        try:
+            from token_hooks import _get_client
+            tc = _get_client()
+            if tc:
+                bal = tc.get_balances(_SHARED_WALLET)
+                totals = tc.get_totals()
+                embed.add_field(
+                    name="Token Economy",
+                    value=(
+                        f"ECT: {bal['ect']} | RST: {bal['rst']}\n"
+                        f"Total spent: {totals['ect_spent']} ECT | "
+                        f"Earned: {totals['rst_earned']} RST | Slashed: {totals['rst_slashed']} RST"
+                    ),
+                    inline=False,
+                )
+        except Exception:
+            pass
 
         embed.set_footer(text="NEXUS OS Hierarchy Manager")
 

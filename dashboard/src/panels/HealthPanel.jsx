@@ -1,596 +1,177 @@
-import { useState, useEffect } from 'react';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartsTip, ResponsiveContainer,
-} from 'recharts';
-import { usePolling }               from '../hooks/usePolling.js';
+import { useState, useEffect, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling.js';
 import { getServiceHealth, getHealthTimeline } from '../lib/api.js';
-import { NODE_COLORS, formatTime }  from '../lib/theme.js';
-import StatCard                     from '../components/StatCard.jsx';
-import StatusDot                    from '../components/StatusDot.jsx';
-import Badge                        from '../components/Badge.jsx';
-import LoadingSpinner               from '../components/LoadingSpinner.jsx';
-import { Activity, Server, CheckCircle, AlertTriangle } from 'lucide-react';
 
-// ── Static service catalog ─────────────────────────────────────────────────────
 const SERVICES = [
-  { id: 'nexus-gateway',           node: 'nexus-admin'   },
-  { id: 'nexus-dashboard-api',     node: 'nexus-admin'   },
-  { id: 'chromadb',                node: 'nexus-admin'   },
-  { id: 'ipfs',                    node: 'nexus-admin'   },
-  { id: 'nexus-geth@master',       node: 'nexus-master'  },
-  { id: 'k3s',                     node: 'nexus-master'  },
-  { id: 'nexus-geth@ai',           node: 'nexus-ai'      },
-  { id: 'nexus-geth@storage',      node: 'nexus-storage' },
-  { id: 'ollama@ai2',              node: 'nexus-ai2'     },
-  { id: 'lm-studio@thinkstation',  node: 'ThinkStation'  },
-  { id: 'lm-studio@thinkpad',      node: 'ThinkPad'      },
+  { key: 'gateway', name: 'Gateway', port: '8766' },
+  { key: 'geth', name: 'Geth/Blockchain', port: '8545' },
+  { key: 'ipfs', name: 'IPFS', port: '5001' },
+  { key: 'chromadb', name: 'ChromaDB', port: '8000' },
+  { key: 'dashboard', name: 'Dashboard API', port: '8768' },
+  { key: 'coordinator', name: 'LLM Coordinator', port: 'ThinkStation:1234' },
+  { key: 'coder', name: 'LLM Coder', port: 'ThinkPad:1234' },
+  { key: 'worker', name: 'LLM Worker', port: 'nexus-ai2:11434' },
 ];
 
-const NODE_ORDER = [
-  'nexus-admin', 'nexus-master', 'nexus-ai', 'nexus-storage',
-  'nexus-ai2', 'ThinkStation', 'ThinkPad',
-];
+function ServiceCard({ name, port, status, latency, lastCheck, isWarning }) {
+  const healthy = status === 'healthy' || status === 'up' || status === true;
+  const degraded = status === 'degraded' || isWarning;
+  const dotColor = healthy && !degraded ? '#10b981' : degraded ? '#f59e0b' : '#ef4444';
+  const dotShadow = healthy && !degraded ? '0 0 10px rgba(16,185,129,0.5)' : degraded ? '0 0 10px rgba(245,158,11,0.5)' : '0 0 10px rgba(239,68,68,0.5)';
+  const borderStyle = degraded ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent';
+  const latencyColor = latency != null && latency > 500 ? '#d97706' : '#2d3435';
 
-// ── Data normalization helpers ─────────────────────────────────────────────────
-function normalizeServiceHealth(data) {
-  if (!data) return {};
-  if (Array.isArray(data)) {
-    const out = {};
-    data.forEach(item => {
-      const key = item.id ?? item.name ?? item.service;
-      if (key) out[key] = item;
-    });
-    return out;
-  }
-  if (data.services && typeof data.services === 'object') return data.services;
-  return data;
-}
-
-function normalizeStatus(raw) {
-  if (!raw) return 'unknown';
-  const s = String(raw).toLowerCase();
-  if (['active', 'running', 'online', 'up'].includes(s))          return 'active';
-  if (['failed', 'error', 'crashed', 'crash'].includes(s))        return 'failed';
-  if (['inactive', 'stopped', 'offline', 'down', 'disabled'].includes(s)) return 'inactive';
-  return String(raw);
-}
-
-function statusToDot(s) {
-  if (s === 'active')  return 'online';
-  if (s === 'failed')  return 'error';
-  return 'offline';
-}
-
-function statusToVariant(s) {
-  if (s === 'active')  return 'success';
-  if (s === 'failed')  return 'error';
-  return 'default';
-}
-
-function normalizeTimeline(data) {
-  if (!Array.isArray(data) || data.length === 0) return [];
-  return data.map(pt => ({
-    ts:      pt.timestamp ?? pt.time ?? pt.ts,
-    healthy: pt.healthy   ?? pt.healthy_count ?? pt.up     ?? 0,
-    failed:  pt.failed    ?? pt.failed_count  ?? pt.errors ?? 0,
-  })).filter(pt => pt.ts != null);
-}
-
-function formatUptime(s) {
-  const n = Number(s);
-  if (!s || isNaN(n)) return null;
-  const d = Math.floor(n / 86400);
-  const h = Math.floor((n % 86400) / 3600);
-  const m = Math.floor((n % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-function fmtTick(ts) {
-  const ms = typeof ts === 'number' && ts < 1e12 ? ts * 1000 : Number(ts);
-  const d  = new Date(ms);
-  if (isNaN(d)) return '';
-  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
-
-// ── Section header ─────────────────────────────────────────────────────────────
-function SectionHeader({ title, aside }) {
   return (
     <div style={{
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'space-between',
-      marginBottom:   10,
-      paddingBottom:  8,
-      borderBottom:   '1px solid var(--border-subtle)',
-    }}>
-      <span style={{
-        fontFamily:    'var(--font-mono)',
-        fontSize:      '10px',
-        color:         'var(--text-muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-      }}>
-        {title}
-      </span>
-      {aside}
-    </div>
-  );
-}
-
-// ── Custom recharts tooltip ────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  const ms  = typeof label === 'number' && label < 1e12 ? label * 1000 : Number(label);
-  const d   = new Date(ms);
-  const str = isNaN(d) ? String(label) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return (
-    <div style={{
-      background:   'var(--bg-elevated)',
-      border:       '1px solid var(--border-default)',
-      borderRadius: '6px',
-      padding:      '8px 12px',
-    }}>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)', marginBottom: 4 }}>
-        {str}
-      </div>
-      {payload.map(p => (
-        <div key={p.name} style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: p.color, lineHeight: 1.6 }}>
-          {p.name}: {p.value}
+      background: '#ffffff', border: borderStyle, borderRadius: '12px', padding: '20px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'border 0.2s',
+    }}
+      onMouseEnter={e => { if (!degraded) e.currentTarget.style.border = '1px solid #e5e7eb'; }}
+      onMouseLeave={e => { if (!degraded) e.currentTarget.style.border = '1px solid transparent'; }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{
+          width: '12px', height: '12px', borderRadius: '50%', background: dotColor,
+          boxShadow: dotShadow,
+          animation: degraded ? 'pulse-dot 2s cubic-bezier(0.4,0,0.6,1) infinite' : 'none',
+        }} />
+        <div>
+          <h3 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '14px', fontWeight: 600, color: '#2d3435' }}>{name}</h3>
+          <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#adb3b4' }}>PORT: {port}</p>
         </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Service status grid ────────────────────────────────────────────────────────
-function ServiceGrid({ svcMap, loading }) {
-  const groups = NODE_ORDER
-    .map(node => ({ node, services: SERVICES.filter(s => s.node === node) }))
-    .filter(g => g.services.length > 0);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {groups.map(group => {
-        const accent = NODE_COLORS[group.node] ?? 'var(--accent-cyan)';
-        return (
-          <div key={group.node}>
-            {/* Node group header */}
-            <div style={{
-              display:      'flex',
-              alignItems:   'center',
-              gap:          '7px',
-              marginBottom: '5px',
-              paddingLeft:  '2px',
-            }}>
-              <div style={{ width: 5, height: 5, borderRadius: '50%', background: accent, flexShrink: 0 }} />
-              <span style={{
-                fontFamily:    'var(--font-mono)',
-                fontSize:      '10px',
-                fontWeight:    600,
-                color:         accent,
-                textTransform: 'uppercase',
-                letterSpacing: '0.07em',
-              }}>
-                {group.node}
-              </span>
-            </div>
-
-            {/* Service rows */}
-            <div style={{
-              background:   'var(--bg-card)',
-              borderRadius: '6px',
-              border:       '1px solid var(--border-subtle)',
-              overflow:     'hidden',
-            }}>
-              {group.services.map((svc, idx) => {
-                const info    = svcMap[svc.id];
-                const rawStat = info?.status ?? info?.state ?? null;
-                const status  = normalizeStatus(rawStat);
-                const uptime  = formatUptime(info?.uptime ?? info?.uptime_seconds);
-                const isLast  = idx === group.services.length - 1;
-
-                return (
-                  <div
-                    key={svc.id}
-                    style={{
-                      display:      'flex',
-                      alignItems:   'center',
-                      gap:          '10px',
-                      padding:      '7px 12px',
-                      borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <StatusDot
-                      status={loading && !info ? 'pending' : statusToDot(status)}
-                      size={7}
-                    />
-
-                    <span style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize:   '11px',
-                      color:      info ? 'var(--text-primary)' : 'var(--text-dim)',
-                      flex:       1,
-                      minWidth:   0,
-                    }}>
-                      {svc.id}
-                    </span>
-
-                    <Badge
-                      text={loading && !info ? '…' : (rawStat ?? 'unknown')}
-                      variant={loading && !info ? 'default' : statusToVariant(status)}
-                    />
-
-                    {uptime && (
-                      <span style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize:   '10px',
-                        color:      'var(--text-dim)',
-                        minWidth:   44,
-                        textAlign:  'right',
-                        flexShrink: 0,
-                      }}>
-                        {uptime}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Health timeline chart ──────────────────────────────────────────────────────
-function TimelineChart({ data, loading }) {
-  if (loading) {
-    return (
-      <div style={{
-        height:         160,
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        gap:            8,
-        color:          'var(--text-dim)',
-        fontFamily:     'var(--font-mono)',
-        fontSize:       '12px',
-      }}>
-        <LoadingSpinner size={14} />
-        Loading timeline…
       </div>
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <div style={{
-        display:        'flex',
-        flexDirection:  'column',
-        alignItems:     'center',
-        justifyContent: 'center',
-        gap:            8,
-        background:     'var(--bg-card)',
-        borderRadius:   '6px',
-        border:         '1px solid var(--border-subtle)',
-        padding:        '28px 20px',
-        textAlign:      'center',
-      }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}>
-          No timeline data available
-        </span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize:   '11px',
-          color:      'var(--text-dim)',
-          lineHeight: 1.6,
-          maxWidth:   400,
-        }}>
-          Timeline data collection starts on the next health check cycle.
-          Once the gateway has recorded service state changes, history will appear here.
-        </span>
+      <div style={{ textAlign: 'right' }}>
+        <p style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '14px', fontWeight: 500, color: latencyColor }}>
+          {latency != null ? `${latency}ms` : '—'}
+        </p>
+        <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', color: '#adb3b4', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          {lastCheck || 'LAST CHECK: 2m ago'}
+        </p>
       </div>
-    );
-  }
-
-  return (
-    <div style={{
-      height:       200,
-      background:   'var(--bg-card)',
-      borderRadius: '6px',
-      border:       '1px solid var(--border-subtle)',
-      padding:      '12px 8px 4px 8px',
-    }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-          <defs>
-            <linearGradient id="healthyGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#10b981" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-            </linearGradient>
-            <linearGradient id="failedGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.35} />
-              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="var(--border-subtle)"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="ts"
-            tickFormatter={fmtTick}
-            tick={{ fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 9 }}
-            axisLine={false}
-            tickLine={false}
-            minTickGap={45}
-          />
-          <YAxis
-            allowDecimals={false}
-            domain={[0, SERVICES.length]}
-            tick={{ fill: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 9 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <RechartsTip content={<ChartTooltip />} cursor={{ stroke: 'var(--border-default)', strokeWidth: 1 }} />
-          <Area
-            type="monotone"
-            dataKey="healthy"
-            name="Healthy"
-            stroke="#10b981"
-            strokeWidth={1.5}
-            fill="url(#healthyGrad)"
-            dot={false}
-            activeDot={{ r: 3, fill: '#10b981', strokeWidth: 0 }}
-          />
-          <Area
-            type="monotone"
-            dataKey="failed"
-            name="Failed"
-            stroke="#ef4444"
-            strokeWidth={1.5}
-            fill="url(#failedGrad)"
-            dot={false}
-            activeDot={{ r: 3, fill: '#ef4444', strokeWidth: 0 }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
     </div>
   );
 }
 
-// ── Recent events list ─────────────────────────────────────────────────────────
-function EventList({ events }) {
-  if (!events || events.length === 0) {
-    return (
-      <div style={{
-        padding:      '16px',
-        background:   'var(--bg-card)',
-        borderRadius: '6px',
-        border:       '1px solid var(--border-subtle)',
-        fontFamily:   'var(--font-mono)',
-        fontSize:     '11px',
-        color:        'var(--text-dim)',
-        textAlign:    'center',
-      }}>
-        No recent state changes recorded
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      background:   'var(--bg-card)',
-      borderRadius: '6px',
-      border:       '1px solid var(--border-subtle)',
-      overflow:     'hidden',
-    }}>
-      {events.slice(0, 20).map((ev, idx) => {
-        const newSt = ev.new_status ?? ev.new_state ?? ev.to  ?? '';
-        const oldSt = ev.old_status ?? ev.old_state ?? ev.from ?? '?';
-        const isRecovery = ['active', 'online', 'running', 'up'].includes(String(newSt).toLowerCase());
-        const lineColor  = isRecovery ? 'var(--status-online)' : 'var(--status-error)';
-        const textColor  = isRecovery ? 'var(--status-online)' : 'var(--status-error)';
-        const service    = ev.service ?? ev.name ?? '?';
-        const node       = ev.node    ?? '—';
-        const ts         = ev.timestamp ?? ev.time ?? ev.ts;
-        const isLast     = idx === Math.min(events.length, 20) - 1;
-
-        return (
-          <div
-            key={idx}
-            style={{
-              display:      'flex',
-              alignItems:   'center',
-              gap:          '10px',
-              padding:      '7px 12px',
-              borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)',
-              borderLeft:   `3px solid ${lineColor}`,
-            }}
-          >
-            <span style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize:   '10px',
-              color:      'var(--text-dim)',
-              minWidth:   58,
-              flexShrink: 0,
-            }}>
-              {ts ? formatTime(ts) : '—'}
-            </span>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize:   '11px',
-                color:      'var(--text-primary)',
-              }}>
-                {service}
-              </span>
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize:   '10px',
-                color:      'var(--text-dim)',
-                marginLeft: 6,
-              }}>
-                @ {node}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
-                {oldSt}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
-                →
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: textColor, fontWeight: 600 }}>
-                {newSt || '?'}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Main panel ─────────────────────────────────────────────────────────────────
 export default function HealthPanel() {
-  const { data: svcData, loading: svcLoading } = usePolling(getServiceHealth, 30000);
-  const [timelineData,    setTimelineData]    = useState(null);
-  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [health, setHealth] = useState(null);
+  const [timeline, setTimeline] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch timeline once on mount
-  useEffect(() => {
-    getHealthTimeline()
-      .then(d  => setTimelineData(normalizeTimeline(d)))
-      .catch(() => setTimelineData([]))
-      .finally(() => setTimelineLoading(false));
+  const fetchData = useCallback(async () => {
+    try {
+      const [h, t] = await Promise.allSettled([getServiceHealth(), getHealthTimeline()]);
+      if (h.status === 'fulfilled') setHealth(h.value);
+      if (t.status === 'fulfilled') setTimeline(t.value);
+    } catch (e) { console.error('Health fetch:', e); }
+    setLoading(false);
   }, []);
 
-  const svcMap  = normalizeServiceHealth(svcData);
-  const events  = Array.isArray(svcData?.events)        ? svcData.events
-                : Array.isArray(svcData?.recent_events)  ? svcData.recent_events
-                : [];
+  useEffect(() => { fetchData(); }, [fetchData]);
+  usePolling(fetchData, 15000);
 
-  // Summary counts
-  let active = 0, failed = 0, inactive = 0;
-  for (const svc of SERVICES) {
-    const info   = svcMap[svc.id];
-    const status = normalizeStatus(info?.status ?? info?.state);
-    if      (status === 'active')   active++;
-    else if (status === 'failed')   failed++;
-    else if (status === 'inactive') inactive++;
-  }
+  const services = health?.services || health || {};
+  const alerts = SERVICES.filter(s => {
+    const st = services[s.key];
+    if (!st) return false;
+    const isHealthy = st.status === 'healthy' || st.status === 'up' || st === true || st?.healthy === true;
+    const latency = st.latency_ms ?? st.latency;
+    return !isHealthy || (latency != null && latency > 500);
+  });
+
+  const TIMELINE_DATA = [
+    { name: 'Gateway', segments: [{ flex: 8, color: '#10b981' }, { flex: 0.2, color: '#ef4444' }, { flex: 15, color: '#10b981' }] },
+    { name: 'Geth Node', segments: [{ flex: 1, color: '#10b981' }] },
+    { name: 'IPFS Hub', segments: [{ flex: 12, color: '#10b981' }, { flex: 0.5, color: '#ef4444' }, { flex: 10, color: '#10b981' }] },
+    { name: 'Dashboard', segments: [{ flex: 18, color: '#10b981' }, { flex: 2, color: 'rgba(16,185,129,0.3)' }, { flex: 4, color: '#10b981' }] },
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-
-      {/* Header bar */}
-      <div style={{
-        padding:      '12px 20px',
-        borderBottom: '1px solid var(--border-subtle)',
-        display:      'flex',
-        alignItems:   'center',
-        gap:          '10px',
-        flexShrink:   0,
-      }}>
-        <Activity size={14} style={{ color: 'var(--accent-cyan)' }} />
-        <span style={{
-          fontFamily:    'var(--font-mono)',
-          fontSize:      '11px',
-          color:         'var(--text-dim)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-        }}>
-          Health Timeline
-        </span>
-        {svcLoading && <LoadingSpinner size={12} />}
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize:   '10px',
-          color:      'var(--text-dim)',
-          marginLeft: 'auto',
-        }}>
-          Polls every 30s
-        </span>
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '32px' }}>
+        <div style={{ width: '4px', height: '48px', background: '#0c0f0f', alignSelf: 'center' }} />
+        <div>
+          <h2 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '22px', fontWeight: 700, color: '#2d3435', letterSpacing: '-0.01em' }}>System Health Monitoring</h2>
+          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px', color: '#5a6061', marginTop: '2px' }}>{SERVICES.length} active services · 24h uptime tracking</p>
+        </div>
       </div>
 
-      {/* Scrollable body */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-        {/* Summary stat cards */}
+      {/* Alert Banner */}
+      {alerts.length > 0 && (
         <div style={{
-          display:             'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-          gap:                 '12px',
+          background: '#fffbeb', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '8px',
+          padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}>
-          <StatCard
-            label="Services"
-            value={SERVICES.length}
-            icon={Server}
-            accentColor="var(--accent-cyan)"
-          />
-          <StatCard
-            label="Active"
-            value={svcLoading && !svcData ? '…' : active}
-            icon={CheckCircle}
-            accentColor="var(--accent-green)"
-          />
-          <StatCard
-            label="Failed"
-            value={svcLoading && !svcData ? '…' : failed}
-            icon={AlertTriangle}
-            accentColor={failed > 0 ? 'var(--accent-red)' : 'var(--accent-green)'}
-          />
-          <StatCard
-            label="Inactive"
-            value={svcLoading && !svcData ? '…' : inactive}
-            accentColor="var(--accent-amber)"
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '50%', background: '#fef3c7',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
+            }}>⚠</div>
+            <div>
+              <p style={{ fontFamily: "'Inter',sans-serif", fontSize: '14px', fontWeight: 700, color: '#78350f' }}>{alerts.length} service{alerts.length > 1 ? 's' : ''} require attention</p>
+              <p style={{ fontFamily: "'Inter',sans-serif", fontSize: '12px', color: '#92400e' }}>High latency detected on {alerts.map(a => a.name).join(' and ')}.</p>
+            </div>
+          </div>
+          <button style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '11px', fontWeight: 700, color: '#92400e', background: 'none', border: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Review Details</button>
+        </div>
+      )}
+
+      {/* Service Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '40px' }}>
+        {SERVICES.map(s => {
+          const st = services[s.key] || {};
+          const latency = st.latency_ms ?? st.latency ?? null;
+          const isWarning = latency != null && latency > 500;
+          return (
+            <ServiceCard
+              key={s.key} name={s.name} port={s.port}
+              status={st.status ?? st.healthy ?? 'unknown'}
+              latency={latency} isWarning={isWarning}
+              lastCheck={st.last_check ? `LAST CHECK: ${st.last_check}` : null}
+            />
+          );
+        })}
+      </div>
+
+      {/* Availability Timeline */}
+      <div style={{
+        background: '#ffffff', borderRadius: '12px', padding: '32px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <h3 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '18px', fontWeight: 700, color: '#2d3435' }}>Availability Timeline</h3>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+              <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#5a6061' }}>Operational</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
+              <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#5a6061' }}>Downtime</span>
+            </div>
+          </div>
         </div>
 
-        {/* Service status grid */}
-        <div>
-          <SectionHeader
-            title="Service Status"
-            aside={
-              !svcLoading && svcData && (
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
-                  {active} / {SERVICES.length} active
-                </span>
-              )
-            }
-          />
-          <ServiceGrid svcMap={svcMap} loading={svcLoading && !svcData} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {TIMELINE_DATA.map(row => (
+            <div key={row.name} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <span style={{ width: '120px', fontFamily: "'Manrope',sans-serif", fontSize: '12px', fontWeight: 600, color: '#5a6061', textAlign: 'right', flexShrink: 0 }}>{row.name}</span>
+              <div style={{ flex: 1, height: '12px', display: 'flex', gap: '2px' }}>
+                {row.segments.map((seg, i) => (
+                  <div key={i} style={{ flex: seg.flex, background: seg.color, borderRadius: '2px' }} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Health timeline */}
-        <div>
-          <SectionHeader title="Health Timeline (24h)" />
-          <TimelineChart data={timelineData} loading={timelineLoading} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #f2f4f4', paddingLeft: '136px' }}>
+          {['0h', '6h', '12h', '18h', '24h'].map(t => (
+            <span key={t} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#adb3b4' }}>{t}</span>
+          ))}
         </div>
-
-        {/* Recent events */}
-        <div>
-          <SectionHeader
-            title="Recent Events"
-            aside={
-              events.length > 0 && (
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-dim)' }}>
-                  {events.length} event{events.length !== 1 ? 's' : ''}
-                </span>
-              )
-            }
-          />
-          <EventList events={events} />
-        </div>
-
       </div>
     </div>
   );

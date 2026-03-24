@@ -1,489 +1,190 @@
-import { useEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import '@xterm/xterm/css/xterm.css';
+import { useState, useEffect, useRef } from 'react';
 import { execTerminalCommand } from '../lib/api.js';
-import { Terminal as TermIcon, Circle, Info, ChevronDown } from 'lucide-react';
 
-// ── Static config ──────────────────────────────────────────────────────────────
-const NODES = [
-  { id: 'nexus-admin',   label: 'nexus-admin (10.0.10.5)', available: true  },
-  { id: 'nexus-master',  label: 'nexus-master',            available: false },
-  { id: 'nexus-ai',      label: 'nexus-ai',                available: false },
-  { id: 'nexus-ai2',     label: 'nexus-ai2',               available: false },
-  { id: 'nexus-storage', label: 'nexus-storage',           available: false },
-  { id: 'ThinkStation',  label: 'ThinkStation',            available: false },
-  { id: 'ThinkPad',      label: 'ThinkPad',                available: false },
-];
-
-const PROMPT = '\r\n\x1b[36mnexus-admin\x1b[0m:\x1b[34m/opt/nexus\x1b[0m$ ';
-
-const TERM_THEME = {
-  background:          '#0a0e17',
-  foreground:          '#e2e8f0',
-  cursor:              '#06b6d4',
-  cursorAccent:        '#0a0e17',
-  selectionBackground: '#2a3548',
-  black:               '#0a0e17',
-  brightBlack:         '#475569',
-  red:                 '#ef4444',
-  brightRed:           '#f87171',
-  green:               '#10b981',
-  brightGreen:         '#34d399',
-  yellow:              '#f59e0b',
-  brightYellow:        '#fbbf24',
-  blue:                '#3b82f6',
-  brightBlue:          '#60a5fa',
-  magenta:             '#8b5cf6',
-  brightMagenta:       '#a78bfa',
-  cyan:                '#06b6d4',
-  brightCyan:          '#22d3ee',
-  white:               '#cbd5e1',
-  brightWhite:         '#f8fafc',
-};
-
-// ANSI helpers
-const C = {
-  reset:  '\x1b[0m',
-  bold:   '\x1b[1m',
-  dim:    '\x1b[2m',
-  red:    '\x1b[31m',
-  green:  '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue:   '\x1b[34m',
-  cyan:   '\x1b[36m',
-  white:  '\x1b[37m',
-};
-
-function ln(term, text = '') {
-  term.write(text + '\r\n');
-}
-
-function writeWelcome(term) {
-  ln(term, `${C.cyan}${C.bold}NEXUS OS — Command Center Terminal${C.reset}`);
-  ln(term, `${C.dim}nexus-admin · 10.0.10.5 · Pi 500${C.reset}`);
-  ln(term, `${C.dim}Phase 11A: command-execution mode  (type ${C.reset}${C.yellow}help${C.reset}${C.dim} for usage)${C.reset}`);
-}
-
-function writeHelp(term) {
-  ln(term);
-  ln(term, `${C.bold}${C.cyan}Built-in commands${C.reset}`);
-  ln(term, `  ${C.yellow}help${C.reset}        show this message`);
-  ln(term, `  ${C.yellow}clear${C.reset}       clear the screen`);
-  ln(term, `  ${C.yellow}history${C.reset}     show command history`);
-  ln(term);
-  ln(term, `${C.bold}${C.cyan}Allowed commands (COMMAND_ALLOWLIST)${C.reset}`);
-  const ops = [
-    'systemctl status <svc>',
-    'df -h / df -hT',
-    'free -m',
-    'uptime',
-    'top -bn1',
-    'ps aux',
-    'ip addr / ip route',
-    'cat /proc/{cpuinfo,meminfo,loadavg}',
-    'cat /opt/nexus/<file>',
-    'ls [path]',
-    'pwd / whoami / hostname / uname / date',
-    'echo / env / printenv',
-    'kubectl get|describe|logs|top',
-    'journalctl -u <svc>',
-    'ping -c <n> <host>',
-  ];
-  ops.forEach(op => ln(term, `  ${C.dim}·${C.reset} ${op}`));
-  ln(term);
-  ln(term, `${C.dim}Ctrl+C — cancel input  ·  Ctrl+L — clear  ·  ↑↓ — history${C.reset}`);
-}
-
-function writeHistory(term, history) {
-  ln(term);
-  if (history.length === 0) {
-    ln(term, `${C.dim}No history yet.${C.reset}`);
-    return;
-  }
-  history.slice().reverse().forEach((cmd, i) => {
-    ln(term, `  ${C.dim}${String(history.length - i).padStart(3)}${C.reset}  ${cmd}`);
-  });
-}
-
-// ── Main panel ─────────────────────────────────────────────────────────────────
 export default function TerminalPanel() {
-  const containerRef = useRef(null);
-  const termRef      = useRef(null);
-  const fitRef       = useRef(null);
+  const [history, setHistory] = useState([
+    { type: 'system', text: 'Nexus OS Shell v2.4.0-stable (LTS)' },
+    { type: 'dim', text: 'Last login: ' + new Date().toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' on console' },
+  ]);
+  const [input, setInput] = useState('');
+  const [running, setRunning] = useState(false);
+  const [cmdHistory, setCmdHistory] = useState([]);
+  const [histIdx, setHistIdx] = useState(-1);
+  const termRef = useRef(null);
+  const inputRef = useRef(null);
 
-  // Mutable refs — avoid triggering re-renders on every keystroke
-  const inputRef    = useRef('');
-  const historyRef  = useRef([]);
-  const histIdxRef  = useRef(-1);
-  const histSaveRef = useRef('');   // saves current input when browsing history
-  const busyRef     = useRef(false);
-
-  const [selectedNode, setSelectedNode] = useState('nexus-admin');
-  const [status,       setStatus]       = useState('initializing');
-
-  // ── Build and attach terminal ────────────────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
+  }, [history]);
 
-    const term = new Terminal({
-      theme:              TERM_THEME,
-      fontFamily:         '"JetBrains Mono", "Cascadia Code", "Fira Code", monospace',
-      fontSize:           14,
-      lineHeight:         1.4,
-      cursorBlink:        true,
-      cursorStyle:        'block',
-      scrollback:         5000,
-      allowProposedApi:   true,
-    });
+  const handleExec = async () => {
+    if (!input.trim() || running) return;
+    const cmd = input.trim();
+    setInput('');
+    setCmdHistory(prev => [cmd, ...prev]);
+    setHistIdx(-1);
+    setHistory(prev => [...prev, { type: 'input', text: cmd }]);
 
-    const fitAddon  = new FitAddon();
-    const linksAddon = new WebLinksAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(linksAddon);
-    term.open(containerRef.current);
-    fitAddon.fit();
+    if (cmd === 'clear') { setHistory([{ type: 'system', text: 'Terminal cleared' }]); return; }
 
-    termRef.current = term;
-    fitRef.current  = fitAddon;
-
-    setStatus('ready');
-
-    // ── Welcome message ──────────────────────────────────────────────────────
-    writeWelcome(term);
-    term.write(PROMPT);
-
-    // ── Command execution ────────────────────────────────────────────────────
-    async function executeCommand(cmd) {
-      busyRef.current = true;
-      setStatus('executing');
-
-      // Built-ins
-      if (cmd === 'clear') {
-        term.clear();
-        busyRef.current = false;
-        setStatus('ready');
-        term.write(PROMPT);
-        return;
-      }
-      if (cmd === 'help') {
-        writeHelp(term);
-        busyRef.current = false;
-        setStatus('ready');
-        term.write(PROMPT);
-        return;
-      }
-      if (cmd === 'history') {
-        writeHistory(term, historyRef.current);
-        busyRef.current = false;
-        setStatus('ready');
-        term.write(PROMPT);
-        return;
-      }
-
-      try {
-        const result = await execTerminalCommand(cmd);
-
-        if (!result.allowed) {
-          ln(term, `${C.red}Permission denied: ${result.stderr}${C.reset}`);
-        } else {
-          // stdout
-          if (result.stdout) {
-            const lines = result.stdout.replace(/\n$/, '').split('\n');
-            lines.forEach(l => ln(term, l));
-          }
-          // stderr — shown in yellow (warnings/info often go to stderr)
-          if (result.stderr) {
-            const lines = result.stderr.replace(/\n$/, '').split('\n');
-            lines.forEach(l => { if (l) ln(term, `${C.yellow}${l}${C.reset}`); });
-          }
-          // Non-zero exit with no stderr
-          if (result.return_code !== 0 && !result.stderr) {
-            ln(term, `${C.dim}[exit ${result.return_code}]${C.reset}`);
-          }
-        }
-      } catch (err) {
-        setStatus('error');
-        ln(term, `${C.red}API error: ${err?.message ?? 'Connection failed'}${C.reset}`);
-        ln(term, `${C.dim}Is the dashboard API running on :8768?${C.reset}`);
-      }
-
-      busyRef.current = false;
-      setStatus('ready');
-      term.write(PROMPT);
+    setRunning(true);
+    try {
+      const data = await execTerminalCommand(cmd);
+      const output = data?.output || data?.stdout || (typeof data === 'string' ? data : JSON.stringify(data, null, 2));
+      if (data?.stderr) setHistory(prev => [...prev, { type: 'error', text: data.stderr }]);
+      setHistory(prev => [...prev, { type: 'output', text: output }]);
+    } catch (e) {
+      setHistory(prev => [...prev, { type: 'error', text: 'Error: ' + e.message }]);
     }
+    setRunning(false);
+  };
 
-    // ── Keystroke handler ────────────────────────────────────────────────────
-    const keyDisposable = term.onKey(({ key, domEvent }) => {
-      if (busyRef.current) {
-        // Allow Ctrl+C to show a busy indicator
-        if (domEvent.ctrlKey && domEvent.keyCode === 67) {
-          ln(term, `${C.dim}(busy — command running)${C.reset}`);
-          term.write(PROMPT + inputRef.current);
-        }
-        return;
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleExec();
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (cmdHistory.length > 0) {
+        const idx = Math.min(histIdx + 1, cmdHistory.length - 1);
+        setHistIdx(idx); setInput(cmdHistory[idx]);
       }
-
-      const code   = domEvent.keyCode;
-      const ctrl   = domEvent.ctrlKey;
-      const printable = !domEvent.altKey && !ctrl && !domEvent.metaKey;
-
-      // Ctrl+C — cancel current input
-      if (ctrl && code === 67) {
-        term.write('^C');
-        inputRef.current = '';
-        histIdxRef.current = -1;
-        term.write(PROMPT);
-        return;
-      }
-
-      // Ctrl+L — clear screen
-      if (ctrl && code === 76) {
-        term.clear();
-        term.write(PROMPT + inputRef.current);
-        return;
-      }
-
-      // Enter — submit
-      if (code === 13) {
-        const cmd = inputRef.current.trim();
-        term.write('\r\n');
-        inputRef.current = '';
-        histIdxRef.current = -1;
-        histSaveRef.current = '';
-
-        if (cmd) {
-          // Add to history (deduplicate head)
-          if (historyRef.current[0] !== cmd) {
-            historyRef.current.unshift(cmd);
-            if (historyRef.current.length > 100) historyRef.current.pop();
-          }
-          executeCommand(cmd);
-        } else {
-          term.write(PROMPT);
-        }
-        return;
-      }
-
-      // Backspace
-      if (code === 8) {
-        if (inputRef.current.length > 0) {
-          inputRef.current = inputRef.current.slice(0, -1);
-          term.write('\b \b');
-        }
-        return;
-      }
-
-      // Up arrow — previous history
-      if (code === 38) {
-        const hist = historyRef.current;
-        if (hist.length === 0) return;
-        if (histIdxRef.current === -1) {
-          histSaveRef.current = inputRef.current; // save current typing
-        }
-        const newIdx = Math.min(histIdxRef.current + 1, hist.length - 1);
-        histIdxRef.current = newIdx;
-        const entry = hist[newIdx];
-        // Erase current input on terminal, write history entry
-        term.write('\b \b'.repeat(inputRef.current.length));
-        inputRef.current = entry;
-        term.write(entry);
-        return;
-      }
-
-      // Down arrow — next history (toward present)
-      if (code === 40) {
-        if (histIdxRef.current === -1) return;
-        if (histIdxRef.current === 0) {
-          histIdxRef.current = -1;
-          const saved = histSaveRef.current;
-          term.write('\b \b'.repeat(inputRef.current.length));
-          inputRef.current = saved;
-          term.write(saved);
-          return;
-        }
-        const newIdx = histIdxRef.current - 1;
-        histIdxRef.current = newIdx;
-        const entry = historyRef.current[newIdx];
-        term.write('\b \b'.repeat(inputRef.current.length));
-        inputRef.current = entry;
-        term.write(entry);
-        return;
-      }
-
-      // Tab — simple autocomplete placeholder (just write a space for now)
-      if (code === 9) {
-        domEvent.preventDefault();
-        return;
-      }
-
-      // Printable characters
-      if (printable && key.length === 1) {
-        inputRef.current += key;
-        term.write(key);
-      }
-    });
-
-    // ── ResizeObserver — refit on container size changes ─────────────────────
-    const ro = new ResizeObserver(() => {
-      try { fitAddon.fit(); } catch (_) {}
-    });
-    ro.observe(containerRef.current);
-
-    return () => {
-      keyDisposable.dispose();
-      ro.disconnect();
-      term.dispose();
-      termRef.current = null;
-      fitRef.current  = null;
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Re-fit when selected node changes (layout may shift) ──────────────────
-  useEffect(() => {
-    setTimeout(() => {
-      try { fitRef.current?.fit(); } catch (_) {}
-    }, 50);
-  }, [selectedNode]);
-
-  // ── Status dot ─────────────────────────────────────────────────────────────
-  const statusColor = status === 'ready'       ? '#10b981'
-                    : status === 'executing'    ? '#f59e0b'
-                    : status === 'error'        ? '#ef4444'
-                    : '#475569';
-
-  const statusLabel = status === 'ready'       ? 'ready'
-                    : status === 'executing'    ? 'executing…'
-                    : status === 'error'        ? 'error'
-                    : 'initializing…';
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histIdx > 0) { setHistIdx(histIdx - 1); setInput(cmdHistory[histIdx - 1]); }
+      else { setHistIdx(-1); setInput(''); }
+    }
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column', gap: '40px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <div style={{ width: '6px', height: '48px', background: '#0c0f0f', borderRadius: '100px' }} />
+        <div>
+          <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '22px', fontWeight: 800, color: '#2d3435', letterSpacing: '-0.01em' }}>Terminal</h1>
+          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px', color: '#5a6061', letterSpacing: '0.02em' }}>nexus-admin · xterm.js instance</p>
+        </div>
+      </div>
 
-      {/* ── Top bar ───────────────────────────────────────────────────────── */}
-      <div style={{
-        display:      'flex',
-        alignItems:   'center',
-        gap:          '12px',
-        padding:      '10px 16px',
-        borderBottom: '1px solid var(--border-subtle)',
-        flexShrink:   0,
-      }}>
-        <TermIcon size={14} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-        <span style={{
-          fontFamily:    'var(--font-mono)',
-          fontSize:      '11px',
-          color:         'var(--text-dim)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          flexShrink:    0,
+      {/* Terminal Container */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {/* macOS Toolbar */}
+        <div style={{
+          background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px', height: '48px',
+          borderTopLeftRadius: '12px', borderTopRightRadius: '12px',
+          borderLeft: '1px solid rgba(173,179,180,0.1)', borderTop: '1px solid rgba(173,179,180,0.1)', borderRight: '1px solid rgba(173,179,180,0.1)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}>
-          Terminal
-        </span>
-
-        {/* Node selector */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <select
-            value={selectedNode}
-            onChange={e => setSelectedNode(e.target.value)}
-            style={{
-              appearance:   'none',
-              background:   'var(--bg-elevated)',
-              border:       '1px solid var(--border-default)',
-              borderRadius: '5px',
-              color:        'var(--text-secondary)',
-              fontFamily:   'var(--font-mono)',
-              fontSize:     '11px',
-              padding:      '5px 28px 5px 10px',
-              cursor:       'pointer',
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ff5f57' }} />
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#febc2e' }} />
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#28c840' }} />
+            <div style={{ marginLeft: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', color: '#757c7d' }}>📁</span>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '12px', color: '#757c7d', letterSpacing: '-0.02em' }}>~/nexus</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button onClick={() => setHistory([{ type: 'system', text: 'Terminal cleared' }])} style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+              borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer',
+              transition: 'background 0.15s',
             }}
-          >
-            {NODES.map(n => (
-              <option
-                key={n.id}
-                value={n.id}
-                disabled={!n.available}
-              >
-                {n.available ? n.label : `${n.label} (coming soon)`}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={11} style={{
-            position:      'absolute',
-            right:         8,
-            top:           '50%',
-            transform:     'translateY(-50%)',
-            color:         'var(--text-dim)',
-            pointerEvents: 'none',
-          }} />
+              onMouseEnter={e => e.currentTarget.style.background = '#f2f4f4'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ fontSize: '14px', color: '#5a6061' }}>🗑</span>
+              <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '12px', fontWeight: 500, color: '#5a6061' }}>Clear</span>
+            </button>
+            <button style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+              borderRadius: '6px', border: 'none', background: 'transparent', cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f2f4f4'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ fontSize: '14px', color: '#5a6061' }}>⛶</span>
+              <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '12px', fontWeight: 500, color: '#5a6061' }}>Fullscreen</span>
+            </button>
+          </div>
         </div>
 
-        {/* Connection status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            width:        7,
-            height:       7,
-            borderRadius: '50%',
-            background:   statusColor,
-            boxShadow:    status === 'ready' ? `0 0 6px ${statusColor}` : 'none',
-            flexShrink:   0,
-          }} />
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize:   '10px',
-            color:      'var(--text-dim)',
-          }}>
-            {statusLabel}
-          </span>
+        {/* Terminal Window */}
+        <div ref={termRef} onClick={() => inputRef.current?.focus()} style={{
+          flex: 1, background: '#0c0f0f', padding: '32px',
+          borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px',
+          borderLeft: '1px solid #0c0f0f', borderBottom: '1px solid #0c0f0f', borderRight: '1px solid #0c0f0f',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          overflow: 'auto', cursor: 'text',
+          fontFamily: "'JetBrains Mono',monospace", fontSize: '13px', lineHeight: 1.8,
+        }}>
+          {history.map((entry, i) => {
+            if (entry.type === 'system') return (
+              <div key={i} style={{ color: '#34d399', opacity: 0.8, marginBottom: '8px' }}>{entry.text}</div>
+            );
+            if (entry.type === 'dim') return (
+              <div key={i} style={{ color: '#71717a', marginBottom: '24px' }}>{entry.text}</div>
+            );
+            if (entry.type === 'input') return (
+              <div key={i} style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <span style={{ color: '#34d399' }}>➜</span>
+                <span style={{ color: '#38bdf8' }}>~/nexus</span>
+                <span style={{ color: 'rgba(255,255,255,0.9)' }}>{entry.text}</span>
+              </div>
+            );
+            if (entry.type === 'error') return (
+              <div key={i} style={{ color: '#f87171', paddingLeft: '28px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{entry.text}</div>
+            );
+            return (
+              <div key={i} style={{ color: 'rgba(161,161,170,1)', paddingLeft: '28px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{entry.text}</div>
+            );
+          })}
+
+          {/* Input Line */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '16px' }}>
+            <span style={{ color: '#34d399' }}>➜</span>
+            <span style={{ color: '#38bdf8' }}>~/nexus</span>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={running}
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                  fontFamily: "'JetBrains Mono',monospace", fontSize: '13px',
+                  color: 'rgba(255,255,255,0.9)', caretColor: '#34d399',
+                }}
+                autoFocus
+              />
+              {!input && <div style={{ width: '8px', height: '16px', background: 'rgba(255,255,255,0.9)', animation: 'pulse-dot 1s step-end infinite' }} />}
+            </div>
+          </div>
         </div>
-
-        {/* Keyboard hints */}
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize:   '10px',
-          color:      'var(--text-dim)',
-          marginLeft: 'auto',
-        }}>
-          Ctrl+C cancel · Ctrl+L clear · ↑↓ history
-        </span>
       </div>
 
-      {/* ── Limited-mode notice ───────────────────────────────────────────── */}
-      <div style={{
-        display:    'flex',
-        alignItems: 'center',
-        gap:        '8px',
-        padding:    '6px 16px',
-        background: 'rgba(245,158,11,0.06)',
-        borderBottom: '1px solid rgba(245,158,11,0.2)',
-        flexShrink: 0,
-      }}>
-        <Info size={12} style={{ color: 'var(--accent-amber)', flexShrink: 0 }} />
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize:   '10px',
-          color:      'rgba(245,158,11,0.75)',
-          lineHeight: 1.5,
-        }}>
-          Limited mode: command execution only (no PTY, no pipes, no interactive programs).
-          Full interactive terminal coming in a future update.
-        </span>
+      {/* System Stats Footer */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
+        <div style={{ background: '#f2f4f4', padding: '24px', borderRadius: '12px', border: '1px solid rgba(173,179,180,0.05)' }}>
+          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5a6061' }}>Node Latency</span>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '24px', fontWeight: 500, color: '#2d3435' }}>12.4ms</span>
+            <span style={{ fontFamily: "'Inter',sans-serif", fontSize: '12px', fontWeight: 700, color: '#10b981', marginBottom: '4px' }}>▼ 0.2%</span>
+          </div>
+        </div>
+        <div style={{ background: '#f2f4f4', padding: '24px', borderRadius: '12px', border: '1px solid rgba(173,179,180,0.05)' }}>
+          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5a6061' }}>Uptime</span>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '24px', fontWeight: 500, color: '#2d3435' }}>99.998%</span>
+            <span style={{ fontFamily: "'Inter',sans-serif", fontSize: '12px', color: '#adb3b4', marginBottom: '4px' }}>Global Avg</span>
+          </div>
+        </div>
+        <div style={{ background: '#f2f4f4', padding: '24px', borderRadius: '12px', border: '1px solid rgba(173,179,180,0.05)' }}>
+          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5a6061' }}>Throughput</span>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', marginTop: '8px' }}>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '24px', fontWeight: 500, color: '#2d3435' }}>4.2k</span>
+            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px', color: '#5a6061', marginBottom: '2px' }}>tx/s</span>
+          </div>
+        </div>
       </div>
-
-      {/* ── xterm.js container ────────────────────────────────────────────── */}
-      <div
-        ref={containerRef}
-        style={{
-          flex:       1,
-          overflow:   'hidden',
-          background: '#0a0e17',
-          padding:    '6px 4px 4px 4px',
-          // xterm needs explicit dimensions to fit correctly
-          minHeight:  0,
-          minWidth:   0,
-        }}
-      />
     </div>
   );
 }

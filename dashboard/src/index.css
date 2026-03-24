@@ -1,72 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
-
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
   /* Base */
-  --bg-primary: #0a0e17;
-  --bg-secondary: #0f1520;
-  --bg-tertiary: #141c2b;
-  --bg-card: #111827;
-  --bg-card-hover: #1a2332;
-  --bg-elevated: #1e2a3a;
-
-  /* Borders */
-  --border-subtle: #1e293b;
-  --border-default: #2a3548;
-  --border-strong: #3b4c63;
+  --bg-primary: #f9f9f9;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f5f5;
+  --bg-tertiary: #f2f4f4;
+  --bg-sidebar: #0c0f0f;
 
   /* Text */
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-dim: #475569;
+  --text-primary: #2d3435;
+  --text-secondary: #5a6061;
+  --text-muted: #757c7d;
+  --text-dim: #adb3b4;
 
-  /* Accent colors */
-  --accent-cyan: #06b6d4;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
-  --accent-amber: #f59e0b;
-  --accent-blue: #3b82f6;
-  --accent-purple: #8b5cf6;
+  /* Borders */
+  --border-default: #e5e7eb;
+  --border-subtle: rgba(173, 179, 180, 0.1);
 
-  /* Status */
+  /* Accents — GOLD replaces cyan/purple/teal */
+  --accent-primary: #B8960C;
+  --accent-primary-hover: #D4AF37;
+  --accent-primary-dim: #8B7209;
+
+  /* Functional status colors (unchanged) */
   --status-online: #10b981;
+  --status-offline: #ef4444;
   --status-warning: #f59e0b;
-  --status-error: #ef4444;
-  --status-offline: #475569;
-  --status-pending: #3b82f6;
+  --status-info: #3b82f6;
 
   /* Fonts */
   --font-display: 'Space Grotesk', sans-serif;
+  --font-headline: 'Manrope', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-label: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  margin: 0;
+  font-family: var(--font-body);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: var(--font-display);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-secondary); }
-::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e2e2e2; border-radius: 10px; }
 
-/* Data table base */
-.data-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.8rem; }
-.data-table th { text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border-default); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
-.data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
-.data-table tr:hover { background: var(--bg-card-hover); }
+/* Utility classes */
+.font-headline { font-family: var(--font-headline); }
+.font-label { font-family: var(--font-label); }
+.font-mono { font-family: var(--font-mono); }
 
-/* Pulse animation for live data */
-@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+/* Pulse animation for status dots */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
 .pulse { animation: pulse-dot 2s ease-in-out infinite; }
 
-/* Terminal font for code/log content */
-.terminal { font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+/* Fade in for panel transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }

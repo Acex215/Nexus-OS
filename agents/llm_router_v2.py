@@ -33,6 +33,14 @@ try:
 except ImportError:
     httpx = None
 
+try:
+    from request_queue import get_request_queue, PRIORITY_CSUITE, PRIORITY_DIRECTOR, PRIORITY_WORKER
+except ImportError:
+    get_request_queue = None
+    PRIORITY_CSUITE = 3
+    PRIORITY_DIRECTOR = 2
+    PRIORITY_WORKER = 1
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [llm-router] %(levelname)s %(message)s'
@@ -137,6 +145,14 @@ TIERS = {
         ],
         task_types=["worker_task", "status_report", "simple_json"],
     ),
+}
+
+# ── Tier → request queue priority mapping ──
+TIER_PRIORITY = {
+    "coordinator": PRIORITY_CSUITE,
+    "coder": PRIORITY_DIRECTOR,
+    "director": PRIORITY_DIRECTOR,
+    "worker": PRIORITY_WORKER,
 }
 
 
@@ -330,10 +346,21 @@ class LLMRouter:
             "stop": kwargs.get("stop", ["<think>", "</think>"]),  # Default stop sequences
         }
 
-        # Make the request
+        # Make the request — route through RequestQueue if available
         start_time = time.monotonic()
         try:
-            content, tokens = await self._call_api(endpoint, payload, tier.timeout)
+            rq = get_request_queue() if get_request_queue is not None else None
+            if rq is not None:
+                priority = TIER_PRIORITY.get(tier.name, PRIORITY_WORKER)
+                content, tokens = await rq.enqueue(
+                    endpoint=endpoint,
+                    payload=payload,
+                    timeout=tier.timeout,
+                    priority=priority,
+                    caller_api=self._call_api,
+                )
+            else:
+                content, tokens = await self._call_api(endpoint, payload, tier.timeout)
             latency_ms = (time.monotonic() - start_time) * 1000
 
             # Post-process: strip thinking tokens (defense-in-depth)

@@ -629,7 +629,7 @@ class DevAssistant(discord.Client):
             search_lines = search_str.count("\n")
             replace_lines = replace_str.count("\n")
             net_deleted = search_lines - replace_lines
-            from safety_config import MAX_NET_DELETIONS
+            from safety_config import MAX_NET_DELETIONS, MAX_SHRINKAGE_PERCENT
             if net_deleted > MAX_NET_DELETIONS:
                 await self.channel.send(
                     f"🔧 ⚠️ Patch rejected: would delete {net_deleted} net lines (max {MAX_NET_DELETIONS}). Rolling back."
@@ -639,8 +639,8 @@ class DevAssistant(discord.Client):
                 return
             new_content = current_full.replace(search_str, replace_str, 1)
 
-            # Guard: reject if file shrinks by more than 20%
-            if len(new_content) < len(current_full) * 0.8:
+            # Guard: reject if file shrinks by more than configured threshold
+            if len(new_content) < len(current_full) * (1 - MAX_SHRINKAGE_PERCENT):
                 shrink_pct = round((1 - len(new_content) / len(current_full)) * 100)
                 await self.channel.send(
                     f"🔧 ⚠️ Patch rejected: file would shrink by {shrink_pct}% — likely truncation. Rolling back."

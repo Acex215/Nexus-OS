@@ -1,0 +1,63 @@
+# ═══════════════════════════════════════════════════════════════════
+# NEXUS OS — K3s Resource Quotas per Agent Tier
+#
+# Prevents a runaway agent from starving the cluster by capping
+# CPU/memory per tier namespace.
+#
+# NOTE: The agent hierarchy currently runs as a single process
+# (hierarchy_manager.py), not as separate K3s pods. These quotas are
+# for FUTURE use when agents are containerized individually. For now,
+# they define the target resource boundaries.
+#
+# Tier breakdown:
+#   C-Suite:   2 agents  (CEO, COO)
+#   Directors: 7 agents  (one per department)
+#   Workers:   21 agents (3 per department)
+#
+# Total cluster budget (4 Pi 5 nodes):
+#   nexus-master:  4 cores, 8GB RAM (also runs control-plane + Geth)
+#   nexus-ai:      4 cores, 8GB RAM (also runs LLM inference)
+#   nexus-storage:  4 cores, 8GB RAM (also runs IPFS heavy storage)
+#   nexus-admin:   4 cores, 8GB RAM (also runs dev tooling)
+#   = 16 cores, 32GB total — quotas below reserve ~5 cores / 4GB
+#     for agents, leaving headroom for Geth, IPFS, K3s, and system.
+# ═══════════════════════════════════════════════════════════════════
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: c-suite-quota
+  namespace: nexus-csuite
+spec:
+  hard:
+    requests.cpu: "1000m"        # 1 full core for CEO + COO
+    requests.memory: "512Mi"
+    limits.cpu: "2000m"          # burst to 2 cores
+    limits.memory: "1Gi"
+    pods: "4"                    # 2 agents + headroom for restarts
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: director-quota
+  namespace: nexus-directors
+spec:
+  hard:
+    requests.cpu: "2000m"        # 2 cores shared among 7 directors
+    requests.memory: "1Gi"
+    limits.cpu: "4000m"          # burst to 4 cores
+    limits.memory: "2Gi"
+    pods: "10"                   # 7 agents + headroom for restarts
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: worker-quota
+  namespace: nexus-workers
+spec:
+  hard:
+    requests.cpu: "2000m"        # 2 cores shared among 21 workers
+    requests.memory: "512Mi"
+    limits.cpu: "4000m"          # burst to 4 cores
+    limits.memory: "1Gi"
+    pods: "25"                   # 21 agents + headroom for restarts

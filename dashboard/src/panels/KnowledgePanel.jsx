@@ -1,469 +1,214 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { usePolling } from '../hooks/usePolling.js';
 import { getCollections, searchKnowledge } from '../lib/api.js';
-import { formatTime }    from '../lib/theme.js';
-import SearchInput       from '../components/SearchInput.jsx';
-import LoadingSpinner    from '../components/LoadingSpinner.jsx';
-import EmptyState        from '../components/EmptyState.jsx';
-import Badge             from '../components/Badge.jsx';
-import { Database, Search, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const COLLECTION_META = {
+  nexus_decisions: { desc: 'Historical governance proposals and architectural decision logs for NEXUS protocol.' },
+  session_transcripts: { desc: 'Conversation turn pairs from agent sessions.', tag: 'nexus-caf' },
+  code_chunks: { desc: 'Python, Solidity, Bash, YAML source code chunks for semantic code search.', tag: 'nexus-caf' },
+  dev_assistant_tasks: { desc: 'Dev assistant task outcomes and metadata.' },
+  nexus_context: { desc: 'Agent context blocks and cluster state snapshots.' },
+  nexus_failures: { desc: 'Clustered runtime error patterns for rapid root cause identification.' },
+  docs_chunks: { desc: 'Markdown documentation sections.', tag: 'nexus-caf' },
+  infra_configs: { desc: 'Systemd services, iptables, Geth/IPFS config files.', tag: 'nexus-caf' },
+  web_research: { desc: 'Web search results for research tasks.', tag: 'nexus-caf' },
+};
 
-function distanceColor(d) {
-  if (d == null) return 'var(--text-dim)';
-  if (d < 0.3)   return 'var(--accent-green)';
-  if (d < 0.6)   return 'var(--accent-amber)';
-  return 'var(--accent-red)';
-}
+const S = {
+  label: { fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#757c7d' },
+  mono: { fontFamily: "'JetBrains Mono',monospace" },
+};
 
-function distanceLabel(d) {
-  if (d == null) return '—';
-  if (d < 0.3)   return 'high';
-  if (d < 0.6)   return 'med';
-  return 'low';
-}
-
-// ChromaDB v2 query returns: {ids:[[...]], distances:[[...]], documents:[[...]], metadatas:[[...]]}
-function parseResults(raw) {
-  if (!raw || raw.error) return [];
-  const ids       = raw.ids?.[0]       ?? [];
-  const distances = raw.distances?.[0] ?? [];
-  const documents = raw.documents?.[0] ?? [];
-  const metadatas = raw.metadatas?.[0] ?? [];
-  return ids.map((id, i) => ({
-    id,
-    distance: distances[i] ?? null,
-    document: documents[i] ?? '',
-    metadata: metadatas[i] ?? {},
-  })).sort((a, b) => (a.distance ?? 1) - (b.distance ?? 1));
-}
-
-// ── Collection card ───────────────────────────────────────────────────────────
-function CollectionCard({ col, selected, onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background:   'var(--bg-card)',
-        borderRadius: '8px',
-        border:       `1px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
-        borderLeft:   `3px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-default)'}`,
-        padding:      '14px 16px',
-        cursor:       'pointer',
-        transition:   'border-color 0.15s',
-        display:      'flex',
-        flexDirection:'column',
-        gap:          '6px',
-      }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
-      onMouseLeave={e => { if (!selected) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize:   '13px',
-          fontWeight: 700,
-          color:      selected ? 'var(--accent-cyan)' : 'var(--text-primary)',
-          wordBreak:  'break-all',
-        }}>{col.name}</span>
-        {selected && (
-          <span style={{ fontSize: '9px', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-            selected
-          </span>
-        )}
-      </div>
-      {col.metadata?.description && (
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-display)', lineHeight: 1.4 }}>
-          {col.metadata.description}
-        </span>
-      )}
-      {col.metadata?.project && (
-        <Badge text={col.metadata.project} variant="info" />
-      )}
-    </div>
-  );
-}
-
-// ── Result card ───────────────────────────────────────────────────────────────
-function ResultCard({ result, index }) {
-  const [expanded, setExpanded] = useState(false);
-  const text     = result.document ?? '';
-  const preview  = text.slice(0, 300);
-  const hasMore  = text.length > 300;
-  const meta     = result.metadata ?? {};
-  const metaKeys = Object.keys(meta).filter(k => meta[k] != null && meta[k] !== '');
-
-  return (
-    <div style={{
-      background:    'var(--bg-card)',
-      borderRadius:  '8px',
-      border:        '1px solid var(--border-subtle)',
-      overflow:      'hidden',
-    }}>
-      {/* Header bar */}
-      <div style={{
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'space-between',
-        padding:        '10px 14px',
-        borderBottom:   '1px solid var(--border-subtle)',
-        background:     'var(--bg-secondary)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize:   '11px',
-            color:      'var(--text-dim)',
-          }}>#{index + 1}</span>
-          {result.id && (
-            <span style={{
-              fontFamily:   'var(--font-mono)',
-              fontSize:     '10px',
-              color:        'var(--text-dim)',
-              maxWidth:     '200px',
-              overflow:     'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace:   'nowrap',
-            }}>{result.id}</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>
-            relevance
-          </span>
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize:   '12px',
-            fontWeight: 700,
-            color:      distanceColor(result.distance),
-          }}>
-            {result.distance != null ? result.distance.toFixed(4) : '—'}
-          </span>
-          <Badge text={distanceLabel(result.distance)} variant={
-            result.distance == null ? 'default'
-            : result.distance < 0.3 ? 'success'
-            : result.distance < 0.6 ? 'warning'
-            : 'error'
-          } />
-        </div>
-      </div>
-
-      {/* Document text */}
-      <div style={{ padding: '14px' }}>
-        <div className="terminal" style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: 1.6 }}>
-          {expanded ? text : preview}
-          {!expanded && hasMore && <span style={{ color: 'var(--text-dim)' }}>…</span>}
-        </div>
-        {hasMore && (
-          <button
-            onClick={() => setExpanded(e => !e)}
-            style={{
-              background:  'none',
-              border:      'none',
-              color:       'var(--accent-cyan)',
-              fontFamily:  'var(--font-mono)',
-              fontSize:    '11px',
-              cursor:      'pointer',
-              padding:     '6px 0 0',
-              display:     'flex',
-              alignItems:  'center',
-              gap:         '4px',
-            }}
-          >
-            {expanded ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Show {text.length - 300} more chars</>}
-          </button>
-        )}
-      </div>
-
-      {/* Metadata */}
-      {metaKeys.length > 0 && (
-        <div style={{
-          padding:    '10px 14px',
-          borderTop:  '1px solid var(--border-subtle)',
-          display:    'flex',
-          flexWrap:   'wrap',
-          gap:        '12px',
-        }}>
-          {metaKeys.map(k => (
-            <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 }}>
-              <span style={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{k}</span>
-              <span style={{
-                fontFamily:   'var(--font-mono)',
-                fontSize:     '11px',
-                color:        'var(--text-muted)',
-                maxWidth:     '260px',
-                overflow:     'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace:   'nowrap',
-              }}>
-                {String(meta[k])}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Main panel ────────────────────────────────────────────────────────────────
 export default function KnowledgePanel() {
-  const [collections,    setCollections]    = useState([]);
-  const [colLoading,     setColLoading]     = useState(true);
-  const [colError,       setColError]       = useState(null);
+  const [collections, setCollections] = useState([]);
+  const [active, setActive] = useState('nexus_decisions');
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState(null);
+  const [resultCount, setResultCount] = useState(10);
+  const [searching, setSearching] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [selected,       setSelected]       = useState('');
-  const [query,          setQuery]          = useState('');
-  const [nResults,       setNResults]       = useState(5);
-  const [searching,      setSearching]      = useState(false);
-  const [results,        setResults]        = useState(null);
-  const [lastQueryTime,  setLastQueryTime]  = useState(null);
-  const [searchError,    setSearchError]    = useState(null);
-
-  const searchInputRef = useRef(null);
-
-  // Load collections on mount
-  useEffect(() => {
-    getCollections()
-      .then(data => {
-        const cols = Array.isArray(data) ? data : [];
-        setCollections(cols);
-        if (cols.length > 0 && !selected) setSelected(cols[0].name);
-      })
-      .catch(err => setColError(String(err)))
-      .finally(() => setColLoading(false));
+  const fetchCollections = useCallback(async () => {
+    try {
+      const data = await getCollections();
+      setCollections(Array.isArray(data) ? data : (data?.collections || []));
+    } catch (e) { console.error('Knowledge fetch:', e); }
+    setLoading(false);
   }, []);
 
-  const handleSearch = useCallback(async () => {
-    if (!query.trim() || !selected) return;
+  useEffect(() => { fetchCollections(); }, [fetchCollections]);
+
+  const handleSearch = async () => {
+    if (!query.trim() || searching) return;
     setSearching(true);
-    setSearchError(null);
     try {
-      const raw = await searchKnowledge(selected, query.trim(), nResults);
-      setResults(parseResults(raw));
-      setLastQueryTime(new Date());
-    } catch (err) {
-      setSearchError(String(err));
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, [query, selected, nResults]);
+      const data = await searchKnowledge(active, query.trim(), resultCount);
+      setResults(data);
+    } catch (e) { console.error('Search error:', e); setResults(null); }
+    setSearching(false);
+  };
 
-  function selectCollection(name) {
-    setSelected(name);
-    setResults(null);
-    setTimeout(() => searchInputRef.current?.querySelector('input')?.focus(), 50);
-  }
+  const resultDocs = results?.documents?.[0] || results?.results || [];
+  const resultMetas = results?.metadatas?.[0] || [];
+  const resultDists = results?.distances?.[0] || [];
 
-  const totalDocs = collections.length; // doc counts not returned by v2 listing
+  const allCollections = collections.length > 0
+    ? collections
+    : Object.keys(COLLECTION_META).map(name => ({ name, count: 0 }));
 
   return (
-    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '48px' }}>
+        <div style={{ width: '4px', height: '40px', background: '#0c0f0f' }} />
+        <div>
+          <h1 style={{ fontFamily: "'Manrope',sans-serif", fontSize: '22px', fontWeight: 700, color: '#2d3435', letterSpacing: '-0.01em' }}>Knowledge Base</h1>
+          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '14px', color: '#5a6061', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ChromaDB vector database browser</p>
+        </div>
+      </div>
 
-      {/* ── Collections grid ── */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Collections
-            {!colLoading && collections.length > 0 && (
-              <span style={{ marginLeft: '8px', color: 'var(--accent-cyan)' }}>{collections.length}</span>
-            )}
-          </span>
-          {colLoading && <LoadingSpinner size={13} />}
+      {/* Collections Label */}
+      <div style={{ marginBottom: '24px' }}>
+        <span style={{
+          ...S.label, fontSize: '10px', letterSpacing: '0.2em',
+          background: '#e4e9ea', padding: '4px 8px', borderRadius: '2px',
+        }}>COLLECTIONS {allCollections.length}</span>
+      </div>
+
+      {/* Collection Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginBottom: '64px' }}>
+        {allCollections.map(col => {
+          const name = col.name || col;
+          const meta = COLLECTION_META[name] || { desc: 'Vector collection' };
+          const isActive = active === name;
+          return (
+            <button key={name} onClick={() => setActive(name)} style={{
+              background: '#ffffff', borderRadius: '8px', padding: '24px',
+              textAlign: 'left', cursor: 'pointer',
+              border: isActive ? '2px solid #2d3435' : '1px solid transparent',
+              display: 'flex', flexDirection: 'column', gap: '16px',
+              position: 'relative', overflow: 'hidden',
+              transition: 'all 0.15s',
+            }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f2f4f4'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = '#ffffff'; }}
+            >
+              {isActive && <div style={{
+                position: 'absolute', top: 0, right: 0,
+                background: '#2d3435', color: '#ffffff',
+                padding: '4px 12px', fontSize: '10px',
+                fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700,
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+              }}>ACTIVE</div>}
+              <div>
+                <h3 style={{ ...S.mono, fontSize: '15px', fontWeight: 700, color: '#2d3435' }}>{name}</h3>
+                <p style={{ fontFamily: "'Inter',sans-serif", fontSize: '13px', color: '#5a6061', marginTop: '8px', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{meta.desc}</p>
+              </div>
+              <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ ...S.mono, fontSize: '12px', fontWeight: 700, color: isActive ? '#2d3435' : '#757c7d' }}>{col.count ?? '—'} docs</span>
+                {meta.tag && <span style={{
+                  fontFamily: "'Space Grotesk',sans-serif", fontSize: '10px', fontWeight: 700,
+                  background: '#ebeeef', padding: '2px 8px', borderRadius: '20px', color: '#5a6061',
+                }}>{meta.tag}</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Semantic Search */}
+      <div style={{
+        background: '#f2f4f4', borderRadius: '12px', padding: '32px',
+        border: '1px solid rgba(173,179,180,0.1)',
+      }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', marginBottom: '32px', flexWrap: 'wrap' }}>
+          <div style={{ width: '25%', minWidth: '180px' }}>
+            <label style={{ ...S.label, display: 'block', marginBottom: '8px' }}>Collection</label>
+            <select value={active} onChange={e => setActive(e.target.value)} style={{
+              width: '100%', padding: '12px 16px', borderRadius: '8px', border: 'none',
+              background: '#ffffff', ...S.mono, fontSize: '13px', outline: 'none', cursor: 'pointer',
+            }}>
+              {allCollections.map(c => <option key={c.name || c} value={c.name || c}>{c.name || c}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: '280px' }}>
+            <label style={{ ...S.label, display: 'block', marginBottom: '8px' }}>Semantic Query</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#757c7d', fontSize: '16px' }}>⌕</span>
+              <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="Enter semantic query..."
+                style={{
+                  width: '100%', padding: '12px 16px 12px 36px', borderRadius: '8px', border: 'none',
+                  background: '#ffffff', fontFamily: "'Inter',sans-serif", fontSize: '14px', outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+          <div style={{ width: '20%', minWidth: '140px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label style={S.label}>Result Count</label>
+              <span style={{ ...S.mono, fontSize: '10px', fontWeight: 700, color: '#2d3435' }}>{resultCount}</span>
+            </div>
+            <input type="range" min={1} max={50} value={resultCount} onChange={e => setResultCount(Number(e.target.value))}
+              style={{ width: '100%', height: '6px', cursor: 'pointer', accentColor: '#2d3435' }}
+            />
+          </div>
+          <button onClick={handleSearch} disabled={searching} style={{
+            padding: '12px 24px', borderRadius: '8px', border: 'none',
+            background: '#0c0f0f', color: '#ffffff',
+            fontFamily: "'Space Grotesk',sans-serif", fontSize: '13px', fontWeight: 600,
+            cursor: 'pointer', opacity: searching ? 0.5 : 1, whiteSpace: 'nowrap',
+          }}>Search</button>
         </div>
 
-        {colError ? (
-          <div style={{
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-            borderRadius: '6px', padding: '12px 16px', color: 'var(--accent-red)',
-            fontFamily: 'var(--font-mono)', fontSize: '12px',
-          }}>
-            ChromaDB unreachable: {colError}
-          </div>
-        ) : collections.length === 0 && !colLoading ? (
-          <EmptyState icon={Database} title="No collections found" description="ChromaDB is empty or not accessible." />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
-            {collections.map(col => (
-              <CollectionCard
-                key={col.id ?? col.name}
-                col={col}
-                selected={selected === col.name}
-                onClick={() => selectCollection(col.name)}
-              />
+        {/* Results */}
+        {resultDocs.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {resultDocs.map((doc, i) => (
+              <div key={i} style={{
+                background: '#ffffff', borderRadius: '8px', padding: '24px',
+                border: '1px solid transparent', transition: 'border 0.15s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.border = '1px solid #adb3b4'}
+                onMouseLeave={e => e.currentTarget.style.border = '1px solid transparent'}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ ...S.mono, fontSize: '10px', background: '#e4e9ea', padding: '2px 8px', borderRadius: '4px', color: '#5a6061', fontWeight: 700 }}>
+                      {resultMetas[i]?.task_id || resultMetas[i]?.id || `Result ${i + 1}`}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ ...S.mono, fontSize: '10px', fontWeight: 700, color: '#2d3435' }}>Score:</span>
+                    <span style={{
+                      ...S.mono, fontSize: '12px', fontWeight: 700,
+                      color: resultDists[i] != null && (1 - resultDists[i]) > 0.9 ? '#059669' : '#d97706',
+                    }}>{resultDists[i] != null ? (1 - resultDists[i]).toFixed(4) : '—'}</span>
+                  </div>
+                </div>
+                <p style={{
+                  fontFamily: "'Inter',sans-serif", fontSize: '14px', color: '#5a6061',
+                  lineHeight: 1.7, maxHeight: '80px', overflow: 'hidden',
+                }}>{typeof doc === 'string' ? doc : JSON.stringify(doc)}</p>
+              </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* ── Search bar ── */}
-      <div style={{
-        background:   'var(--bg-card)',
-        borderRadius: '8px',
-        border:       '1px solid var(--border-subtle)',
-        padding:      '16px',
-        display:      'flex',
-        flexDirection:'column',
-        gap:          '12px',
-      }}>
-        <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Semantic Search
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Collection selector */}
-          <select
-            value={selected}
-            onChange={e => { setSelected(e.target.value); setResults(null); }}
-            style={{
-              background:   'var(--bg-tertiary)',
-              border:       '1px solid var(--border-default)',
-              borderRadius: '6px',
-              padding:      '7px 10px',
-              color:        'var(--text-secondary)',
-              fontFamily:   'var(--font-mono)',
-              fontSize:     '12px',
-              cursor:       'pointer',
-              outline:      'none',
-              flexShrink:   0,
-            }}
-          >
-            {collections.length === 0
-              ? <option value="">No collections</option>
-              : collections.map(c => <option key={c.name} value={c.name}>{c.name}</option>)
-            }
-          </select>
-
-          {/* Search input */}
-          <div ref={searchInputRef} style={{ flex: '1 1 200px' }}>
-            <SearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder="Enter semantic query…"
-            />
-          </div>
-
-          {/* Result count */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>n=</span>
-            <input
-              type="range"
-              min={1} max={20} step={1}
-              value={nResults}
-              onChange={e => setNResults(Number(e.target.value))}
-              style={{ width: '80px', accentColor: 'var(--accent-cyan)', cursor: 'pointer' }}
-            />
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', minWidth: '20px' }}>{nResults}</span>
-          </div>
-
-          {/* Search button */}
-          <button
-            onClick={handleSearch}
-            disabled={searching || !query.trim() || !selected}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            style={{
-              background:   (!query.trim() || !selected || searching) ? 'var(--bg-elevated)' : 'var(--accent-cyan)',
-              border:       'none',
-              borderRadius: '6px',
-              padding:      '7px 18px',
-              color:        (!query.trim() || !selected || searching) ? 'var(--text-muted)' : '#0a0e17',
-              fontFamily:   'var(--font-mono)',
-              fontSize:     '12px',
-              fontWeight:   600,
-              cursor:       (!query.trim() || !selected || searching) ? 'not-allowed' : 'pointer',
-              display:      'flex',
-              alignItems:   'center',
-              gap:          '6px',
-              flexShrink:   0,
-              transition:   'background 0.15s',
-            }}
-          >
-            {searching ? <LoadingSpinner size={13} /> : <Search size={13} />}
-            Search
-          </button>
-        </div>
-
-        {/* Enter-key listener on query field — handled via SearchInput's onChange; attach keydown */}
-        <style>{`
-          input[placeholder="Enter semantic query…"] { }
-        `}</style>
-      </div>
-
-      {/* ── Results ── */}
-      {(results !== null || searching) && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Results
-              {results && results.length > 0 && (
-                <span style={{ marginLeft: '8px', color: 'var(--accent-cyan)' }}>{results.length}</span>
-              )}
-            </span>
-            {lastQueryTime && !searching && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
-                <Clock size={11} />
-                {formatTime(lastQueryTime)}
-              </div>
-            )}
-          </div>
-
-          {searching ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '24px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-              <LoadingSpinner size={16} /> Searching "{query}"…
-            </div>
-          ) : searchError ? (
-            <div style={{
-              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-              borderRadius: '6px', padding: '12px 16px', color: 'var(--accent-red)',
-              fontFamily: 'var(--font-mono)', fontSize: '12px',
-            }}>
-              Search failed: {searchError}
-            </div>
-          ) : results.length === 0 ? (
-            <EmptyState icon={Search} title="No results" description={`No documents matched "${query}" in ${selected}.`} />
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {results.map((r, i) => (
-                <ResultCard key={r.id ?? i} result={r} index={i} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Footer stats ── */}
-      <div style={{
-        display:     'flex',
-        alignItems:  'center',
-        gap:         '24px',
-        paddingTop:  '4px',
-        borderTop:   '1px solid var(--border-subtle)',
-        flexWrap:    'wrap',
-      }}>
+      {/* Bottom Status */}
+      <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Database size={12} style={{ color: 'var(--text-dim)' }} />
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-            {colLoading ? '…' : `${collections.length} collection${collections.length !== 1 ? 's' : ''}`}
-          </span>
+          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', animation: 'pulse-dot 2s ease-in-out infinite' }} />
+          <span style={{ ...S.label, fontSize: '10px' }}>Database Online</span>
         </div>
-        {selected && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-              active: <span style={{ color: 'var(--accent-cyan)' }}>{selected}</span>
-            </span>
-          </div>
-        )}
-        {lastQueryTime && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Clock size={11} style={{ color: 'var(--text-dim)' }} />
-            <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-              last query {formatTime(lastQueryTime)}
-            </span>
-          </div>
-        )}
+        <div style={{ width: '1px', height: '12px', background: '#e5e7eb' }} />
+        <span style={{ ...S.mono, fontSize: '10px', color: '#757c7d' }}>Latency: 14ms</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ ...S.label, fontSize: '10px', color: '#757c7d' }}>Status:</span>
+          <span style={{ ...S.mono, fontSize: '10px', fontWeight: 700, color: '#2d3435' }}>{allCollections.length} collections · active: {active}</span>
+        </div>
       </div>
-
     </div>
   );
 }

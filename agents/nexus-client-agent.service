@@ -1,0 +1,31 @@
+[Unit]
+Description=NEXUS OS Client Node Agent — lightweight agent for public nodes
+After=network-online.target ipfs.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mhuraibi
+Group=mhuraibi
+WorkingDirectory=/opt/nexus/agents
+ExecStart=/usr/bin/python3 /opt/nexus/agents/client_node_agent.py
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=15
+
+# Minimal resource footprint for client nodes
+MemoryMax=512M
+CPUQuota=25%
+
+# Restrict filesystem access
+ReadWritePaths=/opt/nexus/config /opt/nexus/blockchain/keystore /opt/nexus/logs
+ReadOnlyPaths=/opt/nexus/agents /opt/nexus/libnexus
+ProtectHome=true
+ProtectSystem=strict
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=LOG_LEVEL=WARNING
+
+[Install]
+WantedBy=multi-user.target

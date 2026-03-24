@@ -40,8 +40,8 @@ export default function DataTable({ columns = [], data = [], onRowClick }) {
                   {col.label}
                   {col.sortable && sortKey === col.key && (
                     sortDir === 'asc'
-                      ? <ChevronUp size={11} style={{ color: 'var(--accent-cyan)' }} />
-                      : <ChevronDown size={11} style={{ color: 'var(--accent-cyan)' }} />
+                      ? <ChevronUp size={11} style={{ color: '#B8960C' }} />
+                      : <ChevronDown size={11} style={{ color: '#B8960C' }} />
                   )}
                   {col.sortable && sortKey !== col.key && (
                     <ChevronUp size={11} style={{ opacity: 0.2 }} />

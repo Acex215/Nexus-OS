@@ -1,397 +1,240 @@
-import { useState, useCallback } from 'react';
-import { usePolling }          from '../hooks/usePolling.js';
-import { getBlockchainSummary, getBlocks, getTransactions } from '../lib/api.js';
-import { formatAddress, formatTime, COLORS } from '../lib/theme.js';
-import StatCard       from '../components/StatCard.jsx';
-import StatusDot      from '../components/StatusDot.jsx';
-import Badge          from '../components/Badge.jsx';
-import LoadingSpinner from '../components/LoadingSpinner.jsx';
-import EmptyState     from '../components/EmptyState.jsx';
-import { Blocks, Link, Database, Network, Hash, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
+import { useState, useEffect, useCallback, useContext } from 'react';
+import { usePolling } from '../hooks/usePolling.js';
+import { NavigationContext } from '../lib/NavigationContext.jsx';
+import { getBlockchainSummary, getBlocks } from '../lib/api.js';
+import { formatAddress, formatTime } from '../lib/theme.js';
 
-// ── Copy-to-clipboard cell ────────────────────────────────────────────────────
-function CopyCell({ value, display }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy(e) {
-    e.stopPropagation();
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-  return (
-    <span
-      onClick={handleCopy}
-      title={copied ? 'Copied!' : 'Click to copy'}
-      style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize:   '11px',
-        color:      'var(--text-muted)',
-        cursor:     'pointer',
-        display:    'inline-flex',
-        alignItems: 'center',
-        gap:        '4px',
-      }}
-    >
-      {display ?? value}
-      {copied
-        ? <Check size={10} style={{ color: 'var(--accent-green)' }} />
-        : <Copy size={10} style={{ opacity: 0.4 }} />}
-    </span>
-  );
-}
-
-// ── Validator card ────────────────────────────────────────────────────────────
-function ValidatorCard({ address, balance, index }) {
-  const colors  = [COLORS.cyan, COLORS.green, COLORS.amber];
-  const accent  = colors[index % colors.length];
-  const present = !!address;
-
+function StatCard({ label, value, loading }) {
   return (
     <div style={{
-      background:    'var(--bg-card)',
-      borderLeft:    `3px solid ${present ? accent : 'var(--border-default)'}`,
-      borderRadius:  '8px',
-      padding:       '14px 16px',
-      display:       'flex',
-      flexDirection: 'column',
-      gap:           '8px',
-      flex:          1,
-      minWidth:      0,
+      background: '#ffffff', padding: '20px', borderRadius: '12px',
+      border: '1px solid rgba(173,179,180,0.1)',
+      borderBottom: '2px solid #B8960C',
+      flex: 1,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <StatusDot status={present ? 'online' : 'offline'} />
-        <span style={{
-          fontSize:      '10px',
-          color:         'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          fontFamily:    'var(--font-display)',
-          fontWeight:    500,
-        }}>Validator {index + 1}</span>
-      </div>
-      {present ? (
-        <>
-          <CopyCell value={address} display={formatAddress(address)} />
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize:   '16px',
-            fontWeight: 700,
-            color:      'var(--text-primary)',
-          }}>
-            {balance != null ? `${balance.toFixed(2)} ETH` : '—'}
-          </span>
-        </>
+      <p style={{
+        fontFamily: 'var(--font-label)', fontSize: '10px',
+        color: 'var(--text-muted)', letterSpacing: '0.08em',
+        textTransform: 'uppercase', marginBottom: '6px',
+      }}>{label}</p>
+      {loading ? (
+        <div style={{ width: '60px', height: '28px', borderRadius: '4px', background: '#f0f0f0' }} />
       ) : (
-        <span style={{ fontSize: '12px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-          not registered
-        </span>
+        <p style={{
+          fontFamily: 'var(--font-mono)', fontSize: '24px',
+          fontWeight: 500, color: 'var(--text-primary)',
+        }}>{value ?? '—'}</p>
       )}
     </div>
   );
 }
 
-// ── Transaction sub-table ─────────────────────────────────────────────────────
-function TxTable({ blockNum, cache, setCache }) {
-  const [loading, setLoading] = useState(!cache[blockNum]);
-
-  // Fetch once if not cached
-  useState(() => {
-    if (cache[blockNum]) return;
-    getTransactions(blockNum)
-      .then(txns => setCache(prev => ({ ...prev, [blockNum]: txns })))
-      .catch(() => setCache(prev => ({ ...prev, [blockNum]: [] })))
-      .finally(() => setLoading(false));
-  });
-
-  const txns = cache[blockNum];
-
-  if (loading && !txns) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '16px 24px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-        <LoadingSpinner size={14} /> Loading transactions…
+function ValidatorCard({ number, address, status }) {
+  return (
+    <div style={{
+      background: '#ffffff', border: '1px solid rgba(173,179,180,0.1)',
+      borderRadius: '12px', padding: '20px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{
+          width: '40px', height: '40px', borderRadius: '50%',
+          background: '#f2f4f4', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-headline)', fontWeight: 700, fontSize: '14px',
+          color: 'var(--text-secondary)',
+        }}>V{number}</div>
+        <div>
+          <p style={{
+            fontFamily: 'var(--font-label)', fontSize: '10px',
+            color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}>Validator</p>
+          <p style={{
+            fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)',
+          }}>{formatAddress(address)}</p>
+        </div>
       </div>
-    );
-  }
-  if (!txns || txns.length === 0) {
-    return (
-      <div style={{ padding: '14px 24px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-        No transactions in this block.
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '6px',
+        background: '#f2f4f4', padding: '4px 12px', borderRadius: '20px',
+      }}>
+        <div style={{
+          width: '6px', height: '6px', borderRadius: '50%',
+          background: status === 'active' ? '#10b981' : '#adb3b4',
+        }} />
+        <span style={{
+          fontFamily: 'var(--font-label)', fontSize: '10px',
+          color: 'var(--text-muted)',
+        }}>{status === 'active' ? 'Active' : 'Unregistered'}</span>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+export default function BlockchainPanel() {
+  const navigate = useContext(NavigationContext);
+  const [summary, setSummary] = useState(null);
+  const [blocks, setBlocks] = useState(null);
+  const [blockCount, setBlockCount] = useState(15);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [s, b] = await Promise.allSettled([
+        getBlockchainSummary(),
+        getBlocks(blockCount),
+      ]);
+      if (s.status === 'fulfilled') setSummary(s.value);
+      if (b.status === 'fulfilled') setBlocks(b.value);
+    } catch (e) { console.error('Blockchain fetch:', e); }
+    setLoading(false);
+  }, [blockCount]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+  usePolling(fetchData, 15000);
+
+  const blockHeight = summary?.block_number ?? summary?.blockNumber ?? '—';
+  const reasoningCount = summary?.reasoning_count ?? summary?.entryCount ?? '—';
+  const registeredNodes = summary?.registered_nodes ?? 0;
+  const meshPeers = summary?.mesh_peers ?? summary?.ipfs_peers ?? '—';
+  const chainId = summary?.chain_id ?? summary?.chainId ?? '123454321';
+  const validators = summary?.validators || [];
+
+  const blockList = Array.isArray(blocks) ? blocks : (blocks?.blocks || []);
 
   return (
-    <div style={{ background: 'var(--bg-tertiary)', borderTop: '1px solid var(--border-subtle)' }}>
-      <table className="data-table" style={{ fontSize: '11px' }}>
-        <thead>
-          <tr>
-            <th>Tx Hash</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Value</th>
-            <th>Gas</th>
-            <th>Type</th>
-          </tr>
-        </thead>
-        <tbody>
-          {txns.map((tx, i) => {
-            const isCall = tx.input_preview && tx.input_preview !== '0x' && tx.input_preview.length > 2;
-            return (
-              <tr key={i}>
-                <td><CopyCell value={tx.hash} display={tx.hash ? `${tx.hash.slice(0,10)}…` : '—'} /></td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {tx.from ? formatAddress(tx.from) : '—'}
+    <div style={{ maxWidth: '1400px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
+        <div style={{ width: '4px', height: '40px', background: '#0c0f0f', borderRadius: '2px' }} />
+        <div>
+          <h2 style={{
+            fontFamily: 'var(--font-headline)', fontSize: '22px',
+            fontWeight: 800, letterSpacing: '-0.01em', color: 'var(--text-primary)',
+          }}>Blockchain</h2>
+          <p style={{
+            fontFamily: 'var(--font-label)', fontSize: '11px', color: 'var(--text-muted)',
+            letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '2px',
+          }}>Private Ethereum PoA · Chain ID {chainId} · Clique consensus</p>
+        </div>
+      </div>
+
+      {/* Chain Summary */}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '32px' }}>
+        <StatCard label="Block Height" value={typeof blockHeight === 'number' ? blockHeight.toLocaleString() : blockHeight} loading={loading} />
+        <StatCard label="Reasoning Entries" value={typeof reasoningCount === 'number' ? reasoningCount.toLocaleString() : reasoningCount} loading={loading} />
+        <StatCard label="Registered Nodes" value={registeredNodes} loading={loading} />
+        <StatCard label="Mesh Peers" value={meshPeers} loading={loading} />
+        <StatCard label="Chain ID" value={chainId} loading={loading} />
+      </div>
+
+      {/* Validators */}
+      <div style={{ marginBottom: '32px' }}>
+        <h3 style={{
+          fontFamily: 'var(--font-label)', fontSize: '11px', fontWeight: 700,
+          letterSpacing: '0.1em', textTransform: 'uppercase',
+          color: 'var(--text-secondary)', marginBottom: '16px',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>Clique Validators</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+          {validators.length > 0 ? (
+            validators.map((v, i) => (
+              <ValidatorCard key={i} number={i + 1} address={v.address || v} status={v.registered ? 'active' : 'unregistered'} />
+            ))
+          ) : (
+            <>
+              <ValidatorCard number={1} address="0x0000000000000000000000000000000000000000" status="unregistered" />
+              <ValidatorCard number={2} address="0x0000000000000000000000000000000000000000" status="unregistered" />
+              <ValidatorCard number={3} address="0x0000000000000000000000000000000000000000" status="unregistered" />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Recent Blocks */}
+      <div style={{
+        background: '#ffffff', borderRadius: '12px',
+        border: '1px solid rgba(173,179,180,0.1)', overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '20px 24px', display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', borderBottom: '1px solid #f0f0f0',
+        }}>
+          <h3 style={{
+            fontFamily: 'var(--font-headline)', fontSize: '14px', fontWeight: 600,
+            color: 'var(--text-primary)',
+          }}>Recent Blocks</h3>
+          <button onClick={fetchData} style={{
+            fontFamily: 'var(--font-label)', fontSize: '11px',
+            color: 'var(--text-secondary)', background: 'none', border: 'none',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+          }}>↻ Refresh</button>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#f2f4f4' }}>
+              {['Block', 'Time', 'Txns', 'Miner', 'Gas Used'].map((h, i) => (
+                <th key={h} style={{
+                  padding: '12px 24px', textAlign: i >= 2 ? 'right' : 'left',
+                  fontFamily: 'var(--font-label)', fontSize: '10px', fontWeight: 700,
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: 'var(--text-muted)',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {blockList.slice(0, blockCount).map((block, i) => (
+              <tr key={block.number || i} style={{
+                borderBottom: '1px solid #f5f5f5',
+                background: i % 2 === 0 ? '#ffffff' : '#fafafa',
+                transition: 'background 0.1s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f2f4f4'}
+                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? '#ffffff' : '#fafafa'}
+              >
+                <td style={{ padding: '14px 24px', fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-primary)' }}>
+                  {typeof block.number === 'number' ? block.number.toLocaleString() : block.number}
                 </td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {tx.to ? formatAddress(tx.to) : <span style={{ color: 'var(--accent-purple)' }}>deploy</span>}
+                <td style={{ padding: '14px 24px', fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  {formatTime(block.timestamp)}
                 </td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                  {tx.value_eth != null ? `${tx.value_eth.toFixed(4)} ETH` : '—'}
+                <td style={{ padding: '14px 24px', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                  {block.transactions ?? block.tx_count ?? 0}
                 </td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {tx.gas_used?.toLocaleString() ?? '—'}
+                <td style={{ padding: '14px 24px', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                  {formatAddress(block.miner)}
                 </td>
-                <td>
-                  <Badge
-                    text={isCall ? 'Contract call' : 'Transfer'}
-                    variant={isCall ? 'info' : 'success'}
-                  />
+                <td style={{ padding: '14px 24px', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                  {block.gasUsed != null ? Number(block.gasUsed).toLocaleString() : '—'}
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ── Main panel ────────────────────────────────────────────────────────────────
-export default function BlockchainPanel() {
-  const { data: summary, loading: sumLoading } = usePolling(getBlockchainSummary, 30000);
-
-  const [blockCount,   setBlockCount]   = useState(20);
-  const [blocksData,   setBlocksData]   = useState(null);
-  const [blocksLoading,setBlocksLoading]= useState(true);
-  const [expandedBlock,setExpandedBlock]= useState(null);
-  const [txCache,      setTxCache]      = useState({});
-
-  // Fetch blocks independently (not via usePolling so we can control count)
-  const fetchBlocks = useCallback((count) => {
-    setBlocksLoading(true);
-    getBlocks(count)
-      .then(setBlocksData)
-      .catch(() => setBlocksData([]))
-      .finally(() => setBlocksLoading(false));
-  }, []);
-
-  // Initial fetch + refetch when count changes
-  useState(() => { fetchBlocks(blockCount); }, [blockCount]);
-
-  function toggleBlock(num) {
-    setExpandedBlock(prev => prev === num ? null : num);
-    // Prefetch txns
-    if (!txCache[num]) {
-      getTransactions(num)
-        .then(txns => setTxCache(prev => ({ ...prev, [num]: txns })))
-        .catch(() => setTxCache(prev => ({ ...prev, [num]: [] })));
-    }
-  }
-
-  const err = summary?.error;
-
-  const validators = summary?.validators ?? [];
-  // Pad to 3 slots
-  const validatorSlots = [0, 1, 2].map(i => validators[i] ?? null);
-
-  return (
-    <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-      {/* ── Summary stat row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-        <StatCard
-          label="Block Height"
-          value={sumLoading ? '…' : err ? '—' : (summary?.block_number?.toLocaleString() ?? '—')}
-          icon={Blocks}
-          accentColor="var(--accent-cyan)"
-        />
-        <StatCard
-          label="Reasoning Entries"
-          value={sumLoading ? '…' : err ? '—' : (summary?.reasoning_entries?.toLocaleString() ?? '—')}
-          icon={Database}
-          accentColor="var(--accent-purple)"
-        />
-        <StatCard
-          label="Registered Nodes"
-          value={sumLoading ? '…' : err ? '—' : (summary?.registered_nodes ?? '—')}
-          icon={Link}
-          accentColor="var(--accent-green)"
-        />
-        <StatCard
-          label="Mesh Peers"
-          value={sumLoading ? '…' : err ? '—' : (summary?.mesh_peers ?? '—')}
-          icon={Network}
-          accentColor="var(--accent-blue)"
-        />
-        <StatCard
-          label="Chain ID"
-          value={sumLoading ? '…' : err ? '—' : (summary?.chain_id ?? '—')}
-          icon={Hash}
-          accentColor="var(--accent-amber)"
-        />
+            ))}
+            {blockList.length === 0 && !loading && (
+              <tr>
+                <td colSpan={5} style={{
+                  padding: '32px', textAlign: 'center',
+                  fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)',
+                }}>No blocks loaded</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        {blockList.length >= blockCount && (
+          <div style={{ padding: '20px', display: 'flex', justifyContent: 'center', borderTop: '1px solid #f0f0f0' }}>
+            <button onClick={() => setBlockCount(c => c + 15)} style={{
+              padding: '8px 32px', borderRadius: '8px',
+              border: '1px solid rgba(173,179,180,0.3)', background: 'transparent',
+              fontFamily: 'var(--font-label)', fontSize: '11px', fontWeight: 600,
+              letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'var(--text-secondary)', cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f2f4f4'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >Load more</button>
+          </div>
+        )}
       </div>
-
-      {/* ── Error banner ── */}
-      {err && (
-        <div style={{
-          background:   'rgba(239,68,68,0.08)',
-          border:       '1px solid rgba(239,68,68,0.25)',
-          borderRadius: '6px',
-          padding:      '12px 16px',
-          color:        'var(--accent-red)',
-          fontFamily:   'var(--font-mono)',
-          fontSize:     '12px',
-        }}>
-          Blockchain unreachable — Geth RPC at 10.0.20.3:8545 not responding.
-        </div>
-      )}
-
-      {/* ── Validators ── */}
-      <div>
-        <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
-          Clique Validators
-        </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          {validatorSlots.map((v, i) => (
-            <ValidatorCard
-              key={i}
-              index={i}
-              address={v?.address ?? null}
-              balance={v?.balance_eth ?? null}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* ── Recent blocks ── */}
-      <div>
-        <div style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
-          Recent Blocks
-        </div>
-
-        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-          {blocksLoading && (!blocksData || blocksData.length === 0) ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '24px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-              <LoadingSpinner size={16} /> Loading blocks…
-            </div>
-          ) : !blocksData || blocksData.length === 0 ? (
-            <EmptyState icon={Blocks} title="No blocks" description="Chain may be idle — blocks are only produced when transactions are pending." />
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '28px' }}></th>
-                  <th>Block</th>
-                  <th>Time</th>
-                  <th>Txns</th>
-                  <th>Miner</th>
-                  <th>Gas Used</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(blocksData ?? []).map(block => {
-                  const isOpen = expandedBlock === block.number;
-                  return [
-                    <tr
-                      key={block.number}
-                      onClick={() => toggleBlock(block.number)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td style={{ paddingRight: 0 }}>
-                        {isOpen
-                          ? <ChevronDown size={13} style={{ color: 'var(--accent-cyan)' }} />
-                          : <ChevronRight size={13} style={{ color: 'var(--text-dim)' }} />}
-                      </td>
-                      <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                          #{block.number?.toLocaleString()}
-                        </span>
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {block.timestamp ? formatTime(block.timestamp) : '—'}
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: block.tx_count > 0 ? 'var(--text-primary)' : 'var(--text-dim)' }}>
-                        {block.tx_count ?? 0}
-                      </td>
-                      <td>
-                        {block.miner ? <CopyCell value={block.miner} display={formatAddress(block.miner)} /> : '—'}
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {block.gas_used?.toLocaleString() ?? '—'}
-                      </td>
-                    </tr>,
-                    isOpen && (
-                      <tr key={`${block.number}-txns`} style={{ background: 'none' }}>
-                        <td colSpan={6} style={{ padding: 0, border: 'none' }}>
-                          <TxTable
-                            blockNum={block.number}
-                            cache={txCache}
-                            setCache={setTxCache}
-                          />
-                        </td>
-                      </tr>
-                    ),
-                  ];
-                })}
-              </tbody>
-            </table>
-          )}
-
-          {/* Load more */}
-          {blocksData && blocksData.length > 0 && (
-            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button
-                onClick={() => {
-                  const next = blockCount + 20;
-                  setBlockCount(next);
-                  fetchBlocks(next);
-                }}
-                disabled={blocksLoading}
-                style={{
-                  background:   'var(--bg-elevated)',
-                  border:       '1px solid var(--border-default)',
-                  borderRadius: '6px',
-                  color:        'var(--text-secondary)',
-                  fontFamily:   'var(--font-mono)',
-                  fontSize:     '12px',
-                  padding:      '6px 14px',
-                  cursor:       blocksLoading ? 'not-allowed' : 'pointer',
-                  opacity:      blocksLoading ? 0.5 : 1,
-                }}
-              >
-                {blocksLoading ? 'Loading…' : `Load more (showing ${blocksData.length})`}
-              </button>
-              <button
-                onClick={() => fetchBlocks(blockCount)}
-                disabled={blocksLoading}
-                style={{
-                  background:   'none',
-                  border:       'none',
-                  color:        'var(--text-dim)',
-                  fontFamily:   'var(--font-mono)',
-                  fontSize:     '11px',
-                  cursor:       'pointer',
-                  padding:      '6px 0',
-                }}
-              >
-                ↻ refresh
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
     </div>
   );
 }

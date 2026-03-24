@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-export default function StatCard({ label, value, unit, trend, trendValue, icon: Icon, accentColor = 'var(--accent-cyan)' }) {
+export default function StatCard({ label, value, unit, trend, trendValue, icon: Icon, accentColor = '#B8960C' }) {
   const trendColor = trend === 'up' ? 'var(--accent-green)' : trend === 'down' ? 'var(--accent-red)' : 'var(--text-muted)';
   const TrendIcon  = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
 

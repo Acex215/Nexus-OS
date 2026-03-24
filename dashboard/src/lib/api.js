@@ -1,13 +1,14 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? '' : `http://${window.location.hostname}:8768`,
+  baseURL: '',
   timeout: 30000,
 });
 
 // Gateway
 export const getHealth = () => api.get('/api/health').then(r => r.data);
 export const getNodes = () => api.get('/api/nodes').then(r => r.data);
+export const getClients = () => api.get('/api/clients').then(r => r.data);
 
 // Blockchain
 export const getBlockchainSummary = () => api.get('/api/blockchain/summary').then(r => r.data);
@@ -53,8 +54,26 @@ export const getTrainingStats    = () => api.get('/api/training/stats').then(r =
 export const logTrainingSession  = (data) => api.post('/api/training/log', data).then(r => r.data);
 export const exportTrainingPairs = () => api.get('/api/training/export/pairs', { responseType: 'blob' }).then(r => r.data);
 
+// Mesh
+export const getMeshPeers = () => api.get('/api/mesh/peers').then(r => r.data);
+
+// Mining
+export const getMiningResults  = () => api.get('/api/mining/results').then(r => r.data);
+export const getMiningPatterns = () => api.get('/api/mining/patterns').then(r => r.data);
+export const getMiningClusters = () => api.get('/api/mining/clusters').then(r => r.data);
+export const getMiningAnomalies = () => api.get('/api/mining/anomalies').then(r => r.data);
+
 // Temporal Binning
 export const getTemporalSummary  = () => api.get('/api/temporal/summary').then(r => r.data);
 export const getTemporalHeatmap  = (year, weeks = 4) => api.get(`/api/temporal/heatmap?year=${year}&weeks=${weeks}`).then(r => r.data);
 export const getTemporalBin      = (binId) => api.get(`/api/temporal/bin/${binId}`).then(r => r.data);
 export const getTemporalRecent   = (limit = 20) => api.get(`/api/temporal/recent?limit=${limit}`).then(r => r.data);
+export const getTemporalHeatmapScored = (days = 30) => api.get(`/api/temporal/heatmap/scored?days=${days}`).then(r => r.data);
+export const getTemporalStats    = () => api.get('/api/temporal/stats').then(r => r.data);
+export const getTemporalCurrent  = () => api.get('/api/temporal/current').then(r => r.data);
+
+// Tournaments
+export const getTournaments         = () => api.get('/api/tournaments').then(r => r.data);
+export const getTournamentLeaderboard = (id) => api.get(`/api/tournaments/${id}/leaderboard`).then(r => r.data);
+export const getCauseAllocations    = () => api.get('/api/tournaments/causes').then(r => r.data);
+export const setCauseAllocation     = (cause, percentage) => api.post('/api/tournaments/causes', { cause, percentage }).then(r => r.data);

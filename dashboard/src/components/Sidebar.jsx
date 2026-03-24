@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Monitor, Link, ListTodo, Bot, Database,
   MessageSquare, GitBranch, Network, Activity, Coins, FileText,
-  Terminal, Pin, PinOff,
+  Terminal, BrainCircuit, Clock, Trophy, Pin, PinOff,
 } from 'lucide-react';
 
-const NAV_ITEMS = [
+const NAV_MAIN = [
   { id: 'overview',    label: 'Overview',    icon: LayoutDashboard },
   { id: 'nodes',       label: 'Nodes',       icon: Monitor },
   { id: 'blockchain',  label: 'Blockchain',  icon: Link },
@@ -15,16 +15,22 @@ const NAV_ITEMS = [
   { id: 'chat',        label: 'Chat',        icon: MessageSquare },
   { id: 'git',         label: 'Git',         icon: GitBranch },
   { id: 'topology',    label: 'Topology',    icon: Network },
+  { id: 'intelligence', label: 'Intelligence', icon: BrainCircuit },
+  { id: 'temporal',     label: 'Temporal',     icon: Clock },
+  { id: 'tournaments',  label: 'Tournaments',  icon: Trophy },
+];
+
+const NAV_SYSTEM = [
   { id: 'health',      label: 'Health',      icon: Activity },
   { id: 'tokens',      label: 'Tokens',      icon: Coins },
   { id: 'logs',        label: 'Logs',        icon: FileText },
-  { id: 'terminal',    label: 'Terminal',    icon: Terminal },
+  { id: 'terminal',    label: 'Terminal',     icon: Terminal },
 ];
 
 export default function Sidebar({ activePanel, onNavigate, gwConnected }) {
-  const [pinned,    setPinned]    = useState(false);
-  const [hovered,   setHovered]   = useState(false);
-  const [time,      setTime]      = useState(new Date());
+  const [pinned, setPinned] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [time, setTime] = useState(new Date());
 
   const expanded = pinned || hovered;
 
@@ -34,149 +40,160 @@ export default function Sidebar({ activePanel, onNavigate, gwConnected }) {
   }, []);
 
   const timeStr = time.toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    hour: '2-digit', minute: '2-digit', hour12: true,
   });
+
+  const renderNavItem = ({ id, label, icon: Icon }) => {
+    const active = activePanel === id;
+    return (
+      <button
+        key={id}
+        title={!expanded ? label : undefined}
+        onClick={() => onNavigate(id)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: expanded ? '8px 12px' : '8px 0',
+          justifyContent: expanded ? 'flex-start' : 'center',
+          background: active ? 'rgba(184,150,12,0.15)' : 'transparent',
+          border: 'none',
+          borderLeft: active ? '3px solid #B8960C' : '3px solid transparent',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          color: active ? '#B8960C' : '#9ca3af',
+          fontFamily: 'var(--font-body)',
+          fontSize: '14px',
+          fontWeight: active ? 500 : 400,
+          textAlign: 'left',
+          whiteSpace: 'nowrap',
+          transition: 'all 0.15s ease',
+        }}
+        onMouseEnter={e => {
+          if (!active) {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+            e.currentTarget.style.color = '#D4AF37';
+          }
+        }}
+        onMouseLeave={e => {
+          if (!active) {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = '#9ca3af';
+          }
+        }}
+      >
+        <Icon size={18} style={{ minWidth: '18px' }} />
+        {expanded && <span>{label}</span>}
+      </button>
+    );
+  };
 
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        width:           expanded ? '240px' : '56px',
-        minWidth:        expanded ? '240px' : '56px',
-        height:          '100vh',
-        background:      'var(--bg-secondary)',
-        borderRight:     '1px solid var(--border-subtle)',
-        display:         'flex',
-        flexDirection:   'column',
-        transition:      'width 0.2s ease, min-width 0.2s ease',
-        overflow:        'hidden',
-        position:        'sticky',
-        top:             0,
-        zIndex:          50,
+        width: expanded ? '240px' : '56px',
+        minWidth: expanded ? '240px' : '56px',
+        height: '100vh',
+        background: '#0c0f0f',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'width 0.2s ease, min-width 0.2s ease',
+        overflow: 'hidden',
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
       }}
     >
       {/* Logo */}
       <div style={{
-        height:      '56px',
-        display:     'flex',
-        alignItems:  'center',
-        padding:     '0 12px',
-        borderBottom:'1px solid var(--border-subtle)',
-        flexShrink:  0,
-        gap:         '10px',
+        padding: expanded ? '24px' : '24px 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: expanded ? 'flex-start' : 'center',
+        gap: '12px',
       }}>
-        <div style={{
-          width:          '32px',
-          height:         '32px',
-          minWidth:       '32px',
-          background:     'var(--bg-tertiary)',
-          border:         '1px solid var(--accent-cyan)',
-          borderRadius:   '6px',
-          display:        'flex',
-          alignItems:     'center',
-          justifyContent: 'center',
-          fontFamily:     'var(--font-mono)',
-          fontWeight:     700,
-          fontSize:       '14px',
-          color:          'var(--accent-cyan)',
-          letterSpacing:  '0.05em',
-        }}>N</div>
+        <img
+          src="/nexus-logo.png"
+          alt="NEXUS"
+          style={{ width: '32px', height: '32px', minWidth: '32px', objectFit: 'contain' }}
+        />
         {expanded && (
-          <span style={{
-            fontFamily:   'var(--font-mono)',
-            fontWeight:   700,
-            fontSize:     '13px',
-            color:        'var(--text-primary)',
-            letterSpacing:'0.08em',
-            whiteSpace:   'nowrap',
-          }}>NEXUS OS</span>
+          <div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600, fontSize: '14px', color: '#B8960C',
+              letterSpacing: '0.1em', lineHeight: 1.2,
+            }}>NEXUS</div>
+            <div style={{
+              fontFamily: 'var(--font-label)',
+              fontSize: '9px', color: '#6b7280',
+              letterSpacing: '0.15em', textTransform: 'uppercase',
+            }}>BLOCKCHAIN OS</div>
+          </div>
         )}
       </div>
 
-      {/* Nav items */}
-      <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-          const active = activePanel === id;
-          return (
-            <button
-              key={id}
-              title={!expanded ? label : undefined}
-              onClick={() => onNavigate(id)}
-              style={{
-                width:          '100%',
-                display:        'flex',
-                alignItems:     'center',
-                gap:            '10px',
-                padding:        '9px 12px',
-                background:     active ? 'var(--bg-card)' : 'transparent',
-                border:         'none',
-                borderLeft:     active ? '3px solid var(--accent-cyan)' : '3px solid transparent',
-                cursor:         'pointer',
-                color:          active ? 'var(--text-primary)' : 'var(--text-muted)',
-                fontFamily:     'var(--font-display)',
-                fontSize:       '13px',
-                fontWeight:     active ? 600 : 400,
-                textAlign:      'left',
-                whiteSpace:     'nowrap',
-                transition:     'background 0.15s, color 0.15s',
-              }}
-              onMouseEnter={e => {
-                if (!active) e.currentTarget.style.background = 'var(--bg-card-hover)';
-              }}
-              onMouseLeave={e => {
-                if (!active) e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <Icon size={16} style={{ minWidth: '16px' }} />
-              {expanded && <span>{label}</span>}
-            </button>
-          );
-        })}
+      {/* Main Nav */}
+      <nav style={{
+        flex: 1, overflowY: 'auto', overflowX: 'hidden',
+        padding: expanded ? '0 16px' : '0 8px',
+        display: 'flex', flexDirection: 'column', gap: '2px',
+      }}>
+        {NAV_MAIN.map(renderNavItem)}
+
+        {/* System divider */}
+        {expanded && (
+          <div style={{
+            padding: '16px 12px 8px',
+            fontFamily: 'var(--font-label)',
+            fontSize: '10px', color: '#4b5563',
+            letterSpacing: '0.15em', textTransform: 'uppercase',
+          }}>System</div>
+        )}
+        {!expanded && <div style={{ height: '16px' }} />}
+
+        {NAV_SYSTEM.map(renderNavItem)}
       </nav>
 
       {/* Bottom bar */}
       <div style={{
-        borderTop:   '1px solid var(--border-subtle)',
-        padding:     '10px 12px',
-        flexShrink:  0,
-        display:     'flex',
-        alignItems:  'center',
-        gap:         '8px',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        padding: expanded ? '12px 16px' : '12px 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: expanded ? 'space-between' : 'center',
+        gap: '8px',
       }}>
-        {/* Gateway status dot */}
-        <div
-          className={gwConnected ? 'pulse' : ''}
-          style={{
-            width:        '7px',
-            height:       '7px',
-            minWidth:     '7px',
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className={gwConnected ? 'pulse' : ''} style={{
+            width: '6px', height: '6px', minWidth: '6px',
             borderRadius: '50%',
-            background:   gwConnected ? 'var(--status-online)' : 'var(--status-offline)',
-          }}
-        />
+            background: gwConnected ? '#10b981' : '#ef4444',
+          }} />
+          {expanded && (
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#6b7280',
+            }}>Connected</span>
+          )}
+        </div>
         {expanded && (
           <>
             <span style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize:   '11px',
-              color:      'var(--text-muted)',
-              flex:       1,
-              whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#6b7280',
             }}>{timeStr}</span>
             <button
               onClick={() => setPinned(p => !p)}
               title={pinned ? 'Unpin sidebar' : 'Pin sidebar'}
               style={{
-                background: 'none',
-                border:     'none',
-                cursor:     'pointer',
-                color:      pinned ? 'var(--accent-cyan)' : 'var(--text-dim)',
-                padding:    '2px',
-                display:    'flex',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: pinned ? '#ffffff' : '#4b5563',
+                display: 'flex', padding: '2px',
               }}
             >
-              {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+              {pinned ? <PinOff size={12} /> : <Pin size={12} />}
             </button>
           </>
         )}

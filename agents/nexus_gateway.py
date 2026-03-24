@@ -16,8 +16,17 @@ import signal
 import pathlib
 import time
 import uuid
+from collections import defaultdict
 
 import yaml
+
+try:
+    from eth_account.messages import encode_defunct
+    from web3 import Web3
+    _w3 = Web3()
+    _HAS_WEB3 = True
+except ImportError:
+    _HAS_WEB3 = False
 
 try:
     import websockets
@@ -98,13 +107,24 @@ class NexusGateway:
         self.router = LLMRouter()
         self.blockchain = get_blockchain_logger()
 
-        # Connected clients: websocket → {user_id, channel, session_id}
+        # Connected channel clients: websocket → {user_id, channel, session_id}
         self._clients: dict = {}
-        # Connected nodes: wallet_address → {ws, hostname, capabilities, models, resources, last_heartbeat}
+        # Connected host nodes: wallet_address → {ws, hostname, capabilities, models, resources, last_heartbeat}
         self.nodes: dict = {}
+        # Connected client nodes: wallet → {ws, hostname, capabilities, resources, last_heartbeat, connected_at}
+        self.client_nodes: dict = {}
         # In-flight node commands: request_id → {requester_ws, timestamp, hostname, command}
         self._pending_requests: dict = {}
+        # Rate limiting: wallet → list of message timestamps
+        self._client_msg_times: dict = defaultdict(list)
+        # Gradient submission tracking: wallet → last epoch submission timestamp
+        self._gradient_submissions: dict = {}
         self._running = False
+
+        _CLIENT_MAX_MSGS_PER_MIN = 10
+        self._client_rate_limit = _CLIENT_MAX_MSGS_PER_MIN
+        # Epoch duration for gradient rate limiting (default 1 hour)
+        self._epoch_duration = 3600
 
         log.info("NexusGateway initialised (ws=%s:%d, http=%s:%d)",
                  self.host, self.ws_port, self.host, self.http_port)
@@ -123,6 +143,61 @@ class NexusGateway:
             asyncio.ensure_future(self._timeout_sweep()),
             asyncio.Future(),   # run forever
         )
+
+    # ── Client wallet authentication ──────────────────────────────────────────
+
+    def _verify_wallet_signature(self, wallet: str, signature: str, message: str) -> bool:
+        """Verify that `signature` over `message` was produced by `wallet`.
+
+        Message format expected: "nexus-auth-{timestamp}"
+        Rejects messages older than 5 minutes.
+        """
+        if not _HAS_WEB3:
+            log.warning("web3 not installed — wallet signature verification disabled")
+            return True  # permissive fallback during development
+
+        try:
+            # Reject stale auth messages (> 5 min)
+            parts = message.split("-")
+            if len(parts) >= 3:
+                try:
+                    msg_ts = int(parts[-1])
+                    if abs(time.time() - msg_ts) > 300:
+                        log.warning("Auth message too old: %s", message)
+                        return False
+                except (ValueError, IndexError):
+                    pass
+
+            msg_obj = encode_defunct(text=message)
+            recovered = _w3.eth.account.recover_message(msg_obj, signature=signature)
+            if recovered.lower() == wallet.lower():
+                return True
+            log.warning("Signature mismatch: expected %s, recovered %s",
+                        wallet, recovered)
+            return False
+        except Exception as exc:
+            log.warning("Signature verification failed: %s", exc)
+            return False
+
+    def _check_client_rate_limit(self, wallet: str) -> bool:
+        """Return True if the client is within the message rate limit (10/min)."""
+        now = time.time()
+        times = self._client_msg_times[wallet]
+        # Prune entries older than 60 seconds
+        self._client_msg_times[wallet] = [t for t in times if now - t < 60]
+        if len(self._client_msg_times[wallet]) >= self._client_rate_limit:
+            return False
+        self._client_msg_times[wallet].append(now)
+        return True
+
+    def _check_gradient_rate(self, wallet: str) -> bool:
+        """Return True if the client hasn't submitted a gradient this epoch."""
+        now = time.time()
+        last = self._gradient_submissions.get(wallet, 0)
+        # Same epoch = same epoch_duration window
+        if now - last < self._epoch_duration:
+            return False
+        return True
 
     # ── WebSocket handler ──────────────────────────────────────────────────────
 
@@ -144,11 +219,16 @@ class NexusGateway:
             pass
         finally:
             self._clients.pop(websocket, None)
-            if client_info.get("role") == "node":
-                wallet = client_info.get("wallet", "")
-                hostname = client_info.get("hostname", "unknown")
+            role = client_info.get("role")
+            wallet = client_info.get("wallet", "")
+            hostname = client_info.get("hostname", "unknown")
+            if role == "node":
                 self.nodes.pop(wallet, None)
                 log.info("Node disconnected: %s", hostname)
+            elif role == "client":
+                self.client_nodes.pop(wallet, None)
+                self._client_msg_times.pop(wallet, None)
+                log.info("Client node disconnected: %s (%s)", hostname, wallet[:10])
             else:
                 log.debug("Client disconnected: %s", client_info.get("user_id"))
 
@@ -173,33 +253,77 @@ class NexusGateway:
                                 request_id)
 
         if msg_type == MSG_NODE_REGISTER:
-            token = payload.get("auth_token", "")
-            if self.auth_token and token != self.auth_token:
-                return make_error("Authentication failed", request_id)
+            role = payload.get("role", "node")
             wallet = payload.get("wallet_address", "")
             hostname = payload.get("hostname", "unknown")
             capabilities = payload.get("capabilities", [])
             models = payload.get("models", [])
             resources = payload.get("resources", {})
-            node_key = wallet or hostname
-            self.nodes[node_key] = {
-                "ws": ws,
-                "hostname": hostname,
-                "capabilities": capabilities,
-                "models": models,
-                "resources": resources,
-                "last_heartbeat": time.time(),
-            }
-            client_info["role"] = "node"
-            client_info["wallet"] = node_key
-            client_info["hostname"] = hostname
-            log.info("Node registered: %s (%s...) capabilities: %s",
-                     hostname, wallet[:10] if wallet else "?", capabilities)
-            return make_message(MSG_NODE_REGISTERED, {"status": "ok"}, request_id)
+
+            if role == "client":
+                # ── Client node: wallet signature authentication ──
+                signature = payload.get("signature", "")
+                auth_message = payload.get("auth_message", "")
+                if not wallet:
+                    return make_error("Client registration requires wallet_address", request_id)
+                if not self._verify_wallet_signature(wallet, signature, auth_message):
+                    log.warning("Client auth failed for wallet %s", wallet[:10])
+                    try:
+                        await ws.close(4001, "Authentication failed: invalid wallet signature")
+                    except Exception:
+                        pass
+                    return None
+                # Reject duplicate connections from same wallet
+                if wallet in self.client_nodes:
+                    return make_error("Wallet already connected as client", request_id)
+                self.client_nodes[wallet] = {
+                    "ws": ws,
+                    "hostname": hostname,
+                    "capabilities": capabilities,
+                    "models": models,
+                    "resources": resources,
+                    "last_heartbeat": time.time(),
+                    "connected_at": time.time(),
+                }
+                client_info["role"] = "client"
+                client_info["wallet"] = wallet
+                client_info["hostname"] = hostname
+                log.info("Client node registered: %s (%s...) capabilities: %s",
+                         hostname, wallet[:10], capabilities)
+                return make_message(MSG_NODE_REGISTERED,
+                                    {"status": "ok", "role": "client"}, request_id)
+            else:
+                # ── Host node: token authentication (existing behaviour) ──
+                token = payload.get("auth_token", "")
+                if self.auth_token and token != self.auth_token:
+                    return make_error("Authentication failed", request_id)
+                node_key = wallet or hostname
+                self.nodes[node_key] = {
+                    "ws": ws,
+                    "hostname": hostname,
+                    "capabilities": capabilities,
+                    "models": models,
+                    "resources": resources,
+                    "last_heartbeat": time.time(),
+                }
+                client_info["role"] = "node"
+                client_info["wallet"] = node_key
+                client_info["hostname"] = hostname
+                log.info("Node registered: %s (%s...) capabilities: %s",
+                         hostname, wallet[:10] if wallet else "?", capabilities)
+                return make_message(MSG_NODE_REGISTERED, {"status": "ok"}, request_id)
 
         if msg_type == MSG_NODE_HEARTBEAT:
             wallet = client_info.get("wallet", "")
-            if wallet and wallet in self.nodes:
+            role = client_info.get("role")
+            if role == "client" and wallet and wallet in self.client_nodes:
+                if not self._check_client_rate_limit(wallet):
+                    return None  # silently drop rate-limited heartbeats
+                self.client_nodes[wallet]["last_heartbeat"] = time.time()
+                for k in ("cpu_percent", "memory_percent", "disk_percent", "uptime_seconds"):
+                    if k in payload:
+                        self.client_nodes[wallet]["resources"][k] = payload[k]
+            elif wallet and wallet in self.nodes:
                 self.nodes[wallet]["last_heartbeat"] = time.time()
                 if "resources" in payload:
                     self.nodes[wallet]["resources"].update(payload["resources"])
@@ -236,6 +360,29 @@ class NexusGateway:
                 log.warning("node_response for unknown request_id: %s", req_id)
             return None
 
+        # ── Rate limiting for client nodes ──
+        if client_info.get("role") == "client":
+            wallet = client_info.get("wallet", "")
+            if not self._check_client_rate_limit(wallet):
+                return make_error("Rate limit exceeded (max 10 messages/minute)", request_id)
+
+        # ── Gradient submission from client nodes ──
+        if msg_type == "gradient_submit":
+            if client_info.get("role") != "client":
+                return make_error("gradient_submit is only available to client nodes", request_id)
+            wallet = client_info.get("wallet", "")
+            if not self._check_gradient_rate(wallet):
+                return make_error("Gradient already submitted this epoch", request_id)
+            gradient = payload.get("gradient", [])
+            dim = payload.get("dim", 0)
+            if not gradient or not dim:
+                return make_error("Missing gradient data", request_id)
+            self._gradient_submissions[wallet] = time.time()
+            log.info("Gradient received from client %s (%d dim)",
+                     wallet[:10], dim)
+            return make_message(MSG_COMMAND_RESPONSE,
+                                {"status": "accepted", "dim": dim}, request_id)
+
         if not client_info.get("user_id"):
             return make_error("Not connected. Send 'connect' first.", request_id)
 
@@ -269,9 +416,17 @@ class NexusGateway:
             target = payload.get("target_node", "")
             command = payload.get("command", "")
             args = payload.get("args", {})
+            # Check both host nodes and client nodes
             node_wallet, node_info = self._find_node(target)
+            is_target_client = node_wallet in self.client_nodes if node_wallet else False
             if node_info is None:
                 return make_error(f"Node not connected: {target}", request_id)
+            # Permission check: commands TO client nodes are restricted
+            if is_target_client and command != "health":
+                return make_error(
+                    f"Command '{command}' not allowed on client nodes (only 'health' permitted)",
+                    request_id,
+                )
             # Derive operation name (storage sub-actions get their own cost bucket)
             operation = (f"storage_{args.get('action', '')}"
                          if command == "storage" else command)
@@ -313,6 +468,7 @@ class NexusGateway:
                 {
                     "hostname": v["hostname"],
                     "wallet_address": k,
+                    "role": "node",
                     "capabilities": v["capabilities"],
                     "models": v["models"],
                     "resources": v["resources"],
@@ -321,15 +477,38 @@ class NexusGateway:
                 }
                 for k, v in self.nodes.items()
             ]
-            return make_message(MSG_COMMAND_RESPONSE, {"nodes": nodes}, request_id)
+            clients = [
+                {
+                    "hostname": v["hostname"],
+                    "wallet_address": k,
+                    "role": "client",
+                    "capabilities": v["capabilities"],
+                    "models": v.get("models", []),
+                    "resources": v["resources"],
+                    "last_heartbeat": v["last_heartbeat"],
+                    "connected": True,
+                }
+                for k, v in self.client_nodes.items()
+            ]
+            return make_message(MSG_COMMAND_RESPONSE,
+                                {"nodes": nodes, "clients": clients}, request_id)
 
         return make_error(f"Unknown message type: {msg_type}", request_id)
 
     def _find_node(self, target: str):
-        """Return (wallet, node_info) matching target by wallet_address or hostname."""
+        """Return (wallet, node_info) matching target by wallet_address or hostname.
+
+        Searches host nodes first, then client nodes.
+        """
         if target in self.nodes:
             return target, self.nodes[target]
         for wallet, info in self.nodes.items():
+            if info["hostname"] == target:
+                return wallet, info
+        # Also search client nodes (for health queries)
+        if target in self.client_nodes:
+            return target, self.client_nodes[target]
+        for wallet, info in self.client_nodes.items():
             if info["hostname"] == target:
                 return wallet, info
         return None, None
@@ -375,6 +554,7 @@ class NexusGateway:
         app = aiohttp.web.Application()
         app.router.add_get("/health", self._health_handler)
         app.router.add_get("/nodes", self._nodes_handler)
+        app.router.add_get("/clients", self._clients_handler)
         app.router.add_static("/chat", "/opt/nexus/webchat")
         app.router.add_get("/dashboard", self._dashboard_redirect)
         app.router.add_get("/dashboard/", self._dashboard_redirect)
@@ -394,12 +574,14 @@ class NexusGateway:
         health_data = {
             "status": "ok",
             "connected_clients": len(self._clients),
+            "node_count": len(self.nodes),
+            "client_count": len(self.client_nodes),
             "queue_size": len(self.queue.list_pending()),
         }
         return aiohttp.web.json_response(health_data)
 
     async def _nodes_handler(self, request):
-        """HTTP GET /nodes — returns list of connected cluster nodes."""
+        """HTTP GET /nodes — returns list of connected host nodes (excludes clients)."""
         nodes = [
             {
                 "hostname": v["hostname"],
@@ -413,6 +595,31 @@ class NexusGateway:
             for k, v in self.nodes.items()
         ]
         return aiohttp.web.json_response(nodes)
+
+    async def _clients_handler(self, request):
+        """HTTP GET /clients — returns connected client nodes."""
+        # Aggregate capabilities across all clients
+        all_caps = {}
+        for v in self.client_nodes.values():
+            for cap in v.get("capabilities", []):
+                all_caps[cap] = all_caps.get(cap, 0) + 1
+
+        clients = [
+            {
+                "hostname": v["hostname"],
+                "wallet_address": k,
+                "capabilities": v["capabilities"],
+                "resources": v["resources"],
+                "last_heartbeat": v["last_heartbeat"],
+                "connected_at": v.get("connected_at"),
+            }
+            for k, v in self.client_nodes.items()
+        ]
+        return aiohttp.web.json_response({
+            "count": len(clients),
+            "capability_summary": all_caps,
+            "clients": clients,
+        })
 
     # ── Shutdown ───────────────────────────────────────────────────────────────
 

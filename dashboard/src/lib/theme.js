@@ -1,29 +1,33 @@
 export const COLORS = {
-  cyan:   '#06b6d4',
-  green:  '#10b981',
-  red:    '#ef4444',
-  amber:  '#f59e0b',
-  blue:   '#3b82f6',
-  purple: '#8b5cf6',
+  gold: '#B8960C',        // Primary accent (from logo metallic gold)
+  goldLight: '#D4AF37',   // Hover/highlight state
+  goldDim: '#8B7209',     // Muted gold for borders
+  black: '#0A0A0A',       // Primary background
+  charcoal: '#1A1A1A',    // Card backgrounds
+  darkGray: '#2A2A2A',    // Elevated surfaces
+  white: '#F5F5F0',       // Primary text (warm white)
+  gray: '#9CA3AF',        // Secondary text
+  mutedGray: '#6B7280',   // Muted text
+  // Status colors (keep functional, not branded)
+  green: '#10b981',
+  red: '#ef4444',
+  amber: '#f59e0b',
+  blue: '#3b82f6',
 };
 
 export const CHART_COLORS = [
-  COLORS.cyan,
-  COLORS.green,
-  COLORS.blue,
-  COLORS.amber,
-  COLORS.purple,
-  COLORS.red,
+  COLORS.gold, COLORS.goldLight, COLORS.green,
+  COLORS.blue, COLORS.amber, COLORS.red
 ];
 
 export const NODE_COLORS = {
-  'nexus-admin':   COLORS.cyan,
-  'nexus-master':  COLORS.green,
-  'nexus-ai':      COLORS.purple,
-  'nexus-ai2':     COLORS.amber,
+  'nexus-admin': COLORS.gold,
+  'nexus-master': COLORS.goldLight,
+  'nexus-ai': COLORS.green,
+  'nexus-ai2': COLORS.amber,
   'nexus-storage': COLORS.blue,
-  'ThinkStation':  COLORS.red,
-  'ThinkPad':      '#f472b6',
+  'ThinkStation': COLORS.goldDim,
+  'ThinkPad': COLORS.gray,
 };
 
 export function formatAddress(addr) {

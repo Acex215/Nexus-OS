@@ -1,0 +1,15 @@
+[Unit]
+Description=NEXUS Storage Repair Daemon
+After=ipfs.service nexus-geth.service
+Wants=ipfs.service
+
+[Service]
+Type=simple
+User=mhuraibi
+ExecStart=/usr/bin/python3 /opt/nexus/modules/repair_daemon.py --interval 30 --max-repairs 0
+Restart=on-failure
+RestartSec=60
+Environment=PYTHONPATH=/opt/nexus/modules
+
+[Install]
+WantedBy=multi-user.target

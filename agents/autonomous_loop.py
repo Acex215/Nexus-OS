@@ -179,6 +179,21 @@ class AutonomousLoop:
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
                 continue
 
+            # Circuit breaker check
+            try:
+                import sys as _sys
+                if '/opt/nexus' not in _sys.path:
+                    _sys.path.insert(0, '/opt/nexus')
+                from modules.circuit_breaker import get_circuit_breaker
+                _cb = get_circuit_breaker(log_on_chain=False)
+                if _cb.is_paused("PAUSE_DEPLOYMENTS"):
+                    log.warning("[CB] Deployments paused: %s — skipping task cycle",
+                                _cb.get_reason("PAUSE_DEPLOYMENTS"))
+                    await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                    continue
+            except Exception:
+                pass  # Circuit breaker unavailable — proceed normally
+
             # Pop next task
             task = self.queue.pop_next()
             if task is None:
@@ -189,7 +204,11 @@ class AutonomousLoop:
             task_id = task["id"]
             self._current_task_id = task_id
             desc_short = task["description"][:60]
-            log.info("Starting task %s: %s", task_id, desc_short)
+            is_self_improvement = task.get("description", "").startswith("[self-improvement]")
+            if is_self_improvement:
+                log.info("Starting self-improvement task %s: %s", task_id, desc_short)
+            else:
+                log.info("Starting task %s: %s", task_id, desc_short)
 
             try:
                 # Phase: analyzing → check if decomposition needed
@@ -263,7 +282,8 @@ class AutonomousLoop:
                         files_changed=result.get("files_changed", 0),
                     )
                     self._consecutive_failures = 0
-                    log.info("Task %s completed successfully", task_id)
+                    src_tag = " (source: self-improvement)" if is_self_improvement else ""
+                    log.info("Task %s completed successfully%s", task_id, src_tag)
                     try:
                         _duration = _time.monotonic() - _task_start
                         await log_task(task, result, duration_seconds=_duration)

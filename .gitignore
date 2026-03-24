@@ -28,3 +28,9 @@ ipfs/datastore/
 *.agent_v2_backup.*
 pi-gen
 training_data/
+config/file_keys/*.key
+chromadb/
+logs/
+ipfs/blocks/
+*.pyc
+__pycache__/

@@ -10,7 +10,7 @@ export default function SearchInput({ value, onChange, placeholder = 'Search…'
       alignItems:  'center',
       gap:         '8px',
       background:  'var(--bg-tertiary)',
-      border:      `1px solid ${focused ? 'var(--accent-cyan)' : 'var(--border-default)'}`,
+      border:      `1px solid ${focused ? '#B8960C' : 'var(--border-default)'}`,
       borderRadius:'6px',
       padding:     '6px 10px',
       transition:  'border-color 0.15s',

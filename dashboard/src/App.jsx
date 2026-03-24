@@ -16,6 +16,9 @@ const HealthPanel      = lazy(() => import('./panels/HealthPanel.jsx'));
 const TokensPanel      = lazy(() => import('./panels/TokensPanel.jsx'));
 const LogsPanel        = lazy(() => import('./panels/LogsPanel.jsx'));
 const TerminalPanel    = lazy(() => import('./panels/TerminalPanel.jsx'));
+const IntelligencePanel = lazy(() => import('./panels/IntelligencePanel.jsx'));
+const TemporalPanel     = lazy(() => import('./panels/TemporalPanel.jsx'));
+const TournamentPanel   = lazy(() => import('./panels/TournamentPanel.jsx'));
 
 const PANELS = {
   overview:   OverviewPanel,
@@ -31,6 +34,9 @@ const PANELS = {
   tokens:     TokensPanel,
   logs:       LogsPanel,
   terminal:   TerminalPanel,
+  intelligence: IntelligencePanel,
+  temporal:     TemporalPanel,
+  tournaments:  TournamentPanel,
 };
 
 function Spinner() {
@@ -50,7 +56,7 @@ function Spinner() {
         width:        '24px',
         height:       '24px',
         border:       '2px solid var(--border-default)',
-        borderTop:    '2px solid var(--accent-cyan)',
+        borderTop:    '2px solid #B8960C',
         borderRadius: '50%',
         animation:    'spin 0.8s linear infinite',
       }} />

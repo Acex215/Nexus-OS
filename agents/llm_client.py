@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Local inference endpoint (llama-server on nexus-ai)
-LOCAL_INFERENCE_URL = "http://10.0.20.4:8090/v1/chat/completions"
+LOCAL_INFERENCE_URL = os.environ.get(
+    "NEXUS_LOCAL_INFERENCE_URL", "http://10.0.20.4:8090/v1/chat/completions"
+)
 LOCAL_TIMEOUT = 30  # seconds — local inference can be slow on CPU
 LOCAL_MODEL_NAME = "local/SmolLM2-1.7B"
 

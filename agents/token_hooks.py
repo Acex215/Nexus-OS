@@ -7,11 +7,25 @@ Both modes write real on-chain transactions when the blockchain is reachable.
 
 import logging
 import os
+import sys
 import hashlib
 
 log = logging.getLogger("token_hooks")
 
 ENFORCEMENT_ENABLED = os.environ.get("ENFORCEMENT_ENABLED", "false").lower() == "true"
+
+# Agent tier lookup (wallet → tier). Populated by hierarchy_manager at startup.
+AGENT_TIERS = {}
+
+def _get_budget_manager():
+    """Lazy-load AgentBudgetManager singleton."""
+    try:
+        if '/opt/nexus/modules' not in sys.path:
+            sys.path.insert(0, '/opt/nexus/modules')
+        from agent_budget import get_budget_manager
+        return get_budget_manager()
+    except Exception:
+        return None
 
 OPERATION_COSTS = {
     "exec": 5, "inference": 10, "storage_pin": 3,
@@ -50,6 +64,17 @@ def _make_task_id(operation, node_wallet):
     return hashlib.sha256(raw).digest()
 
 
+def _get_circuit_breaker():
+    """Lazy-load circuit breaker singleton."""
+    try:
+        if '/opt/nexus' not in sys.path:
+            sys.path.insert(0, '/opt/nexus')
+        from modules.circuit_breaker import get_circuit_breaker
+        return get_circuit_breaker(log_on_chain=False)
+    except Exception:
+        return None
+
+
 def cost_check(requester_wallet, operation, node_wallet):
     """Check if requester has enough ECT for this operation.
     Returns (allowed: bool, cost: int).
@@ -61,6 +86,22 @@ def cost_check(requester_wallet, operation, node_wallet):
     cost = OPERATION_COSTS.get(operation, 1)
     if cost == 0:
         return (True, 0)
+
+    # Circuit breaker check
+    cb = _get_circuit_breaker()
+    if cb and cb.is_paused("PAUSE_TOKEN_ACTIONS"):
+        log.warning("[CB] Token actions paused: %s — allowing %s without ECT spend",
+                    cb.get_reason("PAUSE_TOKEN_ACTIONS"), operation)
+        return (True, 0)
+
+    # Agent budget check (ALWAYS enforced, not toggleable)
+    budget_mgr = _get_budget_manager()
+    if budget_mgr is not None:
+        tier = AGENT_TIERS.get(requester_wallet, "worker")
+        if not budget_mgr.check_budget(requester_wallet, operation, tier, cost):
+            log.warning("[BUDGET] %s over budget for %s — BLOCKED (always enforced)",
+                        requester_wallet[:16], operation)
+            return (False, cost)
 
     client = _get_client()
     if client is None:

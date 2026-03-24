@@ -1,0 +1,193 @@
+# ═══════════════════════════════════════════════════════════════════
+# NEXUS OS — Geth Validator DaemonSet
+#
+# Wraps the Geth PoA validator in a K3s DaemonSet. Runs on all nodes
+# labeled nexus-role=validator. Auto-restarts on failure.
+#
+# MIGRATION: This replaces the systemd nexus-geth.service + clef.service.
+# Before deploying:
+#   1. Test on ONE node first (label only that node as validator)
+#   2. Stop systemd services on that node:
+#        sudo systemctl stop nexus-geth clef
+#        sudo systemctl disable nexus-geth clef
+#   3. Verify the DaemonSet pod starts and peers correctly
+#   4. Then roll out to remaining nodes one at a time
+#
+# Rollback: delete daemonset, re-enable systemd services
+#   kubectl delete -f /opt/nexus/k3s/geth-daemonset.yaml
+#   ssh <node> "sudo systemctl enable --now clef nexus-geth"
+#
+# NOTE: Clef runs as an init container to create the IPC socket before
+# Geth starts. Both share the blockchain hostPath volume.
+# ═══════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nexus-geth
+  namespace: nexus
+  labels:
+    app: nexus-geth
+    component: blockchain
+spec:
+  selector:
+    matchLabels:
+      app: nexus-geth
+  updateStrategy:
+    type: OnDelete    # manual rollout — never auto-restart all validators at once
+  template:
+    metadata:
+      labels:
+        app: nexus-geth
+        component: blockchain
+    spec:
+      hostNetwork: true         # use host networking for P2P peering on 30303
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        nexus-role: validator   # only runs on labeled validator nodes
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule      # allow on K3s master (nexus-master is a validator)
+
+      initContainers:
+      # ── Clef signer (init) ────────────────────────────────────────
+      # Starts Clef, waits for the IPC socket to appear, then exits.
+      # Clef continues running as a sidecar (see below).
+      - name: clef-init
+        image: python:3.11-slim-bookworm
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Verify Clef IPC directory is writable
+          test -d /data || exit 1
+          test -f /clef/clef-wrapper.py || exit 1
+          echo "Clef init: verifying keystore and config..."
+          test -d /data/keystore || exit 1
+          test -f /clef/rules.js || exit 1
+          echo "Clef init: prerequisites OK"
+        volumeMounts:
+        - name: geth-data
+          mountPath: /data
+        - name: clef-config
+          mountPath: /clef
+          readOnly: true
+
+      containers:
+      # ── Clef signer (sidecar) ─────────────────────────────────────
+      - name: clef
+        image: python:3.11-slim-bookworm
+        command:
+        - /usr/bin/python3
+        - /clef/clef-wrapper.py
+        - /clef/.clef-password
+        - --keystore
+        - /data/keystore
+        - --configdir
+        - /clef
+        - --chainid
+        - "123454321"
+        - --rules
+        - /clef/rules.js
+        - --ipcpath
+        - /data
+        - --nousb
+        - --suppress-bootwarn
+        volumeMounts:
+        - name: geth-data
+          mountPath: /data
+        - name: clef-config
+          mountPath: /clef
+          readOnly: true
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+
+      # ── Geth validator ─────────────────────────────────────────────
+      - name: geth
+        image: ethereum/client-go:v1.13.15
+        args:
+        - "--datadir=/data"
+        - "--networkid=123454321"
+        - "--port=30303"
+        - "--http"
+        - "--http.addr=0.0.0.0"
+        - "--http.port=8545"
+        - "--http.api=eth,net,web3,personal,admin,txpool"
+        - "--http.corsdomain=*"
+        - "--ws"
+        - "--ws.addr=0.0.0.0"
+        - "--ws.port=8546"
+        - "--ws.api=eth,net,web3,personal,admin,txpool"
+        - "--ws.origins=*"
+        - "--signer=/data/clef.ipc"
+        - "--mine"
+        - "--miner.etherbase=0x817B0842B208B76A7665948F8D1A0592F9b1e958"
+        - "--syncmode=full"
+        - "--gcmode=archive"
+        - "--verbosity=3"
+        - "--maxpeers=25"
+        - "--config=/data/config.toml"
+        ports:
+        - name: p2p-tcp
+          containerPort: 30303
+          hostPort: 30303
+          protocol: TCP
+        - name: p2p-udp
+          containerPort: 30303
+          hostPort: 30303
+          protocol: UDP
+        - name: http-rpc
+          containerPort: 8545
+          hostPort: 8545
+          protocol: TCP
+        - name: ws-rpc
+          containerPort: 8546
+          hostPort: 8546
+          protocol: TCP
+        volumeMounts:
+        - name: geth-data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "512Mi"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "wget -qO- --timeout=5 http://127.0.0.1:8545 -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' >/dev/null 2>&1"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 5    # 5 consecutive failures before restart
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "wget -qO- --timeout=5 http://127.0.0.1:8545 -d '{\"jsonrpc\":\"2.0\",\"method\":\"net_peerCount\",\"params\":[],\"id\":1}' 2>/dev/null | grep -q result"
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 10
+
+      volumes:
+      - name: geth-data
+        hostPath:
+          path: /opt/nexus/blockchain
+          type: Directory
+      - name: clef-config
+        hostPath:
+          path: /opt/nexus/clef
+          type: Directory
+
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 120   # give Geth time to flush state on shutdown

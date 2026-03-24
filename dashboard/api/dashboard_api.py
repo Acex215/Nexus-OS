@@ -23,7 +23,8 @@ import aiohttp
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 try:
@@ -32,6 +33,14 @@ try:
     HAS_WEB3 = True
 except ImportError:
     HAS_WEB3 = False
+
+try:
+    from sentence_transformers import SentenceTransformer as _ST
+    _embed_model = _ST("sentence-transformers/all-MiniLM-L6-v2")
+    HAS_EMBEDDINGS = True
+except Exception:
+    _embed_model = None
+    HAS_EMBEDDINGS = False
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -45,10 +54,10 @@ NEXUS_REPO        = "/opt/nexus"
 # ---------------------------------------------------------------------------
 # External service endpoints
 # ---------------------------------------------------------------------------
-GETH_RPC        = "http://10.0.20.3:8545"
-GATEWAY_HTTP    = "http://localhost:8766"
-GATEWAY_WS      = "ws://localhost:8765/ws"
-CHROMADB_URL    = "http://localhost:8000"
+GETH_RPC        = os.environ.get("GETH_RPC",      "http://10.0.20.3:8545")
+GATEWAY_HTTP    = os.environ.get("GATEWAY_URL",   "http://10.0.20.1:8766")
+GATEWAY_WS      = os.environ.get("GATEWAY_WS",    "ws://10.0.20.1:8765/ws")
+CHROMADB_URL    = os.environ.get("CHROMADB_URL",  "http://10.0.20.1:8000")
 CHROMADB_V2     = f"{CHROMADB_URL}/api/v2/tenants/default_tenant/databases/default_database"
 VALIDATOR_NODES = ["10.0.20.3", "10.0.20.4", "10.0.20.11"]
 
@@ -168,6 +177,13 @@ async def _ssh_run(host: str, cmd: str, timeout: float = 10.0) -> str:
         return f"ssh error: {exc}"
 
 # ---------------------------------------------------------------------------
+# CLIENT CONFIG
+# ---------------------------------------------------------------------------
+@app.get("/api/config")
+async def get_config():
+    return {"gateway_ws": GATEWAY_WS}
+
+# ---------------------------------------------------------------------------
 # GATEWAY PROXY
 # ---------------------------------------------------------------------------
 @app.get("/api/health")
@@ -181,6 +197,13 @@ async def get_health():
 async def get_nodes():
     try:
         return await _http_get(f"{GATEWAY_HTTP}/nodes", timeout=5)
+    except Exception as exc:
+        return {"error": "gateway unreachable", "detail": str(exc)}
+
+@app.get("/api/clients")
+async def get_clients():
+    try:
+        return await _http_get(f"{GATEWAY_HTTP}/clients", timeout=5)
     except Exception as exc:
         return {"error": "gateway unreachable", "detail": str(exc)}
 
@@ -446,11 +469,19 @@ async def knowledge_collections():
     try:
         data = await _http_get(f"{CHROMADB_V2}/collections")
         if isinstance(data, list):
+            async def _count(col_id: str) -> int:
+                try:
+                    r = await _http_get(f"{CHROMADB_V2}/collections/{col_id}/count")
+                    return r if isinstance(r, int) else 0
+                except Exception:
+                    return 0
+            counts = await asyncio.gather(*[_count(c.get("id", "")) for c in data])
             result = []
-            for col in data:
+            for col, cnt in zip(data, counts):
                 result.append({
                     "name":     col.get("name"),
                     "id":       col.get("id"),
+                    "count":    cnt,
                     "metadata": col.get("metadata", {}),
                 })
             return result
@@ -466,10 +497,22 @@ async def knowledge_search(body: dict):
     n          = int(body.get("n", 5))
     if not collection or not query:
         return {"error": "collection and query required"}
+    if not HAS_EMBEDDINGS:
+        return {"error": "embedding model unavailable"}
     try:
+        loop = asyncio.get_event_loop()
+        embedding = await loop.run_in_executor(
+            None, lambda: _embed_model.encode([query])[0].tolist()
+        )
+        # Get collection UUID first (ChromaDB v1.5.2 query requires UUID path)
+        col_info = await _http_get(f"{CHROMADB_V2}/collections/{collection}")
+        col_id   = col_info.get("id") if isinstance(col_info, dict) else None
+        if not col_id:
+            return {"error": f"collection '{collection}' not found"}
         results = await _http_post(
-            f"{CHROMADB_V2}/collections/{collection}/query",
-            {"query_texts": [query], "n_results": n},
+            f"{CHROMADB_V2}/collections/{col_id}/query",
+            {"query_embeddings": [embedding], "n_results": n,
+             "include": ["documents", "metadatas", "distances"]},
         )
         return results
     except Exception as exc:
@@ -928,6 +971,106 @@ async def health_services():
     return {"services": services}
 
 # ---------------------------------------------------------------------------
+# MESH PEERS — on-chain + discovered
+# ---------------------------------------------------------------------------
+DISCOVERED_PEERS_FILE = Path("/opt/nexus/config/discovered_peers.json")
+
+@app.get("/api/mesh/peers")
+async def mesh_peers():
+    """Return mesh peers from MeshRegistry (on-chain) + discovered_peers.json."""
+    onchain_peers = []
+    w3, contract = _w3_contract("MeshRegistry")
+    if w3 and contract:
+        try:
+            count = contract.functions.getPeerCount().call()
+            for i in range(count):
+                addr = contract.functions.getPeerAddress(i).call()
+                enode, wg_pub, mesh_ip, active = contract.functions.getPeer(addr).call()
+                # enode stores "ip:port", wg_pub stores capabilities
+                ip, port = "", 0
+                if ":" in enode:
+                    parts = enode.rsplit(":", 1)
+                    ip = parts[0]
+                    try:
+                        port = int(parts[1])
+                    except ValueError:
+                        port = 0
+                elif enode:
+                    ip = enode
+                onchain_peers.append({
+                    "wallet": addr,
+                    "ip": ip or mesh_ip,
+                    "port": port,
+                    "capabilities": wg_pub,
+                    "mesh_ip": mesh_ip,
+                    "active": active,
+                    "source": "onchain",
+                })
+        except Exception as exc:
+            log.warning("MeshRegistry read failed: %s", exc)
+
+    discovered_peers = []
+    if DISCOVERED_PEERS_FILE.exists():
+        try:
+            data = json.loads(DISCOVERED_PEERS_FILE.read_text())
+            for wallet, info in data.items():
+                discovered_peers.append({
+                    "wallet": wallet,
+                    "ip": info.get("ip", ""),
+                    "port": info.get("port", 0),
+                    "capabilities": info.get("capabilities", ""),
+                    "last_seen": info.get("last_seen_iso", ""),
+                    "source": info.get("source", "discovery"),
+                })
+        except Exception as exc:
+            log.warning("discovered_peers.json read failed: %s", exc)
+
+    # Merge: on-chain peers take priority, add any discovery-only peers
+    seen_wallets = {p["wallet"] for p in onchain_peers}
+    merged = list(onchain_peers)
+    for dp in discovered_peers:
+        if dp["wallet"] not in seen_wallets:
+            merged.append(dp)
+
+    return {"peers": merged, "onchain_count": len(onchain_peers), "discovered_count": len(discovered_peers)}
+
+# ---------------------------------------------------------------------------
+# DATA MINING — results from scheduled mining job
+# ---------------------------------------------------------------------------
+MINING_RESULTS_FILE = Path("/opt/nexus/logs/mining_results.json")
+
+def _read_mining_results() -> dict:
+    if not MINING_RESULTS_FILE.exists():
+        return {"error": "no mining results yet", "timestamp": None}
+    try:
+        return json.loads(MINING_RESULTS_FILE.read_text())
+    except Exception as exc:
+        return {"error": str(exc), "timestamp": None}
+
+@app.get("/api/mining/results")
+async def mining_results():
+    """Full mining results from latest run."""
+    return _read_mining_results()
+
+@app.get("/api/mining/patterns")
+async def mining_patterns():
+    """Association rules only."""
+    data = _read_mining_results()
+    return {"timestamp": data.get("timestamp"), "patterns": data.get("patterns", [])}
+
+@app.get("/api/mining/clusters")
+async def mining_clusters():
+    """Node clustering only."""
+    data = _read_mining_results()
+    return {"timestamp": data.get("timestamp"), "node_clusters": data.get("node_clusters", [])}
+
+@app.get("/api/mining/anomalies")
+async def mining_anomalies():
+    """Anomaly flags only."""
+    data = _read_mining_results()
+    return {"timestamp": data.get("timestamp"), "anomalies": data.get("anomalies", [])}
+
+# ---------------------------------------------------------------------------
 # TERMINAL — Command execution (Phase 11A)
 # Mirrors COMMAND_ALLOWLIST / COMMAND_BLOCKLIST from node_agent.py
 # ---------------------------------------------------------------------------
@@ -1381,6 +1524,356 @@ async def temporal_recent(limit: int = 20):
     except Exception as exc:
         return {"error": str(exc)}
 
+
+# ---------------------------------------------------------------------------
+# Temporal Scoring (TemporalScorer — offline analysis)
+# ---------------------------------------------------------------------------
+
+def _get_temporal_scorer():
+    try:
+        sys.path.insert(0, "/opt/nexus")
+        from modules.temporal_scoring import TemporalScorer
+        return TemporalScorer()
+    except Exception as exc:
+        log.warning("TemporalScorer unavailable: %s", exc)
+        return None
+
+
+@app.get("/api/temporal/heatmap/scored")
+async def temporal_heatmap_scored(days: int = 30):
+    scorer = _get_temporal_scorer()
+    if not scorer:
+        return {"error": "TemporalScorer module unavailable"}
+    try:
+        hm = scorer.generate_heatmap_data(days=max(1, min(days, 365)))
+        # Convert numpy arrays to nested lists for JSON
+        data = []
+        for hour in range(24):
+            for dow in range(7):
+                data.append({
+                    "hour": hour,
+                    "day": dow,
+                    "utilization": round(float(hm["utilization"][hour, dow]), 4),
+                    "success_rate": round(float(hm["success_rate"][hour, dow]), 4),
+                })
+        return {
+            "period_days": hm["period_days"],
+            "total_entries": hm["total_entries"],
+            "data": data,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/temporal/stats")
+async def temporal_stats():
+    w3, ts = _w3_contract("TemporalScheduler")
+    scorer = _get_temporal_scorer()
+
+    result = {}
+
+    # On-chain stats
+    if w3 and w3.is_connected() and ts:
+        try:
+            result["total_assignments"] = ts.functions.totalAssignments().call()
+            result["total_bins_used"] = ts.functions.totalBinsUsed().call()
+        except Exception as exc:
+            result["chain_error"] = str(exc)
+    else:
+        result["chain_error"] = "TemporalScheduler not available"
+
+    # Scorer heatmap summary
+    if scorer:
+        try:
+            hm = scorer.generate_heatmap_data(days=30)
+            util = hm["utilization"]
+            sr = hm["success_rate"]
+            # Busiest cell
+            max_idx = util.argmax()
+            busiest_hour = int(max_idx // 7)
+            busiest_dow = int(max_idx % 7)
+            dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            result["busiest_bin"] = f"{dow_names[busiest_dow]} {busiest_hour:02d}:00"
+            result["avg_success_rate"] = round(float(sr.mean()), 4)
+            result["total_log_entries"] = hm["total_entries"]
+        except Exception as exc:
+            result["scorer_error"] = str(exc)
+
+    return result
+
+
+@app.get("/api/temporal/current")
+async def temporal_current():
+    w3, ts = _w3_contract("TemporalScheduler")
+    now = datetime.now(timezone.utc)
+    iso_year, iso_week, iso_day = now.isocalendar()
+    dow = iso_day - 1
+    hour = now.hour
+    dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    result = {
+        "label": f"{iso_year}-W{iso_week:02d}-{dow_names[dow]}-{hour:02d}:00",
+        "year": iso_year,
+        "week": iso_week,
+        "day_of_week": dow,
+        "hour": hour,
+    }
+
+    if w3 and w3.is_connected() and ts:
+        try:
+            bin_id = ts.functions.computeBinId(iso_year, iso_week, dow, hour).call()
+            result["bin_id"] = "0x" + bin_id.hex()
+            year, week, d, h, task_count, ect_spent, created_at, exists = \
+                ts.functions.getBin(bin_id).call()
+            result["task_count"] = task_count if exists else 0
+            result["ect_spent"] = ect_spent if exists else 0
+            result["exists"] = exists
+            if exists:
+                tasks = ts.functions.getBinTasks(bin_id).call()
+                result["tasks"] = ["0x" + t.hex() for t in tasks]
+            else:
+                result["tasks"] = []
+        except Exception as exc:
+            result["error"] = str(exc)
+    else:
+        result["error"] = "TemporalScheduler not available"
+        result["task_count"] = 0
+        result["tasks"] = []
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Tournament endpoints
+# ---------------------------------------------------------------------------
+
+DEPLOYER_WALLET = '0x817B0842B208B76A7665948F8D1A0592F9b1e958'
+
+
+def _tournament_contract():
+    """Return (w3, contract) for TournamentManager."""
+    return _w3_contract("TournamentManager")
+
+
+@app.get("/api/tournaments")
+async def list_tournaments():
+    w3, tm = _tournament_contract()
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable", "tournaments": []}
+    if not tm:
+        return {"error": "TournamentManager not deployed", "tournaments": []}
+    try:
+        count = tm.functions.tournamentCount().call()
+        tournaments = []
+        for i in range(count):
+            t = tm.functions.tournaments(i).call()
+            sub_count = tm.functions.getSubmissionCount(i).call()
+            now = int(time.time())
+            end_epoch = t[5]
+            remaining = max(0, end_epoch - now)
+            tournaments.append({
+                "id": t[0],
+                "name": t[1],
+                "description": t[2],
+                "prize_pool": t[3],
+                "start_epoch": t[4],
+                "end_epoch": end_epoch,
+                "validation_data_hash": "0x" + t[6].hex(),
+                "finalized": t[7],
+                "winner": t[8],
+                "winner_score": t[9],
+                "submission_count": sub_count,
+                "time_remaining": remaining,
+            })
+        return {
+            "count": count,
+            "total_prize_distributed": tm.functions.totalPrizeDistributed().call(),
+            "tournaments": tournaments,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "tournaments": []}
+
+
+@app.get("/api/tournaments/{tournament_id}/leaderboard")
+async def tournament_leaderboard(tournament_id: int):
+    w3, tm = _tournament_contract()
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable"}
+    if not tm:
+        return {"error": "TournamentManager not deployed"}
+    try:
+        count = tm.functions.tournamentCount().call()
+        if tournament_id >= count:
+            return {"error": "Invalid tournament ID"}
+        contributors, pred_hashes, scores, timestamps = \
+            tm.functions.getLeaderboard(tournament_id).call()
+        leaderboard = []
+        for i in range(len(contributors)):
+            leaderboard.append({
+                "rank": i + 1,
+                "contributor": contributors[i],
+                "prediction_hash": "0x" + pred_hashes[i].hex(),
+                "score": scores[i],
+                "timestamp": timestamps[i],
+            })
+        return {"tournament_id": tournament_id, "leaderboard": leaderboard}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/tournaments/causes")
+async def get_cause_allocations():
+    w3, tm = _tournament_contract()
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable", "allocations": []}
+    if not tm:
+        return {"error": "TournamentManager not deployed", "allocations": []}
+    try:
+        contributors, cause_names, percentages = \
+            tm.functions.getCauseAllocations().call()
+        allocations = []
+        for i in range(len(contributors)):
+            allocations.append({
+                "contributor": contributors[i],
+                "cause_name": cause_names[i],
+                "percentage_bps": percentages[i],
+            })
+
+        # Get RST totals for contribution weight calculation
+        rst_total = 0
+        user_rst = 0
+        w3_tok, tok = _w3_contract("TokenManager")
+        if tok:
+            try:
+                _, _, rst_earned, rst_slashed = tok.functions.getTotals().call()
+                rst_total = rst_earned - rst_slashed
+                user_rst_raw = tok.functions.rstBalances(
+                    Web3.to_checksum_address(DEPLOYER_WALLET)
+                ).call()
+                user_rst = user_rst_raw
+            except Exception:
+                pass
+
+        return {
+            "allocations": allocations,
+            "rst_total": rst_total,
+            "user_rst": user_rst,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "allocations": []}
+
+
+class CauseRequest(BaseModel):
+    cause: str
+    percentage: int
+
+
+@app.post("/api/tournaments/causes")
+async def set_cause_allocation(req: CauseRequest):
+    w3, tm = _tournament_contract()
+    if not w3 or not w3.is_connected():
+        return {"error": "blockchain unreachable"}
+    if not tm:
+        return {"error": "TournamentManager not deployed"}
+    try:
+        percentage = max(0, min(req.percentage, 10000))
+        tx_hash = tm.functions.setCauseAllocation(
+            req.cause, percentage
+        ).transact({
+            'from': Web3.to_checksum_address(DEPLOYER_WALLET),
+            'gas': 500000,
+        })
+        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
+        return {
+            "success": True,
+            "cause": req.cause,
+            "percentage_bps": percentage,
+            "tx_hash": tx_hash.hex(),
+            "block": receipt['blockNumber'],
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Circuit Breakers
+# ---------------------------------------------------------------------------
+
+def _get_circuit_breaker():
+    try:
+        sys.path.insert(0, "/opt/nexus")
+        from modules.circuit_breaker import get_circuit_breaker
+        return get_circuit_breaker(log_on_chain=False)
+    except Exception as exc:
+        log.warning("CircuitBreaker unavailable: %s", exc)
+        return None
+
+
+@app.get("/api/circuit-breakers")
+async def circuit_breakers_status():
+    cb = _get_circuit_breaker()
+    if not cb:
+        return {"error": "CircuitBreaker module unavailable", "breakers": {}}
+    return {"breakers": cb.get_status()}
+
+
+class BreakerActionRequest(BaseModel):
+    reason: str = ""
+
+
+@app.post("/api/circuit-breakers/{name}/pause")
+async def circuit_breaker_pause(name: str, req: BreakerActionRequest):
+    cb = _get_circuit_breaker()
+    if not cb:
+        return {"error": "CircuitBreaker module unavailable"}
+    changed = cb.pause(name, req.reason or "Paused via dashboard", "dashboard")
+    return {"success": True, "changed": changed, "breaker": name, "action": "paused"}
+
+
+@app.post("/api/circuit-breakers/{name}/resume")
+async def circuit_breaker_resume(name: str, req: BreakerActionRequest):
+    cb = _get_circuit_breaker()
+    if not cb:
+        return {"error": "CircuitBreaker module unavailable"}
+    changed = cb.resume(name, req.reason or "Resumed via dashboard", "dashboard")
+    return {"success": True, "changed": changed, "breaker": name, "action": "resumed"}
+
+
+# ---------------------------------------------------------------------------
+# Serve frontend
+# ---------------------------------------------------------------------------
+DIST_DIR = Path(__file__).parent.parent / "dist"
+if DIST_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="static-assets")
+
+    @app.get("/manifest.json")
+    async def serve_manifest():
+        manifest = DIST_DIR / "manifest.json"
+        if manifest.exists():
+            return FileResponse(str(manifest), media_type="application/manifest+json")
+        return {"error": "manifest not found"}
+
+    @app.get("/sw.js")
+    async def serve_sw():
+        sw = DIST_DIR / "sw.js"
+        if sw.exists():
+            return FileResponse(str(sw), media_type="application/javascript")
+        return {"error": "sw not found"}
+
+    @app.get("/favicon.svg")
+    async def serve_favicon():
+        fav = DIST_DIR / "favicon.svg"
+        if fav.exists():
+            return FileResponse(str(fav), media_type="image/svg+xml")
+        return {"error": "favicon not found"}
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve the React SPA for any non-API route."""
+        index = DIST_DIR / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        return {"error": "Frontend not built"}
 
 # ---------------------------------------------------------------------------
 # Entry point
