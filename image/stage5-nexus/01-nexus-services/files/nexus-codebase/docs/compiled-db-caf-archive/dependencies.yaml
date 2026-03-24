@@ -1,0 +1,315 @@
+# NEXUS OS Component Dependency Graph
+# Generated: 2026-03-09
+# Source: components.yaml + interfaces.yaml + live code inspection
+#
+# Rule: NEVER modify a dependency without checking all dependents first.
+# Rule: modification_risk: critical → requires full cluster coordination + backup
+# Rule: modification_risk: high → requires dependency map review + staged rollout
+# Rule: modification_risk: medium → test locally, verify dependents still pass
+# Rule: modification_risk: low → safe to modify with standard review
+#
+# depends_on: components this component CALLS or REQUIRES to function
+# dependents:  components that CALL or REQUIRE this component
+# safe_modification_order: topological sort for safe change sequencing
+
+dependencies:
+
+  # ─────────────────────────────────────────────────────────────────
+  # LAYER 0 — FOUNDATIONAL (no internal dependencies)
+  # ─────────────────────────────────────────────────────────────────
+
+  - component: blockchain-kernel
+    depends_on: []
+    dependents:
+      - smart-contracts       # contracts live on-chain
+      - blockchain-logging    # writes to ReasoningLedger
+      - libnexus              # kernel.py wraps all contract calls
+      - caf-orchestrator      # reads block number, sends txns
+      - ipfs-storage          # StorageRegistry on-chain
+      - k3s-cluster           # shares cluster network layer
+      - dashboard             # reads blockchain metrics
+      - token-economy         # TokenManager on-chain
+      - wireguard-overlay     # MeshRegistry on-chain
+    modification_risk: critical
+    notes: >
+      Genesis config, validator set, and Clef rules are the lowest layer of
+      the entire system. Any change to genesis.json requires chain re-initialization
+      on ALL 3 validators simultaneously (nexus-master, nexus-ai, nexus-storage).
+      Clef rules.js changes require re-attestation (sha256) + restart of clef AND
+      geth on all validators. period=0 means no blocks are produced without pending
+      transactions — stalled chain height is normal, not a sign of validator failure.
+      NEVER modify validator config without a full backup of /opt/nexus/blockchain/
+      on all three validator nodes.
+
+  - component: llm-inference
+    depends_on: []
+    dependents:
+      - ai-agent-hierarchy    # Workers use local; Directors/CEO use HuggingFace
+      - caf-orchestrator      # Routes to Tier1 (ThinkPad) / Tier2 (nexus-ai2) / Tier3
+    modification_risk: medium
+    notes: >
+      Two independent inference paths: llama-server (nexus-ai:8090) for agents,
+      Ollama (nexus-ai2:11434 + nexus-master:11434 + ThinkPad:1234) for CAF.
+      Changing the local_url in llm_client.py or TIER_ENDPOINTS in llm_router.py
+      affects all callers. Health is cached 60s — endpoint changes take up to 60s
+      to propagate. Currently: llm_client.py has STALE IP (see G005) — local
+      inference unreachable for agents despite service being up on nexus-ai.
+
+  # ─────────────────────────────────────────────────────────────────
+  # LAYER 1 — DEPENDS ON FOUNDATIONAL ONLY
+  # ─────────────────────────────────────────────────────────────────
+
+  - component: smart-contracts
+    depends_on:
+      - blockchain-kernel     # contracts live on-chain; kernel must be running
+    dependents:
+      - blockchain-logging    # calls ReasoningLedger.logReasoning()
+      - libnexus              # kernel.py wraps ResourceManager, ServiceRegistry, MeshRegistry
+      - ipfs-storage          # NexusStorage calls StorageRegistry
+      - token-economy         # TokenManager, AgentGovernance, DecisionQuality deployed here
+      - wireguard-overlay     # mesh_discovery.py calls MeshRegistry
+    modification_risk: critical
+    notes: >
+      Smart contracts are IMMUTABLE once deployed. "Modifying" means deploying a
+      NEW contract at a new address and updating all callers' deployed/*.json files.
+      Any redeployment requires: (1) update deployed/*.json with new address + ABI,
+      (2) update libnexus/contracts.py if contract list changes,
+      (3) update all Python callers (blockchain_logger.py, nexus_storage.py, etc.),
+      (4) update MEMORY.md contract addresses.
+      3 of 9 contract sources not committed (TokenManager.sol, AgentGovernance.sol,
+      DecisionQuality.sol) — cannot redeploy these without source reconstruction.
+      deploy.py:9 has STALE RPC URL (see G007) — new deployments will fail.
+
+  - component: ipfs-storage
+    depends_on:
+      - blockchain-kernel     # StorageRegistry for on-chain metadata
+      - smart-contracts       # StorageRegistry.sol
+    dependents:
+      - libnexus              # NexusStorage uses IPFS HTTP API
+      - chromadb-knowledge    # ChromaDB data on NFS at /mnt/nexus-nas/knowledge/chroma
+      - caf-orchestrator      # context_builder uses world_model.db on NFS
+      - dashboard             # collects IPFS stats
+    modification_risk: medium
+    notes: >
+      Two distinct failure modes: (1) IPFS daemon down → uploads/downloads fail;
+      (2) NFS mount (/mnt/nexus-nas) down → ChromaDB data inaccessible and
+      world_model.db unavailable. The NFS mount (nexus-storage as NFS server) is a
+      transitive dependency for chromadb-knowledge and caf-orchestrator context.
+      nexus-admin IPFS currently has 0 swarm peers (see G010) — uploads succeed
+      locally but have zero redundancy across the cluster.
+
+  - component: k3s-cluster
+    depends_on:
+      - blockchain-kernel     # network layer shared with validators
+    dependents: []
+    modification_risk: low
+    notes: >
+      No application workloads currently deployed on K3s — infrastructure up,
+      application layer pending. kubectl not available on nexus-admin directly;
+      must SSH to nexus-master or set KUBECONFIG. Currently an operational but
+      unused infrastructure layer. Changes to k3s config.yaml (server URL, node-label)
+      affect worker join; if nexus-master IP changes, all workers must update
+      config.yaml and restart k3s-agent.
+
+  # ─────────────────────────────────────────────────────────────────
+  # LAYER 2 — INFRASTRUCTURE SERVICES
+  # ─────────────────────────────────────────────────────────────────
+
+  - component: libnexus
+    depends_on:
+      - blockchain-kernel     # Web3 connection to Geth RPC
+      - smart-contracts       # contracts.py loads deployed/*.json
+      - ipfs-storage          # NexusStorage uploads to IPFS HTTP API
+    dependents:
+      - caf-orchestrator      # context_builder may call NexusKernel for live chain data
+      - dashboard             # may import NexusKernel for contract reads
+    modification_risk: medium
+    notes: >
+      Not pip-installed — importers must do sys.path.insert(0, '/opt/nexus') first.
+      __init__.py exports NexusKernel only; NexusStorage requires direct import from
+      libnexus.nexus_storage (minor inconsistency). Changing contract ABIs in
+      deployed/*.json requires corresponding libnexus/contracts.py update.
+      Adding a new contract method requires adding to kernel.py AND updating
+      clef/4byte-custom.json with the function selector.
+
+  - component: blockchain-logging
+    depends_on:
+      - blockchain-kernel     # Web3 txn to Geth RPC
+      - smart-contracts       # ReasoningLedger.sol
+    dependents:
+      - ai-agent-hierarchy    # every agent decision calls log_decision()
+    modification_risk: medium
+    notes: >
+      Singleton pattern — all 30 agents share one BlockchainLogger instance.
+      Nonce lock (threading.Lock) serializes all on-chain writes from concurrent
+      agents. Changing RPC_URL or CONTRACT_PATH affects all agents simultaneously.
+      CURRENTLY BROKEN: RPC_URL = "http://192.168.8.228:8545" (stale, pre-VLAN).
+      No agent decision has been logged on-chain since Feb 17 (see G004).
+
+  - component: chromadb-knowledge
+    depends_on:
+      - ipfs-storage          # data directory on NFS /mnt/nexus-nas/knowledge/chroma
+    dependents:
+      - caf-orchestrator      # remember(), recall(), context_builder.py
+    modification_risk: medium
+    notes: >
+      ChromaDB HTTP server at localhost:8000 (0.0.0.0 — exposed cluster-wide, no auth).
+      Data on NFS — if nexus-storage is down, ChromaDB loses persistence (in-memory only).
+      seed_knowledge.py has no __main__ guard — importing it runs ChromaDB writes (see G018).
+      Collections: nexus_decisions, nexus_failures, nexus_context (used by chroma_memory.py)
+      + code_chunks, docs_chunks, infra_configs, session_transcripts, web_research (indexer).
+
+  # ─────────────────────────────────────────────────────────────────
+  # LAYER 3 — APPLICATION SERVICES
+  # ─────────────────────────────────────────────────────────────────
+
+  - component: ai-agent-hierarchy
+    depends_on:
+      - llm-inference         # NexusLLMClient (local SmolLM2 + HuggingFace API)
+      - blockchain-logging    # BlockchainLogger.log_decision() per decision
+      - discord-comms         # agent bots run inside hierarchy_manager.py
+    dependents:
+      - discord-comms         # discord-comms hosts the agent bot processes
+    modification_risk: high
+    notes: >
+      30 Discord bots, one discord.Client per active bot. Changes to agent_workflow.py
+      affect all 30 agents simultaneously. Changes to agent_registry.py affect system
+      prompts injected into every agent. Currently DOWN: hierarchy_manager.py not
+      running (PID 29575 defunct); no systemd service. Import issues: web3 and
+      langgraph must be in system Python (not .venv only) for hierarchy to start.
+      CURRENTLY BROKEN: llm_client.py stale IP (G005); blockchain_logger.py stale
+      RPC URL (G004); agent_registry.py stale cluster context (G009).
+      Delegation is cosmetic — CEO 'delegates' but no routing sends tasks to directors
+      (see G042).
+
+  - component: caf-orchestrator
+    depends_on:
+      - chromadb-knowledge    # chroma_memory.remember/recall; context_builder
+      - llm-inference         # llm_router.route_llm_call (Tier1/2/3)
+      - blockchain-kernel     # git_monitor, context_builder chain reads
+      - discord-comms         # embedded: send_notification, request_approval, listener
+    dependents:
+      - discord-comms         # discord_comms.py runs inside orchestrator process
+    modification_risk: high
+    notes: >
+      automation/ is ENTIRELY UNTRACKED in git (see G021) — no version history,
+      no rollback of the system that manages everything else. nexus-orchestrator.service
+      is ENABLED but currently inactive. When running, it is the highest-privilege
+      autonomous process on the system — it can SSH to all nodes, create git branches,
+      modify any unprotected file, and send Discord messages.
+      Critical bugs: phantom-success audit records (G036), no merge gate (G037),
+      infinite retry loop pattern (G011, resolved manually), no human escalation on
+      repeated failures (G038), no branch deduplication (G039).
+      backup_file() and is_protected() are duplicated with diverged logic (G014, G015).
+
+  - component: discord-comms
+    depends_on:
+      - caf-orchestrator      # discord_comms.py is embedded inside orchestrator
+      - ai-agent-hierarchy    # agent bots run via hierarchy_manager.py
+    dependents:
+      - caf-orchestrator      # HITL approval, notifications, command ingestion
+      - ai-agent-hierarchy    # agents receive/send Discord messages
+    modification_risk: medium
+    notes: >
+      Two separate Discord integrations sharing the same guild:
+      (1) discord_comms.py — single bot for CAF HITL control channel;
+      (2) hierarchy_manager.py — 25 active bots (one per agent) + 5 webhook-fallback.
+      CAF Discord: send_notification() is fire-and-forget; request_approval() BLOCKS
+      orchestrator thread for up to 24 hours waiting for human reaction.
+      SECURITY GAP: any guild member can trigger orchestrator actions via CAF channel
+      (see G025). No role or user ID verification.
+
+  - component: dashboard
+    depends_on:
+      - blockchain-kernel     # eth_blockNumber, contract read calls
+      - ipfs-storage          # IPFS stats collection
+    dependents: []
+    modification_risk: low
+    notes: >
+      Source at /home/mhuraibi/nexus/phase4/dashboard/ — NOT in /opt/nexus git repo.
+      Service ACTIVE at :8880. Uses /opt/nexus/contracts/.venv Python.
+      Not version-controlled — a system reinstall or disk failure loses the source.
+      Read-only consumer of blockchain and IPFS data; no writes.
+
+  - component: token-economy
+    depends_on:
+      - blockchain-kernel     # TokenManager on-chain
+      - smart-contracts       # TokenManager, AgentGovernance, DecisionQuality
+    dependents:
+      - ai-agent-hierarchy    # ECT/RST appear in system prompts (simulation only)
+      - caf-orchestrator      # ect_cost param in blockchain_logger (simulation only)
+    modification_risk: low
+    notes: >
+      TokenManager contract IS deployed and callable, but ZERO Python code calls it.
+      ECT/RST are simulation parameters in LLM system prompts, not real transactions.
+      Implementing the token economy requires writing token_client.py (or similar)
+      and wiring it into blockchain_logger and the agent decision flow.
+      3 source contracts missing from repo (see G040). Upgrading from simulation
+      to real requires careful auditing of the Solidity contracts first.
+
+  - component: wireguard-overlay
+    depends_on:
+      - smart-contracts       # MeshRegistry.sol for peer discovery
+      - blockchain-kernel     # for MeshRegistry calls
+    dependents: []
+    modification_risk: medium
+    notes: >
+      WireGuard nexus-mesh interface UP on nexus-admin (10.1.0.4/24).
+      BATMAN-adv module loaded but bat0 not active on nexus-admin.
+      mesh_discovery.py calls MeshRegistry.getAllPeers() to bootstrap peers.
+      RF layer (Flipper Zero, 433.92MHz) runs in --mock mode when no device connected.
+      Modifying WireGuard config (wg0.conf / nexus-mesh interface) affects mesh
+      connectivity before BATMAN-adv and RF fallback layers are active.
+
+  # ─────────────────────────────────────────────────────────────────
+  # DEAD — NO LIVE DEPENDENCIES
+  # ─────────────────────────────────────────────────────────────────
+
+  - component: services-freedombox
+    depends_on: []
+    dependents: []
+    modification_risk: low
+    notes: >
+      Dead — imports plinth, django, augeas (none installed). Nothing in NEXUS calls
+      these modules. core/service_framework.py is the operational replacement.
+      Deleting the services/ subtree and core/action_utils.py from git removes 27 dead
+      files with no functional impact. Recommend archiving to a separate branch.
+
+# ─────────────────────────────────────────────────────────────────
+# SAFE MODIFICATION ORDER (topological sort, safest first)
+# ─────────────────────────────────────────────────────────────────
+safe_modification_order:
+  - services-freedombox     # layer 0 dead — no live dependents
+  - dashboard               # read-only, no dependents
+  - token-economy           # no callers yet, isolated
+  - k3s-cluster             # no application workloads yet
+  - wireguard-overlay       # depends on smart-contracts but no one depends on it
+  - chromadb-knowledge      # only caf-orchestrator depends on it
+  - llm-inference           # external services — local changes affect callers
+  - libnexus                # depends on blockchain + ipfs; callers: caf + dashboard
+  - blockchain-logging      # depends on blockchain; caller: ai-agent-hierarchy
+  - discord-comms           # embedded in orchestrator + hierarchy
+  - ai-agent-hierarchy      # depends on llm + blockchain-logging + discord
+  - caf-orchestrator        # most dependencies; most modification risk
+  - ipfs-storage            # has transitive dependents (chromadb via NFS)
+  - smart-contracts         # critical — redeploy breaks all contract callers
+  - blockchain-kernel       # critical — changes require full cluster coordination
+
+# ─────────────────────────────────────────────────────────────────
+# CIRCULAR DEPENDENCY ANALYSIS
+# ─────────────────────────────────────────────────────────────────
+circular_dependencies:
+  - description: "discord-comms ↔ caf-orchestrator (pseudo-circular)"
+    components: [discord-comms, caf-orchestrator]
+    resolution: >
+      discord_comms.py is a module INSIDE the orchestrator process, not a separate
+      service. The orchestrator starts the Discord bot thread; the bot sends messages
+      back through the orchestrator's event loop. This is not a true circular dependency
+      but a tight coupling. Safe to modify discord_comms.py in isolation as long as
+      the orchestrator is stopped first.
+  - description: "discord-comms ↔ ai-agent-hierarchy (pseudo-circular)"
+    components: [discord-comms, ai-agent-hierarchy]
+    resolution: >
+      Agent bots run inside hierarchy_manager.py (which owns the discord.Client
+      instances). discord-comms is a separate module for the CAF orchestrator's bot.
+      Same guild, different bots. Not a true circular dependency.

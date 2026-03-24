@@ -1,0 +1,39 @@
+services:
+
+  rigctld:
+    image: 'librespace/hamlib:4.5.4'
+    user: '999'
+    read_only: true
+    environment:
+      MODEL: '1'
+    restart: 'unless-stopped'
+    command: 'rigctld'
+
+  satnogs_client:
+    build:
+      context: .
+      args:
+        GNURADIO_IMAGE_TAG: '${GNURADIO_IMAGE_TAG:-3.10.5.1-satnogs}'
+    image: 'satnogs-client'
+    user: '500:500'
+    read_only: true
+    device_cgroup_rules:
+      - 'c 189:* rwm'
+    environment:
+      SATNOGS_API_TOKEN: '0123456789abcdef0123456789abcdef01234567'
+      SATNOGS_SOAPY_RX_DEVICE: 'driver=rtlsdr'
+      SATNOGS_ANTENNA: 'RX'
+      SATNOGS_RX_SAMP_RATE: '2.048e6'
+      SATNOGS_STATION_ELEV: '100'
+      SATNOGS_STATION_ID: '9999'
+      SATNOGS_STATION_LAT: '37.971'
+      SATNOGS_STATION_LON: '23.725'
+      SATNOGS_RIG_IP: 'rigctld'
+    command: 'satnogs-client'
+    volumes:
+      - type: 'tmpfs'
+        target: '/tmp'
+      - type: 'volume'
+        target: '/var/lib/satnogs-client'
+      - '/dev/bus/usb:/dev/bus/usb'
+    restart: 'unless-stopped'

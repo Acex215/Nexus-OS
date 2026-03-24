@@ -1,0 +1,44 @@
+~-[[DebianWiki/EditorGuide#translation|Translation(s)]]: - [[FreedomBox/Manual/Bind|English]] - Español -~
+
+<<TableOfContents()>>
+
+## BEGIN_INCLUDE
+
+== BIND (Servidor de Nombre de Dominio) ==
+
+BIND te permite publicar en Internet tu información de Sistema de Nombre de Dominio (DNS) y resolver consultas DNS de los dispositivos de usuario en tu red.
+
+Actualmente en !FreedomBox BIND solo se usa para resolver consultas DNS de otras máquinas en tu red local. También es incompatible con compartir conexiones a Internet de tu !FreedomBox.
+
+Nota: Este servicio solo está disponible en redes configuradas como zona "interna". Tampoco está disponble a través de OpenVPN (es incompatible).
+
+=== Usar BIND ===
+
+Habilitar BIND no implica que automáticamente se use en todas partes. Se puede configurar lo siguiente:
+ * !FreedomBox se puede configurar para usar el servicio BIND local para sus propias consultas DNS.
+ * Los clientes de la red de área local (LAN) se pueden configurar para usar el servicio BIND de !FreedomBox's para sus consultas DNS.
+
+Se puede configurar !FreedomBox para usar su propio servicio BIND local para sus consultas DNS en [[es/FreedomBox/Manual/Networks|Redes]]:
+ 1. Ir a la página ''Sistema'' y seleccionar ''Redes''.
+ 1. Seleccionar la conexión "!FreedomBox WAN" y pulsar ''Editar''.
+ 1. Debajo de "Métodos de direccionado IPv4" hay un campo "Servidor DNS". Establecerlo a {{{127.0.0.1}}}.
+    /* TODO: Add IPv6 instructions. */
+ 1. Pulsar "Editar conexión" abajo para grabar los cambios.
+ 1. Reiniciar la !FreedomBox desde el menú desplegable de usuario.
+
+/* TODO: Add instructions for serving clients on LAN. */
+
+=== Enlaces externos ===
+
+ * Proyecto original: https://www.isc.org/bind/
+
+
+## END_INCLUDE
+
+Volver a la [[es/FreedomBox/Features|descripción de Funcionalidades]] o a las páginas del [[es/FreedomBox/Manual|manual]].
+
+
+<<Include(es/FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox

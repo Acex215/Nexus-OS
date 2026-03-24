@@ -1,0 +1,34 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block status %}
+  {{ block.super }}
+
+  {% if domains %}
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>{% trans "Address" %}</th>
+            <th>{% trans "Port" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for domain in domains %}
+            <tr>
+              <td>
+                {{ domain }}
+              </td>
+              <td>{{ 30000 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

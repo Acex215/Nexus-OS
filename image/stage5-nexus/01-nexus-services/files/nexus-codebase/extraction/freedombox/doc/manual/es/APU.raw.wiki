@@ -1,0 +1,69 @@
+== APU ==
+
+{{attachment:apu1d.jpg|PC Engines APU 1D|width=632,height=319}}
+
+[[https://www.pcengines.ch/apu.htm|PC Engines APU]] boards are single board computers with 3 Gigabit ethernet ports, a powerful AMD64 APU and Coreboot firmware.  !FreedomBox images built for AMD64 machines are tested to work well for [[http://www.pcengines.ch/apu1d.htm|APU1D]] and [[http://www.pcengines.ch/apu3b2.htm|APU3B ]] models and are expected to work also well on the other, very similar versions.
+
+'''Important:''' Read [[FreedomBox/Hardware|general advice]] about hardware before building a !FreedomBox with this single board computer.
+
+=== Similar Hardware ===
+
+Although untested, the following similar hardware is also likely to work well with !FreedomBox.
+
+ * Using amd64 image:
+  * [[http://www.pcengines.ch/apu1c.htm|apu1c]]
+  * [[http://www.pcengines.ch/apu1c4.htm|apu1c4]]
+  * [[http://www.pcengines.ch/apu1d4.htm|apu1d4]]
+  * [[http://www.pcengines.ch/apu2b2.htm|apu2b2]]
+  * [[http://www.pcengines.ch/apu2b4.htm|apu2b4]]
+  * [[http://www.pcengines.ch/apu2c0.htm|apu2c0]]
+  * [[http://www.pcengines.ch/apu2c2.htm|apu2c2]]
+  * [[http://www.pcengines.ch/apu2c4.htm|apu2c4]]
+  * [[http://www.pcengines.ch/apu3a2.htm|apu3a2]]
+  * [[http://www.pcengines.ch/apu3a4.htm|apu3a4]]
+  * [[http://www.pcengines.ch/apu3b4.htm|apu3b4]]
+
+=== Installation ===
+
+!FreedomBox disk [[FreedomBox/Download|images]] for this hardware are available.  Follow the instructions on the [[FreedomBox/Download|download]] page to create a !FreedomBox SD card, USB disk, SSD or hard drive and boot into !FreedomBox.  Pick the image meant for all amd64 machines.
+
+An alternative to downloading these images is to [[InstallingDebianOn/Alix3d2|install Debian]] on the APU and then [[FreedomBox/Hardware/Debian|install FreedomBox]] on it.
+
+An [[https://github.com/huubsch/APU-Installation-HomeAssistant-Freedombox|installation manual]] tested on the APU3B is available on GitHub, including flashing with UEFI-BIOS
+
+=== Networking ===
+
+The first network port, the left most one in the above picture, is configured by !FreedomBox to be an upstream Internet link and the remaining 2 ports are configured for local computers to connect to.
+
+=== Availability ===
+
+PCEngines announced the [[https://www.pcengines.ch/eol.htm|phase-out]] of these boards in June 2023.
+
+In 2024 [[https://pcengines.github.io/|Dasharo announced the support of APU-boards]] : coreboot + SeaBIOS and coreboot+UEFI.
+
+ * Price: 110 - 170 USD (depending on the board and supplier)
+ * [[http://www.pcengines.ch/order.htm|PC Engines]]
+ * [[http://www.pcengines.ch/order.htm|Full list of suppliers]]
+
+=== Hardware ===
+
+ * Open Hardware: No
+ * CPU: [[http://www.amd.com/en-gb/products/embedded/processors/g-series|AMD G series T40E]]; [[https://teklager.se/en/amd-gx-412tc-cpu-specification/|GX-412TC]], 1 GHz quad core (depending on model)
+ * RAM: 2 GB DDR3-1066 DRAM - 4 GB (depending on model)
+ * Storage: SD card, External USB, mSATA module
+ * Architecture: amd64
+ * Ethernet: 3 Gigabit Ethernet ports
+ * WiFi: wle200nx / wle600vx / wle900vx miniPCI express wireless modules
+ * SATA: 1 mSATA-module and 1 SATA
+
+=== Non-Free Status ===
+
+ * Non-free blobs required: No
+ * Boot firmware: [[http://www.pcengines.ch/apu1d.htm|Coreboot]]
+
+## END_INCLUDE
+
+<<Include(FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox CategoryFreedomBox

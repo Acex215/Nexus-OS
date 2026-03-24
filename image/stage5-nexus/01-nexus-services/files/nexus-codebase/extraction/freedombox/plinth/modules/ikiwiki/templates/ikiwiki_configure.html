@@ -1,0 +1,48 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block configuration %}
+  {{ block.super }}
+
+  <h3>{% trans "Manage Wikis and Blogs" %}</h3>
+
+  <div class="btn-toolbar">
+    <a href="{% url 'ikiwiki:create' %}" class="btn btn-default"
+       role="button" title="{% trans 'Create Wiki or Blog' %}">
+      <span class="fa fa-plus" aria-hidden="true"></span>
+      {% trans 'Create Wiki or Blog' %}
+    </a>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6">
+      {% if not sites %}
+        <p>{% trans "No wikis or blogs available." %}</p>
+      {% else %}
+        <div class="list-group list-group-two-column">
+          {% for site in sites %}
+            <div class="list-group-item">
+              <a class="wiki-label primary" href="/ikiwiki/{{ site.0 }}"
+                 title="{% blocktrans with site=site.1 %}Go to site {{ site }}{% endblocktrans %}">
+                {{ site.1 }}
+              </a>
+
+              <a href="{% url 'ikiwiki:delete' site.0 %}"
+                 class="btn btn-default btn-sm secondary"
+                 role="button"
+                 title="{% blocktrans with site=site.1 %}Delete site {{ site }}{% endblocktrans %}">
+                <span class="fa fa-trash-o"
+                      aria-hidden="true"></span>
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

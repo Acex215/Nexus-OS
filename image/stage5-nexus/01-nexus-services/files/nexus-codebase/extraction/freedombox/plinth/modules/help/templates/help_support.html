@@ -1,0 +1,37 @@
+{% extends 'help_base.html' %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+
+{% block content %}
+  <h2>{% trans "Get Support" %}</h2>
+
+  <p>
+    {% blocktrans trimmed %}
+      If you need help in getting something done or if you are facing problems
+      using {{ box_name }}, you can ask for help from our community of users
+      and contributors.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      Search for past discussions or post a new query on our
+      <a href="https://discuss.freedombox.org" target="_blank">discussion forum</a>.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      You can also chat with us on our IRC and Matrix channels (bridged):
+      <ul>
+        <li>#freedombox on irc.oftc.net</li>
+        <li>#freedombox:matrix.org</li>
+      </ul>
+      Or send an email to our <a
+      href="mailto:freedombox-discuss@alioth-lists.debian.net">mailing list</a>.
+    {% endblocktrans %}
+  </p>
+{% endblock %}

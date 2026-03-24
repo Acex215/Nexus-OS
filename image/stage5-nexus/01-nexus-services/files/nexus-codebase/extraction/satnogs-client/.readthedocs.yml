@@ -1,0 +1,20 @@
+---
+version: '2'
+formats:
+  - 'epub'
+  - 'pdf'
+build:
+  os: 'ubuntu-22.04'
+  tools:
+    python: '3.11'
+  apt_packages:
+    - 'libatlas3-base'
+    - 'libhdf5-103-1'
+    - 'python3-gps'
+    - 'python3-hamlib'
+  jobs:
+    post_install:
+      - 'python -m pip install --exists-action=w --no-cache-dir -c constraints.txt -r requirements.txt -r docs/requirements.txt .'
+sphinx:
+  configuration: 'docs/conf.py'
+  fail_on_warning: true

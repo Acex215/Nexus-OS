@@ -1,0 +1,21 @@
+/*
+# SPDX-License-Identifier: AGPL-3.0-or-later
+*/
+
+.app-name > a.dropdown-toggle {
+    text-decoration: none;
+    color: var(--bs-table-color-state, var(--bs-table-color-type, var(--bs-table-color)));
+}
+
+td.service {
+    padding-left: 2rem;
+}
+
+.service-name {
+    font-style: italic;
+}
+
+.app-status,
+.service-status {
+    width: 11rem;
+}

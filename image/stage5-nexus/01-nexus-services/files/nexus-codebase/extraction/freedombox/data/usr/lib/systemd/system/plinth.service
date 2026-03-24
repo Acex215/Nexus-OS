@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[Unit]
+Description=FreedomBox Service (Plinth)
+Documentation=man:plinth(1)
+After=network.target
+StartLimitIntervalSec=0
+# Uploaded files in /var/tmp/ are shared with FreedomBox privileged service.
+JoinsNamespaceOf=freedombox-privileged.service
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/plinth
+TimeoutSec=300s
+Restart=on-failure
+RestartSec=5
+ExecReload=/bin/kill -HUP $MAINPID
+User=plinth
+Group=plinth
+StandardOutput=null
+StandardError=null
+NotifyAccess=main
+# Uploaded files in /var/tmp/ are shared with FreedomBox privileged service by
+# joining namespaces.
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

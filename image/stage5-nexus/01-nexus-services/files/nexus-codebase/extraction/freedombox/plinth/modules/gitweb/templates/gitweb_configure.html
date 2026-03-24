@@ -1,0 +1,69 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load static %}
+
+{% block configuration %}
+  {{ block.super }}
+
+  <h3>{% trans "Manage Repositories" %}</h3>
+
+  <div class="btn-toolbar">
+    <a href="{% url 'gitweb:create' %}" class="btn btn-default"
+       role="button" title="{% trans 'Create repository' %}">
+      <span class="fa fa-plus" aria-hidden="true"></span>
+      {% trans 'Create repository' %}
+    </a>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6">
+      {% if not repos %}
+        <p>{% trans 'No repositories available.' %}</p>
+      {% else %}
+        <div id="gitweb-repo-list" class="list-group list-group-two-column">
+          {% for repo in repos %}
+            <div class="list-group-item">
+              {% if 'clone_progress' in repo %}
+                <span class="repo-label">{{ repo.name }}</span>
+              {% else %}
+                <a class="repo-label" href="/gitweb/{{ repo.name }}.git"
+                   title="{% blocktrans %}Go to repository {{ repo.name }}{% endblocktrans %}">
+                  {{ repo.name }}
+                </a>
+              {% endif %}
+
+              {% if 'clone_progress' in repo %}
+                <span class="repo-cloning secondary">
+                  {% trans 'Cloning…' %} {{ repo.clone_progress }}%
+                </span>
+              {% endif %}
+
+              {% if repo.access == 'private' %}
+                <span class="repo-private-icon fa fa-lock secondary"
+                      aria-label="private"></span>
+              {% endif %}
+
+              <a class="repo-edit btn btn-sm btn-default secondary {% if 'clone_progress' in repo %} disabled {% endif %}"
+                href="{% url 'gitweb:edit' repo.name %}">
+                <span class="fa fa-pencil-square-o" aria-hidden="true"></span>
+              </a>
+
+              <a href="{% url 'gitweb:delete' repo.name %}"
+                 class="btn btn-default btn-sm secondary {% if 'clone_progress' in repo %} disabled {% endif %}"
+                 role="button"
+                 title="{% blocktrans %}Delete repository {{ repo.name }}{% endblocktrans %}">
+                <span class="fa fa-trash-o" aria-hidden="true"></span>
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+{% endblock %}

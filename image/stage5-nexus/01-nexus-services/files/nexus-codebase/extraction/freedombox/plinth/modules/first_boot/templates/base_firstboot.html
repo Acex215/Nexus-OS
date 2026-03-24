@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load static %}
+
+{% block body_class %}
+no-brand
+{% endblock %}
+
+{% block mainmenu_left_collapse %}
+{% endblock %}
+
+{% block notifications_dropdown %}
+{% endblock %}
+
+{% block breadcrumbs %}
+{% endblock %}
+
+{% block mainmenu_toggler %}
+  {% if user.is_authenticated %}
+    {{ block.super }}
+  {% endif %}
+{% endblock %}
+
+{% block mainmenu_right %}
+  {% if user.is_authenticated %}
+    {% include "firstboot_navbar.html" %}
+  {% endif %}
+{% endblock %}

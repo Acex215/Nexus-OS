@@ -1,0 +1,41 @@
+#language es
+
+<<Include(FreedomBox/Manual/Infinoted, ,from="^##TAG:TRANSLATION-HEADER-START",to="^##TAG:TRANSLATION-HEADER-END")>><<TableOfContents()>>
+
+## BEGIN_INCLUDE
+
+== Infinoted (Edición colaborativa de textos mediante Gobby) ==
+||<tablestyle="float: right;"> {{attachment:FreedomBox/Manual/Infinoted/Infinoted-icon_en_V01.png|icono de Infinoted}} ||
+
+'''Disponible desde''': versión 0.5
+
+''Infinoted'' es un servidor de edición colaborativa de textos para Gobby.
+
+Para usarlo [[https://gobby.github.io/|descarga el cliente Gobby]] para escritorio e instalalo. Inicialo, selecciona "Conectar a un Servidor" e introduce el nombre de dominio de tu !FreedomBox.
+
+=== Redirección de Puertos ===
+
+Si tu !FreedomBox está detras de un router necesitarás configurar la redirección de puertos en tu router. Redirije los siguientes puertos de infinoted:
+ * TCP 6523
+
+
+=== Enlaces externos ===
+
+ * Sitio web: https://gobby.github.io/libinfinity
+
+==== Aplicaciones Cliente ====
+
+!FreedomBox recomienda algunas aplicaciones cliente. Selecciona su icono en la página de ''Aplicaciones'' y haz clic en el botón'''> Aplicaciones Cliente'''.
+
+ * El cliente principal de Infinoted se llama "Gobby: https://gobby.github.io
+ * Documentación de uso: https://github.com/gobby/gobby/wiki
+ * Wiki de Gobby: https://github.com/gobby/gobby/wiki
+ 
+## END_INCLUDE
+
+Volver a la [[es/FreedomBox/Features|descripción de Funcionalidades]] o a las páginas del [[es/FreedomBox/Manual|manual]].
+
+<<Include(es/FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox

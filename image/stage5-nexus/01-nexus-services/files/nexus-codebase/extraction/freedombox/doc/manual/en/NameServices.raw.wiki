@@ -1,0 +1,77 @@
+#language en
+
+##TAG:TRANSLATION-HEADER-START
+~- [[DebianWiki/EditorGuide#translation|Translation(s)]]: [[FreedomBox/Manual/NameServices|English]] - [[es/FreedomBox/Manual/NameServices|Español]] - [[uk/FreedomBox/Manual/NameServices|Українська]] -~
+##TAG:TRANSLATION-HEADER-END
+
+<<TableOfContents()>>
+
+## BEGIN_INCLUDE
+
+== Name Services ==
+
+Name Services provides an overview of ways the box can be reached from the public Internet: domain name, Tor Onion Service, and Pagekite. For each type of name, it is shown whether the HTTP, HTTPS, and SSH services are enabled or disabled for incoming connections through the given name. It also shows and allows configuring how !FreedomBox performs domain name resolutions.
+
+=== Adding Domain Name to FreedomBox ===
+
+Domain names are unique names assigned to computers and servers to identify and reach them easily without having remember their more technical (IP) addresses.
+
+Adding at least one domain name to your !FreedomBox through one of the supported methods is necessary if you wish to access various apps from outside of your home network. Even at home, adding a domain name allows you to have a TLS certificate that is essential for accessing apps securely through HTTPS. The following types of domains are supported:
+ * A regular domain that is purchased from a domain registrar. These domains looks like `mydomain.example`. These types of domains require that your !FreedomBox machine or your home network router have a public IP address provided by your ISP. All apps can be accessed using these domains.
+ * A dynamic domain that can obtained from a dynamic DNS provider. !FreedomBox foundation provides a free dynamic DNS domain for all !FreedomBox users at https://ddns.freedombox.org . These domains look like `mydomain.fbx.one` or `mydomain.freedombox.rocks`. These types of domains require that your !FreedomBox machine or your home network router have a public IP address provided by your ISP. The public IP may be changed by the ISP regularly and DNS records will be updated accordingly. All apps can be accessed using these domains. These types of domains are configured using the [[FreedomBox/Manual/DynamicDNS|Dynamic DNS]] app in !FreedomBox.
+ * A Tor Onion domain that can be obtained by setting up Tor app. These domains look like `mysitenameyx4fi3l6x2gyzmtmgxjyqyorj9qsb5r543izcwymle.onion`. These types of domains don't require a public IP address from your ISP. However, only web or SSH based services/apps work on this type of domain. Further, only users of Tor will be able to reach these domains. A regular browser will not be able to reach these services. These types of domains are configured using the [[FreedomBox/Manual/Tor|Tor]] app in !FreedomBox.
+ * A !PageKite domain that can obtained from a !PageKite service provider. This service can be purchased at https://pagekite.net . These domains look like `https://mydomain.pagekite.net`. These types of domains don't require a public IP address from your ISP. However, only web or SSH based services/apps work on this type of domain. These types of domains are configured using the [[FreedomBox/Manual/PageKite|PageKite]] app in !FreedomBox.
+
+=== Subdomains ===
+
+Subdomains are similar to domains, but reside under the a domain name. For example, for a domain `mydomain.example` a subdomain could be `myapp.mydomain.example`. Some applications such as [[FreedomBox/Manual/HomeAssistant|Home Assistant]] in !FreedomBox require you to setup and access them over a subdomain instead of a URL path. You can obtain and setup subdomains in the following ways:
+
+ * If you own a regular domain (as described above), you can login to the web console provided by your domain registrar and add a subdomain. Make the subdomain a CNAME of the original domain or assign A and AAAA records similar to the original domain. See your domain registrar's documentation for more information. After adding DNS entries for the subdomain, let !FreedomBox know that it can use the subdomain by adding it as another regular domain. TLS certificates (for HTTPS) will be automatically obtained by !FreedomBox using Let's Encrypt for these subdomains.
+ * If you have a dynamic domain name from !FreedomBox foundation, you can also get an unlimited number of free subdomains. For this, login to your account at https://ddns.freedombox.org, go to `Change Settings`, check the option `Wild Card`, and click `Save Changes`. After this you can add any number of subdomains like `foo.myaccount.fbx.one` to your !FreedomBox in `System` -> `Names` -> `Add Domain (regular)`. TLS certificates (for HTTPS) will be automatically obtained by !FreedomBox using Let's Encrypt for these subdomains. Also see [[FreedomBox/Manual/DynamicDNS|Dynamic DNS]] documentation page.
+
+=== systemd-resolved ===
+
+From release 24.19, !FreedomBox uses systemd-resolved as caching DNS resolver and replaces resolvconf for managing DNS server configuration. This improves privacy and security. Newer installations will come with systemd-resolved and older machines will automatically switch after an upgrade to this new release.
+
+systemd-resolved automatically acquires DNS servers from Network Manager, the default and recommended way to configure networks on !FreedomBox. However, if you are manually managing network configuration by editing /etc/network/interfaces, you will need to ensure that the DNS servers acquired are passed on to systemd-resolved. Otherwise, Fallback DNS servers will be used. See below.
+
+=== Support for DNS-over-TLS and DNSSEC ===
+
+systemd-resolved supports DNS-over-TLS. This protocol allows encrypting DNS
+communication between !FreedomBox and the DNS server if your DNS server
+(typically provided by your ISP, sometimes a separate service) has support for
+it. This improves both privacy and security as it makes it harder for
+intermediaries to see the communication or manipulate it. New settings for
+enabling DNS-over-TLS are available at the global level (for all network interfaces) in Name Services app and at the per-connection level in the Networks app's connection settings.
+
+systemd-resolved supports DNSSEC. This standard allows website owners to sign
+their DNS records allowing clients to authenticate them. This improves security
+by making it harder to manipulate DNS responses. If your DNS server supports
+this feature, it can be turned on. New setting for enabling DNSSEC is available
+in the Name Services app.
+
+You can detect whether your current DNS supports DNS-over-TLS and DNSSEC by turning them on in the settings one at a time and running the diagnostics for the Names app. There is a diagnostic check which detects whether you can successfully resolve the domain name deb.debian.org.
+
+=== Setting a custom DNS server ===
+
+If your current DNS server provided by your ISP does not support DNS-over-TLS or DNSSEC
+features, is censoring some domains names, or if you don't trust them enough,
+you can instead use one of the publicly available DNS servers. This can be done by
+editing network connections in the Networks app and adding DNS servers manually.
+You will need to deactivate and re-activate the network connection (or restart
+!FreedomBox) for the settings to become active. After this, Names app will show you the
+currently configured DNS servers.
+
+=== Fallback DNS servers ===
+
+In some cases, when internet connection is available to the system by no DNS servers are known to systemd-resolved, the fallback DNS servers are used. This may happen, for example, due to misconfiguration when manually managing network configuration instead of using !FreedomBox's default, the Network Manager. These fallback DNS servers, as defaulted by the upstream systemd project, include servers from Cloudflare and Google DNS servers. This has privacy implications but we felt that it was important to avoid !FreedomBox from becoming unreachable due to misconfiguration. It was a difficult decision. Once you have proper DNS configuration and you know that it works, you can turn off fallback DNS servers using a new setting in the Privacy app. There is also a renewed notification in the web interface that will attract your attention towards this. You may also edit the list of Fallback DNS servers by creating a configuration file for systemd-resolved. See [[https://www.freedesktop.org/software/systemd/man/latest/systemd-resolved.html|systemd-resolved documentation]].
+
+## END_INCLUDE
+
+Back to [[FreedomBox/Features|Features introduction]] or [[FreedomBox/Manual|manual]] pages.
+
+
+<<Include(FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox

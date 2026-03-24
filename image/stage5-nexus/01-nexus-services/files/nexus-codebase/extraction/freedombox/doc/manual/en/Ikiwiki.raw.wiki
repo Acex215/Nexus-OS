@@ -1,0 +1,88 @@
+#language en
+
+##TAG:TRANSLATION-HEADER-START
+~- [[de/FreedomBox/Manual/Ikiwiki|Deutsch]] - [[FreedomBox/Manual/Ikiwiki|English]] - [[es/FreedomBox/Manual/Ikiwiki|Español]] - [[hu/FreedomBox/Manual/Ikiwiki|Magyar]] - [[DebianWiki/EditorGuide#translation|(+)]] -~
+##TAG:TRANSLATION-HEADER-END
+
+<<TableOfContents()>>
+
+## BEGIN_INCLUDE
+
+== Ikiwiki (Wiki and Blog) ==
+||<tablestyle="float: right;"> {{attachment:Ikiwiki-icon_en_V01.png|Ikiwiki icon}} ||
+
+'''Avaiable since''': version 0.5
+
+=== What is Ikiwiki? ===
+Ikiwiki converts wiki pages into HTML pages suitable for publishing on a website. It provides particularly blogging, podcasting, calendars and a large selection of plugins.
+
+=== Creating a wiki or blog ===
+You can create a wiki or blog to be hosted on your !FreedomBox through the Wiki & Blog (Ikiwiki) page in !FreedomBox. The first time you visit this page, it will ask to install packages required by Ikiwiki.
+
+After the package install has completed, select the "Create Wiki or Blog" button. 
+{{attachment:create_wiki_or_blog.png|ikiwiki: Manage|width=800}}
+
+You can select the type to be Wiki or Blog. Also type in a name for the wiki or blog, and the username and password for the wiki's/blog's admin account. Then click Update setup and you will see the wiki/blog added to your list. Note that each wiki/blog has its own admin account.
+{{attachment:create_wiki_or_blog_step_two.png|ikiwiki: Manage|width=800}}
+
+=== Accessing your wiki or blog ===
+Your wikis and blogs are listed in the Ikiwiki app. Clicking on your site's name will bring you to its start page.
+
+{{attachment:ikiwiki_site_list.png|ikiwiki: Manage|width=800}}
+
+From here, if you click Edit or Preferences, you will be taken to a login page. To log in with the admin account that you created before, select the Other tab, enter the username and password, and click Login.
+
+=== User login through SSO ===
+Besides the wiki/blog admin, other !FreedomBox users can be given access to login and edit wikis and blogs.  However, they will not have all the same permissions as the wiki admin. They can add or edit pages, but cannot change the wiki's configuration.
+
+To add a wiki user, go to the Users and Groups page in !FreedomBox (under System configuration, the gear icon at the top right corner of the page). Create or modify a user, and add them to the wiki group. (Users in the admin group will also have wiki access.)
+
+To login as a !FreedomBox user, go to the wiki/blog's login page and select the Other tab.  Then click the "Login with HTTP auth" button. The browser will show a popup dialog where you can enter the username and password of the !FreedomBox user.
+
+=== Adding FreedomBox users as wiki admins ===
+
+ 1. Login to the site, using the admin account that was specified when the site was created.
+ 2. Click "Preferences", then "Setup".
+ 3. Under "main", in the "users who are wiki admins", add the name of a user on the !FreedomBox.
+ 4. (Optional) Under "auth plugin: passwordauth", uncheck the "enable passwordauth?" option. (Note: This will disable the old admin account login. Only SSO login using HTTP auth will be possible.)
+ 5. At the bottom of the page click "Save Setup".
+ 6. Click "Preferences", then "Logout".
+ 7. Login as the new admin user using "Login with HTTP auth".
+
+
+=== Avoiding Spam ===
+
+By default, every wiki page also has a "Discussion" page, which can be edited anonymously, without logging in. To avoid spam, you may want to disable the Discussion feature all together, by unchecking the "enable Discussion pages?" option in the setup.
+
+
+=== Theming ===
+
+ 1. Login to the site, using the admin account that was specified when the site was created.
+ 2. Click "Preferences", then "Setup".
+ 3. Under "web plugin: theme", check "enable theme?"
+ 4. Right under the checkbox, type in the name of the desired theme. You can choose from the following officially supported themes:
+  * actiontabs - mobile friendly
+  * blueview - non-mobile friendly
+  * goldtype - non-mobile friendly
+  * monochrome - mobile friendly
+ 5. At the bottom of the page click "Save Setup".
+For your changes to become visible, you might have to delete your browser's cache or wait a few minutes and refresh your ikiwiki's page.
+
+It is also possible to install user-contributed themes from ikiwiki's Theme Market. Please note, that this requires additional technical knowledge.
+
+
+=== External links ===
+
+ * Upstream project: https://ikiwiki.info
+ * Upstream project user documentation: https://ikiwiki.info
+  * Upstream project user forum: https://ikiwiki.info/forum/
+  * Upstream project theme market https://ikiwiki.info/theme_market/ 
+
+## END_INCLUDE
+
+Back to [[FreedomBox/Features|Features introduction]] or [[FreedomBox/Manual|manual]] pages.
+
+<<Include(FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox

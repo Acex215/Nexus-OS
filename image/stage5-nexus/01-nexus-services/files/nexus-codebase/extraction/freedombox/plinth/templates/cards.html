@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+{% load static %}
+
+{% block container %}
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8 offset-lg-2">
+        {% include 'messages.html' %}
+      </div>
+    </div>
+  </div>
+
+  {% block tags %}
+    {% include "tags.html" %}
+  {% endblock %}
+
+  <div class="container card-container">
+    <div class="row">
+      <div class="card-list card-list-primary">
+        {% for item in menu_items %}
+          {% if not show_disabled or item.is_enabled %}
+            {% if advanced_mode or not item.advanced %}
+              {% include "card.html" %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if show_disabled %}
+    <div class="container card-container">
+      <div class="card-section-title">{% trans "Disabled" %}</div>
+      <div class="row">
+        <div class="card-list card-list-disabled">
+          {% for item in menu_items %}
+            {% if not item.is_enabled %}
+              {% if advanced_mode or not item.advanced %}
+                {% include "card.html" %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% block content-container %}
+  {% endblock %}
+
+{% endblock %}

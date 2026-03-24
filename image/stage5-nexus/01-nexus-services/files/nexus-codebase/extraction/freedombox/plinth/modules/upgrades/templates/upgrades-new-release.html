@@ -1,0 +1,21 @@
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+{% load static %}
+
+<div class="notification-title">
+  {% blocktrans %}{{box_name}} updated{% endblocktrans %}
+</div>
+
+<p>
+  {% blocktrans trimmed with url="https://discuss.freedombox.org/c/announcements/7" version=data.version %}
+    {{ box_name }} has been updated to version {{ version }}. See the
+    <a href="{{ url }}">release announcement</a>.
+  {% endblocktrans %}
+</p>
+
+<p>
+  {% include 'notifications-dismiss-button.html' with id=id %}
+</p>

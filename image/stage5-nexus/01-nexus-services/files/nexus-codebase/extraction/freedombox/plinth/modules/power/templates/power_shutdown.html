@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+
+  {% block pagetitle %}
+    <h2>{{ title }}</h2>
+  {% endblock %}
+
+  <p>
+    {% blocktrans trimmed %}
+      Are you sure you want to shut down?  You will not be able to
+      access this web interface after shut down.
+    {% endblocktrans %}
+  </p>
+
+  {% if manual_page %}
+    <p class="manual-page">
+      <a href="{% url 'help:manual-page' lang='-' page=manual_page %}">
+        {% trans 'Learn more...' %}
+      </a>
+    </p>
+  {% endif %}
+
+  {% include "power_busy_warning.html" %}
+
+  <form class="form" method="post">
+    {% csrf_token %}
+
+    {{ form|bootstrap }}
+
+    {% if pkg_manager_is_busy %}
+      <input type="submit" class="btn btn-danger"
+             value="{% trans "Shut Down Now" %}"/>
+    {% else %}
+      <input type="submit" class="btn btn-primary"
+             value="{% trans "Shut Down Now" %}"/>
+    {% endif %}
+
+  </form>
+
+
+{% endblock %}

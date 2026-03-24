@@ -1,0 +1,40 @@
+{% extends 'help_base.html' %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+
+{% block content %}
+  <h2>{% trans "Submit Feedback" %}</h2>
+
+  <p>
+    {% blocktrans trimmed %}
+      Your feedback will help us improve {{ box_name }}!
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      Let us know about missing features, your favourite apps and how we can
+      improve them on our <a href="https://discuss.freedombox.org" target="_blank">
+      discussion forum</a>.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      If you find any bugs or issues, please use the <a
+      href="https://salsa.debian.org/freedombox-team/freedombox/issues"
+      target="_blank">issue tracker</a> to let our developers know. To report,
+      first check if the issue is already reported and then use the "New issue"
+      button.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      Thank you!
+    {% endblocktrans %}
+  </p>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+{% load static %}
+
+
+{% block body_class %}index-page{% endblock %}
+
+{% block container %}
+
+  {% if messages or selected_shortcut or not shortcuts %}
+    <div class="container content-container">
+
+      {% include 'messages.html' %}
+
+      {% if not shortcuts %}
+        <p>
+          {% url 'apps' as apps_url %}
+          {% blocktrans trimmed %}
+            Enable some <a href="{{ apps_url }}">applications</a> to add
+            shortcuts to this page.
+          {% endblocktrans %}
+        </p>
+      {% endif %}
+
+      {% if selected_shortcut.description %}
+        {% include "app-header.html" with app_info=selected_shortcut %}
+
+        <section class="toolbar">
+          <div class="btn-toolbar" role="toolbar">
+            {% include "clients-button.html" with clients=selected_shortcut.clients enabled=True %}
+
+            {% if user.is_authenticated and user_is_admin and selected_shortcut.configure_url %}
+              <a class="btn btn-primary" href="{{ selected_shortcut.configure_url }}">
+                {% trans "Configure" %}</a>
+            {% endif %}
+          </div>
+
+          <div class="toolbar-collapsed-content">
+            {% include "clients.html" with clients=selected_shortcut.clients enabled=True %}
+          </div>
+        </section>
+      {% endif %}
+
+    </div>
+  {% endif %}
+
+  {% if shortcuts %}
+    <div class="container card-container">
+      <div class="row">
+        <div class="card-list">
+          {% for shortcut in shortcuts %}
+            {% if shortcut.is_enabled %}
+              {% if user.is_authenticated or not shortcut.login_required %}
+                <div class="card">
+                  {% if selected_shortcut.component_id == shortcut.component_id %}
+                    <a href="{{ shortcut.url }}" class="active">
+                  {% else %}
+                    <a href="{{ shortcut.url }}">
+                  {% endif %}
+                        <div class="card-icon">
+                          {% if shortcut.icon|first == "/" %}
+                            <img src="{{ shortcut.icon }}"/>
+                          {% else %}
+                            {% if shortcut.app_id %}
+                              <img src="{% static shortcut.app_id %}/icons/{{ shortcut.icon }}.svg"/>
+                            {% else %}
+                              <img src="{% static 'theme/icons/' %}{{ shortcut.icon }}.svg"/>
+                            {% endif %}
+                          {% endif %}
+                        </div>
+                        <div class="card-title">
+                          {{ shortcut.name }}
+                        </div>
+                        <div class="card-tags">
+                          {% for tag in shortcut.tags|slice:":3" %}<span class="tag">{% trans tag %}</span>{% if not forloop.last %}<span class="tag-separator"></span>{% endif %}{% endfor %}
+                        </div>
+                    </a>
+                </div>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+{% endblock %}
+
+
+{% block footer_block %}
+  <p>
+    <a href="{% url 'help:about' %}" title="{% trans "About" %}">
+      <img class="footer-logo" alt="{{ box_name }}"
+           src="{% static 'theme/img/freedombox-logo-powered.svg' %}"/>
+    </a>
+  </p>
+{% endblock %}

@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Base */
+  --bg-primary: #f9f9f9;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f5f5;
+  --bg-tertiary: #f2f4f4;
+  --bg-sidebar: #0c0f0f;
+
+  /* Text */
+  --text-primary: #2d3435;
+  --text-secondary: #5a6061;
+  --text-muted: #757c7d;
+  --text-dim: #adb3b4;
+
+  /* Borders */
+  --border-default: #e5e7eb;
+  --border-subtle: rgba(173, 179, 180, 0.1);
+
+  /* Accents — GOLD replaces cyan/purple/teal */
+  --accent-primary: #B8960C;
+  --accent-primary-hover: #D4AF37;
+  --accent-primary-dim: #8B7209;
+
+  /* Functional status colors (unchanged) */
+  --status-online: #10b981;
+  --status-offline: #ef4444;
+  --status-warning: #f59e0b;
+  --status-info: #3b82f6;
+
+  /* Fonts */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-headline: 'Manrope', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-label: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e2e2e2; border-radius: 10px; }
+
+/* Utility classes */
+.font-headline { font-family: var(--font-headline); }
+.font-label { font-family: var(--font-label); }
+.font-mono { font-family: var(--font-mono); }
+
+/* Pulse animation for status dots */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.pulse { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* Fade in for panel transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }

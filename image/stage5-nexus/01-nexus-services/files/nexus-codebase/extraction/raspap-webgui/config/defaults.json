@@ -1,0 +1,283 @@
+{
+  "hostapd": {
+    "modes": {
+      "n": {
+        "settings": [
+          "hw_mode=g",
+          "ieee80211n=1",
+          "wmm_enabled=1"
+        ]
+      },
+      "ac": {
+        "settings": [
+          "hw_mode=a",
+          "# N",
+          "ieee80211n=1",
+          "require_ht=1",
+          "ht_capab=[MAX-AMSDU-3839][{HT40_DIR}][SHORT-GI-20][SHORT-GI-40][DSSS_CCK-40]",
+          "# AC",
+          "ieee80211ac=1",
+          "require_vht=1",
+          "ieee80211d=0",
+          "ieee80211h=0",
+          "vht_capab=[MAX-AMSDU-3839][SHORT-GI-80]",
+          "vht_oper_chwidth=1",
+          "vht_oper_centr_freq_seg0_idx={VHT_FREQ_IDX}"
+        ]
+      },
+      "ax": {
+        "settings": [
+          "# Basic settings",
+          "hw_mode=a",
+          "# Enable 802.11n/ac",
+          "ieee80211d=1",
+          "ieee80211n=1",
+          "ieee80211ac=1",
+          "# Enable 802.11ax",
+          "ieee80211ax=1",
+          "# HE 802.11ax capabilities",
+          "he_su_beamformer=1",
+          "he_su_beamformee=1",
+          "he_mu_beamformer=1",
+          "# BSS color for spatial reuse, value 1-63",
+          "he_bss_color=1",
+          "he_oper_chwidth=1",
+          "# HE/VHT channel widths",
+          "he_oper_chwidth=1",
+          "vht_oper_chwidth=1",
+          "he_oper_centr_freq_seg0_idx={HE_FREQ_IDX}",
+          "vht_oper_centr_freq_seg0_idx={VHT_FREQ_IDX}",
+          "# HT 802.11n capabilities",
+          "ht_capab=[{HT40_DIR}][LDPC][SHORT-GI-20][SHORT-GI-40][TX-STBC][RX-STBC1][MAX-AMSDU-7935]",
+          "# VHT capabilities 802.11ac",
+          "vht_capab=[RXLDPC][SHORT-GI-80][TX-STBC-2BY1][RX-STBC-1][MAX-MPDU-11454][MAX-A-MPDU-LEN-EXP7]",
+          "# WMM/QoS",
+          "wmm_enabled=1"
+        ]
+      },
+      "be": {
+        "settings": [
+          "# Basic settings",
+          "hw_mode=a",
+          "# Enable 802.11n/ac/ax",
+          "ieee80211n=1",
+          "ieee80211ac=1",
+          "ieee80211ax=1",
+          "# Maximum MPDU Length of HE 6 GHz band capabilities.",
+          "# Indicates maximum MPDU length",
+          "# 0 = 3895 octets",
+          "# 1 = 7991 octets",
+          "# 2 = 11454 octets",
+          "he_6ghz_max_mpdu=2",
+          "# Maximum A-MPDU Length Exponent of HE 6 GHz band capabilities. Indicates",
+          "# the maximum length of A-MPDU pre-EOF padding that # the STA can receive.",
+          "# This field is an integer in the range of 0 to 7. The length defined by",
+          "# this field is equal to 2 pow -1",
+          "# octets",
+          "# 0 = AMPDU length of 8k",
+          "# 1 = AMPDU length of 16k",
+          "# 2 = AMPDU length of 32k",
+          "# 3 = AMPDU length of 65k",
+          "# 4 = AMPDU length of 131k",
+          "# 5 = AMPDU length of 262kv",
+          "# 6 = AMPDU length of 524k",
+          "# 7 = AMPDU length of 1048k",
+          "he_6ghz_max_ampdu_len_exp=7",
+          "# 0 = Indoor AP",
+          "# 1 = Standard power AP",
+          "# 2 = Very low power AP",
+          "# 3 = Indoor enabled AP",
+          "# 4 = Indoor standard power AP",
+          "he_6ghz_reg_pwr_type=0",
+          "# HE beamforming capabilities",
+          "he_su_beamformer=1",
+          "he_su_beamformee=1",
+          "he_mu_beamformer=1",
+          "he_mu_edca_qos_info_param_count=0",
+          "he_mu_edca_qos_info_q_ack=0",
+          "he_mu_edca_qos_info_queue_request=0",
+          "he_mu_edca_qos_info_txop_request=0",
+          "he_mu_edca_ac_be_aifsn=8",
+          "he_mu_edca_ac_be_aci=0",
+          "he_mu_edca_ac_be_ecwmin=9",
+          "he_mu_edca_ac_be_ecwmax=10",
+          "he_mu_edca_ac_be_timer=255",
+          "he_mu_edca_ac_bk_aifsn=15",
+          "he_mu_edca_ac_bk_aci=1",
+          "he_mu_edca_ac_bk_ecwmin=9",
+          "he_mu_edca_ac_bk_ecwmax=10",
+          "he_mu_edca_ac_bk_timer=255",
+          "he_mu_edca_ac_vi_ecwmin=5",
+          "he_mu_edca_ac_vi_ecwmax=7",
+          "he_mu_edca_ac_vi_aifsn=5",
+          "he_mu_edca_ac_vi_aci=2",
+          "he_mu_edca_ac_vi_timer=255",
+          "he_mu_edca_ac_vo_aifsn=5",
+          "he_mu_edca_ac_vo_aci=3",
+          "he_mu_edca_ac_vo_ecwmin=5",
+          "he_mu_edca_ac_vo_ecwmax=7",
+          "he_mu_edca_ac_vo_timer=255",
+          "# EHT beamforming capabilities",
+          "eht_su_beamformer=0",
+          "eht_su_beamformee=0",
+          "eht_mu_beamformer=0",
+          "# used by clients to discern the source of interference",
+          "# each AP in your area needs to use a different number",
+          "# allowed: 1-63",
+          "he_bss_color=37",
+          "# 160 MHz for HE",
+          "he_oper_chwidth=2",
+          "he_oper_centr_freq_seg0_idx={HE_FREQ_IDX}",
+          "# IEEE 802.11be WiFi 7 configuration",
+          "ieee80211be=1",
+          "# EHT configuration",
+          "eht_su_beamformer=1",
+          "eht_su_beamformee=1",
+          "eht_mu_beamformer=1",
+          "# EHT operating channel information; see matching he_* parameters for details.",
+          "# The field eht_oper_centr_freq_seg0_idx field is used to indicate center",
+          "# frequency of 40, 80, and 160 MHz bandwidth operation.",
+          "# In the 6 GHz band, eht_oper_chwidth is ignored and the channel width is",
+          "# derived from the configured operating class IEEE P802.11be/D1.5,",
+          "# Annex E.1 - Country information and operating classes.",
+          "# Channel width 0 = 40 MHz, 1 = 80 Mhz, 2 = 160 Mhz",
+          "eht_oper_chwidth=2",
+          "eht_oper_centr_freq_seg0_idx={VHT_FREQ_IDX}",
+          "# VHT operation parameters",
+          "vht_oper_chwidth=2",
+          "vht_oper_centr_freq_seg0_idx={VHT_FREQ_IDX}",
+          "vht_capab=[MAX-MPDU-11454][RXLDPC][SHORT-GI-80][SHORT-GI-160][TX-STBC-2BY1][RX-STBC-1][SU-BEAMFORMER][SU-BEAMFORMEE][MU-BEAMFORMER][MU-BEAMFORMEE]",
+          "# WMM configuration",
+          "wmm_enabled=1",
+          "wmm_ac_bk_cwmin=4",
+          "wmm_ac_bk_cwmax=10",
+          "wmm_ac_bk_aifs=7",
+          "wmm_ac_bk_txop_limit=0",
+          "wmm_ac_be_aifs=3",
+          "wmm_ac_be_cwmin=4",
+          "wmm_ac_be_cwmax=10",
+          "wmm_ac_be_txop_limit=0",
+          "wmm_ac_vi_aifs=2",
+          "wmm_ac_vi_cwmin=3",
+          "wmm_ac_vi_cwmax=4",
+          "wmm_ac_vi_txop_limit=94",
+          "wmm_ac_vo_aifs=2",
+          "wmm_ac_vo_cwmin=2",
+          "wmm_ac_vo_cwmax=3",
+          "wmm_ac_vo_txop_limit=47"
+        ]
+      },
+      "g": {
+        "settings": [
+          "hw_mode=g",
+          "ieee80211n=0"
+        ]
+      },
+      "a": {
+        "settings": [
+          "hw_mode=a",
+          "ieee80211n=0"
+        ]
+      },
+      "b": {
+        "settings": [
+          "hw_mode=b",
+          "ieee80211n=0"
+        ]
+      }
+    }
+  },
+  "dhcp": {
+    "wlan0": {
+      "static ip_address": [ "10.3.141.1" ],
+      "static routers": [ "10.3.141.1" ],
+      "static domain_name_servers": [ "1.1.1.1 8.8.8.8" ],
+      "subnetmask": [ "255.255.255.0" ]
+    },
+    "wlan1": {
+      "static ip_address": [ "10.9.141.1" ],
+      "static routers": [ "10.9.141.1" ],
+      "static domain_name_servers": [ "1.1.1.1 8.8.8.8" ],
+      "subnetmask": [ "255.255.255.0" ]
+    },
+    "wlan2": {
+      "static ip_address": [ "10.6.141.1" ],
+      "static routers": [ "10.6.141.1" ],
+      "static domain_name_servers": [ "1.1.1.1 8.8.8.8" ],
+      "subnetmask": [ "255.255.255.0" ]
+    },
+    "uap0": {
+      "static ip_address": ["192.168.50.1" ],
+      "static routers": [ "192.168.50.1" ],
+      "static domain_name_servers": [ "1.1.1.1 8.8.8.8" ],
+      "subnetmask": [ "255.255.255.0" ]
+    },
+    "eth0": {
+      "static ip_address": [ "192.168.55.1" ],
+      "static routers": [ "192.168.55.1" ],
+      "static domain_name_servers": [ "1.1.1.1 8.8.8.8" ],
+      "subnetmask": [ "255.255.255.0" ]
+    },
+    "enx": {
+      "static ip_address": [ "192.168.60.1" ],
+      "static routers": [ "192.168.60.1" ],
+      "static domain_name_servers": [ "1.1.1.1 8.8.8.8" ],
+      "subnetmask": [ "255.255.255.0" ]
+    },
+    "options": {
+      "# RaspAP default configuration": null,
+      "hostname": null,
+      "clientid": null,
+      "persistent": null,
+      "option rapid_commit": null,
+      "option domain_name_servers, domain_name, domain_search, host_name": null,
+      "option classless_static_routes": null,
+      "option ntp_servers": null,
+      "require dhcp_server_identifier": null,
+      "slaac private": null,
+      "nohook lookup-hostname": null
+    }
+  },
+  "dnsmasq": {
+    "wlan0": {
+      "dhcp-range": [ "10.3.141.50,10.3.141.254,255.255.255.0,12h" ]
+    },
+    "wlan1": {
+      "dhcp-range": [ "10.9.141.50,10.9.141.254,255.255.255.0,12h" ]
+    },
+    "wlan2": {
+      "dhcp-range": [ "10.6.141.50,10.6.141.254,255.255.255.0,12h" ]
+    },
+    "uap0": {
+      "dhcp-range": [ "192.168.50.50,192.168.50.150,12h" ]
+    },
+    "eth0": {
+      "dhcp-range": [ "192.168.55.50,192.168.55.150,12h" ]
+    },
+    "enx": {
+      "dhcp-range": [ "192.168.60.50,192.168.60.150,12h" ]
+    }
+  },
+  "wireguard": {
+    "server": {
+      "Address": [ "10.8.2.1/24" ],
+      "ListenPort": [ "51820" ],
+      "DNS": [ "9.9.9.9" ],
+      "PostUp": [ "iptables -A FORWARD -i wlan0 -o %i -j ACCEPT; iptables -A FORWARD -i %i -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -A POSTROUTING -o %i -j MASQUERADE" ],
+      "PostDown": [ "iptables -D FORWARD -i wlan0 -o %i -j ACCEPT; iptables -D FORWARD -i %i -o wlan0 -m state --state RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -D POSTROUTING -o %i -j MASQUERADE" ],
+      "PostUpEx": [ "iptables -I OUTPUT ! -o %i -m mark ! --mark $(wg show %i fwmark) -m addrtype ! --dst-type LOCAL ! -d %s -j REJECT" ],
+      "PreDown": [ "iptables -D OUTPUT ! -o %i -m mark ! --mark $(wg show %i fwmark) -m addrtype ! --dst-type LOCAL ! -d %s -j REJECT" ]
+    },
+    "peer": {
+      "Address": [ "10.8.1.2/24" ],
+      "Endpoint": [ "10.8.2.1:51820" ],
+      "ListenPort": [ "21841" ],
+      "AllowedIPs": [ "10.8.2.0/24" ],
+      "PersistentKeepalive": [ "15" ]
+    }
+  },
+  "txpower": {
+    "dbm": [ "auto", "30", "20", "17", "10", "6", "3", "1", "0" ]
+  }
+}
+

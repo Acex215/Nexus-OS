@@ -1,0 +1,8 @@
+# These pages are directly copied from wiki.debian.org. The wiki tool does not
+# auto-format to break lines and users not interested breaking lines as the
+# editor lack rewraping capability. Don't expect the wiki documents to have
+# short lines.
+very-long-line-length-in-source-file * [doc/manual/*.raw.wiki:*]
+
+# Misc. files which can't be fixed to have short line lengths.
+very-long-line-length-in-source-file * [COPYING.md:*]

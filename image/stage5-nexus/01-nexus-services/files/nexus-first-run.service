@@ -1,0 +1,15 @@
+[Unit]
+Description=NEXUS OS First Boot Setup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/opt/nexus/config/node-initialized
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+User=root
+ExecStart=/opt/nexus/scripts/first-run.sh
+ExecStartPost=/bin/systemctl enable nexus-node-agent.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=NEXUS Dashboard API
+After=network-online.target nexus-node-agent.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nexus
+Group=nexus
+WorkingDirectory=/opt/nexus/dashboard
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/opt/nexus/logs/dashboard-api.log
+StandardError=append:/opt/nexus/logs/dashboard-api.log
+
+[Install]
+WantedBy=multi-user.target

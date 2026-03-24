@@ -1,0 +1,10 @@
+.DS_Store
+node_modules
+yarn-error.log
+*.swp
+includes/config.php
+rootCA.pem
+.env
+locale/**/*.mo
+app/net_activity
+app/js/plugins/

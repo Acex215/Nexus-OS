@@ -1,0 +1,37 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+purge)
+    deluser --system --quiet plinth || true
+    rm -rf /var/lib/plinth
+
+    # Remove legacy directory too
+    rm -rf /var/log/plinth
+
+    if [ -e '/etc/apt/sources.list.d/freedombox.list' ]; then
+        rm -f /etc/apt/sources.list.d/freedombox.list
+    fi
+
+    if [ -e '/etc/apt/sources.list.d/freedombox2.list' ]; then
+        rm -f /etc/apt/sources.list.d/freedombox2.list
+    fi
+
+    if [ -e '/etc/apt/preferences.d/50freedombox.pref' ]; then
+        rm -f /etc/apt/preferences.d/50freedombox.pref
+    fi
+
+    if [ -e '/etc/apt/preferences.d/50freedombox2.pref' ]; then
+        rm -f /etc/apt/preferences.d/50freedombox2.pref
+    fi
+
+    if [ -e '/etc/apt/preferences.d/50freedombox4.pref' ]; then
+        rm -f /etc/apt/preferences.d/50freedombox4.pref
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

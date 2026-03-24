@@ -1,0 +1,195 @@
+# NEXUS OS Compiled Database — Dependencies
+# Generated: 2026-03-21
+# Scope: Dev Assistant pipeline + shared infrastructure
+#
+# Dependency layers (bottom = foundational, top = application):
+#
+#   Layer 3: dev-assistant-bot, autonomous-loop (application)
+#   Layer 2: llm-routing, safety-layer, knowledge-layer, blockchain-logging (services)
+#   Layer 1: llm-inference, chromadb-knowledge, smart-contracts, libnexus (infrastructure)
+#   Layer 0: blockchain-kernel, ipfs-storage, k3s-cluster (foundational)
+
+dependencies:
+
+  # ═══════════════════════════════════════════════════════════════
+  # LAYER 0 — FOUNDATIONAL (no upstream dependencies)
+  # ═══════════════════════════════════════════════════════════════
+
+  - component: blockchain-kernel
+    depends_on: []
+    dependents:
+      - smart-contracts
+      - blockchain-logging
+      - libnexus
+      - ipfs-storage
+    modification_risk: critical
+    notes: >
+      3 Geth validators on VLAN 20. Changing chain configuration requires
+      coordinated restart of all validators. Period=0 means blocks are only
+      produced on demand (when transactions are submitted).
+
+  - component: ipfs-storage
+    depends_on:
+      - blockchain-kernel
+    dependents:
+      - libnexus
+      - chromadb-knowledge
+    modification_risk: medium
+    notes: >
+      Two failure modes: (1) IPFS daemon down → uploads fail; (2) NFS mount
+      (/mnt/nexus-nas) down → ChromaDB data inaccessible. nexus-admin has
+      0 swarm peers (see G112).
+
+  - component: k3s-cluster
+    depends_on:
+      - blockchain-kernel
+    dependents: []
+    modification_risk: low
+    notes: "Infrastructure up, no application workloads deployed. Unused layer."
+
+  # ═══════════════════════════════════════════════════════════════
+  # LAYER 1 — INFRASTRUCTURE SERVICES
+  # ═══════════════════════════════════════════════════════════════
+
+  - component: smart-contracts
+    depends_on:
+      - blockchain-kernel
+    dependents:
+      - blockchain-logging
+      - libnexus
+    modification_risk: critical
+    notes: >
+      Contracts are IMMUTABLE. "Modifying" = deploying new contract + updating
+      all callers' deployed/*.json. 3 of 9 sources not committed (G109).
+
+  - component: llm-inference
+    depends_on: []
+    dependents:
+      - llm-routing
+    modification_risk: high
+    notes: >
+      Physical hardware dependency. ThinkPad sleep = coder tier down = cascading
+      failures (G100). ThinkStation models share a single LM Studio port.
+      JIT loading OFF required on both machines.
+
+  - component: chromadb-knowledge
+    depends_on:
+      - ipfs-storage
+    dependents:
+      - knowledge-layer
+    modification_risk: medium
+    notes: >
+      ChromaDB data on NFS. If NFS mount drops, ChromaDB loses persistence.
+      9 collections total but only dev_assistant_tasks actively written.
+
+  - component: libnexus
+    depends_on:
+      - blockchain-kernel
+      - smart-contracts
+      - ipfs-storage
+    dependents: []
+    modification_risk: medium
+    notes: >
+      Not pip-installed — sys.path.insert required. Currently not imported by
+      Dev Assistant pipeline (used by scripts and standalone tools).
+
+  # ═══════════════════════════════════════════════════════════════
+  # LAYER 2 — APPLICATION SERVICES
+  # ═══════════════════════════════════════════════════════════════
+
+  - component: llm-routing
+    depends_on:
+      - llm-inference
+    dependents:
+      - dev-assistant-bot
+      - autonomous-loop
+      - task-decomposer
+    modification_risk: high
+    notes: >
+      Single file (llm_router_v2.py) routes ALL LLM traffic. Changing endpoints
+      or tier assignments affects every task. Health cache TTL not explicitly
+      documented (relies on aiohttp/httpx connection behavior).
+
+  - component: safety-layer
+    depends_on: []
+    dependents:
+      - dev-assistant-bot
+      - autonomous-loop
+    modification_risk: medium
+    notes: >
+      Safety constants in safety_config.py are env-var overridable. Changing
+      AUTO_APPROVE_LOW to false would require human approval for all tasks.
+
+  - component: knowledge-layer
+    depends_on:
+      - chromadb-knowledge
+    dependents:
+      - dev-assistant-bot
+      - autonomous-loop
+    modification_risk: low
+    notes: >
+      Knowledge is additive — failure to index a task doesn't block execution.
+      Knowledge planner gracefully returns "" on query failure.
+
+  - component: blockchain-logging
+    depends_on:
+      - blockchain-kernel
+      - smart-contracts
+    dependents:
+      - dev-assistant-bot
+      - agent-hierarchy
+    modification_risk: medium
+    notes: >
+      Singleton with nonce lock. All 30 agents (if running) + Dev Assistant share
+      one BlockchainLogger. Changing RPC_URL affects all consumers. Pending retry
+      queue handles transient failures.
+
+  # ═══════════════════════════════════════════════════════════════
+  # LAYER 3 — APPLICATION
+  # ═══════════════════════════════════════════════════════════════
+
+  - component: dev-assistant-bot
+    depends_on:
+      - llm-routing
+      - safety-layer
+      - knowledge-layer
+      - blockchain-logging
+      - task-queue
+      - autonomous-loop
+    dependents: []
+    modification_risk: high
+    notes: >
+      Entry point for all development task execution. Protected file — cannot
+      self-modify. Changes to dev_assistant.py require bot restart. Current
+      codebase layout injected as hardcoded string in _analyze() system prompt.
+
+  - component: autonomous-loop
+    depends_on:
+      - safety-layer
+      - knowledge-layer
+      - task-queue
+    dependents:
+      - dev-assistant-bot
+    modification_risk: medium
+    notes: >
+      Imported by dev_assistant.py, does not run independently. Changes to
+      loop constants (SUMMARY_INTERVAL, MAX_CONSECUTIVE_FAILURES) affect
+      autonomous behavior.
+
+  - component: task-queue
+    depends_on: []
+    dependents:
+      - dev-assistant-bot
+      - autonomous-loop
+    modification_risk: low
+    notes: "YAML file on disk. Gitignored. Survives restarts."
+
+  - component: agent-hierarchy
+    depends_on:
+      - llm-inference
+      - blockchain-logging
+    dependents: []
+    modification_risk: low
+    notes: >
+      DORMANT. Not running. agent_registry.py is shared with Dev Assistant
+      for tier assignments. Restarting requires fixing stale IP in llm_client.py.

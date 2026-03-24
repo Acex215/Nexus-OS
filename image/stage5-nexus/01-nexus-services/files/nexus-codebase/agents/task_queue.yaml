@@ -1,0 +1,201 @@
+tasks:
+- affected_files: []
+  branch: dev-assistant/task-20260319-221616-5a2fa9-add-a-module-level-docstring-t
+  completed: '2026-03-22T19:40:22.321702+00:00'
+  created: '2026-03-19T22:16:16.403111+00:00'
+  depends_on: []
+  description: "Add a module-level docstring to failure_analyzer.py: \"Phase 4 \u2014 Failure pattern recognition and categorized\
+    \ analysis.\""
+  id: task-20260319-221616-5a2fa9
+  parent_id: null
+  priority: P2
+  result:
+    blockchain_tx: null
+    commit_hash: ead9094dbdbc
+    diffs:
+    - "diff --git a/agents/failure_analyzer.py b/agents/failure_analyzer.py\nindex e970d29..d839457 100644\n--- a/agents/failure_analyzer.py\n\
+      +++ b/agents/failure_analyzer.py\n@@ -1,7 +1,4 @@\n-\"\"\"failure_analyzer.py \u2014 Analyzes task log JSONL for recurring\
+      \ failure patterns.\n-\n-Produces actionable summaries and Discord-formatted reports (Phase 4).\n-\"\"\"\n+\"\"\"Phase\
+      \ 4 \u2014 Failure pattern recognition and categorized analysis.\"\"\"\n \n import logging\n from collections import\
+      \ Counter"
+    error: null
+    files_changed: 1
+    lines_added: 1
+    lines_removed: 4
+    success: true
+  risk: low
+  started: '2026-03-22T19:37:50.123657+00:00'
+  status: done
+  sub_tasks: []
+- affected_files: []
+  branch: dev-assistant/task-20260319-221623-913a32-add-a-module-level-docstring-t
+  completed: '2026-03-22T19:42:08.364481+00:00'
+  created: '2026-03-19T22:16:23.235146+00:00'
+  depends_on: []
+  description: "Add a module-level docstring to change_analyzer.py: \"Phase 4 \u2014 Git and task log change summaries on\
+    \ demand.\""
+  id: task-20260319-221623-913a32
+  parent_id: null
+  priority: P2
+  result:
+    blockchain_tx: null
+    commit_hash: ed4dc9dca4e1
+    diffs: []
+    error: null
+    files_changed: 1
+    lines_added: 0
+    lines_removed: 0
+    success: true
+  risk: low
+  started: '2026-03-22T19:40:28.726507+00:00'
+  status: done
+  sub_tasks: []
+- affected_files: []
+  branch: dev-assistant/task-20260319-221629-bd3316-in-task-logger-py-add-a-functi
+  completed: '2026-03-22T19:47:28.362244+00:00'
+  created: '2026-03-19T22:16:29.900166+00:00'
+  depends_on: []
+  description: In task_logger.py, add a function count_total_tasks() that reads the JSONL file and returns the total number
+    of lines. Handle missing file by returning 0.
+  id: task-20260319-221629-bd3316
+  parent_id: null
+  priority: P2
+  result:
+    blockchain_tx: null
+    commit_hash: 814f88e871fc
+    diffs:
+    - "diff --git a/agents/task_logger.py b/agents/task_logger.py\nindex 08f0b09..3421263 100644\n--- a/agents/task_logger.py\n\
+      +++ b/agents/task_logger.py\n@@ -111,6 +111,17 @@ def read_recent_logs(n: int = 20, _log_file=None) -> list[dict]:\n\
+      \     except Exception:\n         return []\n \n+def count_total_tasks(_log_file=None) -> int:\n+    \"\"\"Return total\
+      \ number of tasks in the log file.\"\"\"\n+    try:\n+        log_file = _resolve_log_file(_log_file)\n+        if not\
+      \ log_file.exists():\n+            return 0\n+        with open(log_file, \"r\", encoding=\"utf-8\") as f:\n+      \
+      \      return sum(1 for line in f if line.strip())\n+    except Exception:\n+        return 0\n+\n \n def read_failed_logs(n:\
+      \ int = 20, _log_file=None) -> list[dict]:\n     \"\"\"Return last n failed entries (success=False), newest first.\"\
+      \"\""
+    error: null
+    files_changed: 1
+    lines_added: 11
+    lines_removed: 0
+    success: true
+  risk: low
+  started: '2026-03-22T19:42:15.683224+00:00'
+  status: done
+  sub_tasks: []
+- affected_files: []
+  branch: null
+  completed: null
+  created: '2026-03-19T22:16:38.165384+00:00'
+  depends_on: []
+  description: In knowledge_indexer.py, add a function get_collection_count() that returns the number of documents in the
+    dev_assistant_tasks ChromaDB collection. Return 0 on any error.
+  id: task-20260319-221638-7ee212
+  parent_id: null
+  priority: P2
+  result:
+    blockchain_tx: null
+    commit_hash: null
+    diffs: []
+    error: null
+    files_changed: 0
+    lines_added: 0
+    lines_removed: 0
+    success: null
+  risk: low
+  started: null
+  status: pending
+  sub_tasks: []
+- affected_files: []
+  branch: null
+  completed: null
+  created: '2026-03-19T22:16:38.881386+00:00'
+  depends_on: []
+  description: In failure_analyzer.py, add a function get_success_rate(n=50) that reads the last n task logs and returns the
+    success rate as a float between 0.0 and 100.0. Handle empty logs by returning 0.0.
+  id: task-20260319-221638-e110b6
+  parent_id: null
+  priority: P2
+  result:
+    blockchain_tx: null
+    commit_hash: null
+    diffs: []
+    error: null
+    files_changed: 0
+    lines_added: 0
+    lines_removed: 0
+    success: null
+  risk: low
+  started: null
+  status: pending
+  sub_tasks: []
+- id: task-20260322-152345-6ec835
+  description: hi
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-22T15:23:45.469017+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260322-152350-e99d00
+  description: cancel
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-22T15:23:50.595562+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+- id: task-20260322-164116-05f7ce
+  description: test temporal binning assignment
+  priority: P2
+  status: pending
+  risk: low
+  created: '2026-03-22T16:41:16.129454+00:00'
+  started: null
+  completed: null
+  branch: null
+  parent_id: null
+  sub_tasks: []
+  depends_on: []
+  affected_files: []
+  result:
+    success: null
+    commit_hash: null
+    blockchain_tx: null
+    error: null
+    diffs: []
+    lines_added: 0
+    lines_removed: 0
+    files_changed: 0
+  temporal_bin: '0x0bad3233d5f79e8bfa26c13aa9b626add8ffce268de367663e3b6281bb0b2f40'
+  temporal_params:
+    year: 2026
+    week: 12
+    day_of_week: 6
+    hour: 16

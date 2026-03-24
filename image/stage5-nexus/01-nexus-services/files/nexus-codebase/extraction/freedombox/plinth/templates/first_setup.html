@@ -1,0 +1,27 @@
+{% extends "base_firstboot.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load static %}
+
+{% block body_class %}
+no-brand
+{% endblock %}
+
+{% block content %}
+
+  <div class="logo">
+    <img class="firstboot img-fluid" alt="{{ box_name }}"
+         src="{% static 'theme/img/freedombox-logo-standard.svg' %}"/>
+  </div>
+
+  {% if is_first_setup_running %}
+    <p class="firstboot-spinner">
+      <span class="fa fa-refresh fa-spin fa-4x fa-pull-left processing"></span>
+    </p>
+  {% endif %}
+
+{% endblock %}

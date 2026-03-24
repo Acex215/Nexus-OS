@@ -1,0 +1,57 @@
+#language en
+
+##TAG:TRANSLATION-HEADER-START
+~- [[FreedomBox/Manual/Sharing|English]] - [[es/FreedomBox/Manual/Sharing|Español]] - [[DebianWiki/EditorGuide#translation|(+)]] -~
+##TAG:TRANSLATION-HEADER-END
+<<TableOfContents()>>
+
+## BEGIN_INCLUDE
+
+== Sharing (File Publishing) ==
+||<tablestyle="float: right;"> {{attachment:Sharing-icon_en_V01.png|Sharing icon}} ||
+
+'''Available since''': version 0.25
+
+=== What Is Sharing App? ===
+
+Sharing app allows you to share content over the web. Shared content can be individual files or whole directories.
+
+The content can be shared publicly or restricted to the users of listed allowed groups. Allowed users will be able to access the shared content from their web browser at {{{https://your_freedombox/share/content_name}}}. Users not belonging to any of the allowed groups won't see or access the content through this mechanism.
+
+=== Setting Up Shares ===
+
+ * In Plinth enable the Sharing App. Only admins can create, edit or remove shares. They'll find the Sharing app in the Apps section of the !FreedomBox web interface. Many shares can coexist in the same server.
+ * Add a new share
+   * Give it a name (an thereby the URL) with which the users will ask for the content. In the example above it would be called ''content_name''.
+   * The Disk Path of the content to be served. This path is relative to ''root'' on your !FreedomBox. For instance ''/var/lib/freedombox/sharing/content_name'' might be a choice.
+   * Sharing mode. On restricted mode, it also has the list of allowed groups. Only groups recognized by !FreedomBox service can be combined in the list of allowed groups. Groups created in the CLI won't be offered by the Sharing app. 
+ * Create the directory specified under ''Disk Path'' on your !FreedomBox through ''Cockpit'', ''Nautilus'' or remote login.
+ * Make sure the user, who will provide the content, has write access to that directory for instance by making him the owner of that directory. 
+
+=== Providing/Updating Content ===
+
+The content can be created before or after the share is created and they can be updated independently.
+
+The content doesn't need to be provided by an admin either. Any user with write access to the share's disk path can create or update it.
+
+Multiple shares might point to the same content.
+
+If you are user of !FreedomBox and your admin refuses to create shares for you, and you don't need to restrict the access to your content, you still can fall back to the [[FreedomBox/Manual/Apache_userdir|User Websites]] mechanism or the P2P networks ([[FreedomBox/Manual/Deluge|Deluge]] or [[FreedomBox/Manual/Transmission|Transmission]] for Torrent) to publish your files.
+
+=== Technicalities ===
+Sharing will share the content using the built-in Apache web server.
+
+=== External Links ===
+
+ * Upstream Project: https://projects.apache.org/project.html?httpd-http_server
+ * Upstream Documentation: https://httpd.apache.org/docs/2.4/en/mod/mod_alias.html
+ * Debian Apache Wiki: https://wiki.debian.org/Apache
+
+## END_INCLUDE
+
+Back to [[FreedomBox/Features|Features introduction]] or [[FreedomBox/Manual|manual]] pages.
+
+<<Include(FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox

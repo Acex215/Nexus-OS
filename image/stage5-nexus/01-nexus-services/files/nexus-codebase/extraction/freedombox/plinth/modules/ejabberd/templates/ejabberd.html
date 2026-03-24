@@ -1,0 +1,37 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load static %}
+
+{% block page_js %}
+  <script type="text/javascript" src="{% static 'ejabberd/ejabberd.js' %}"
+          defer></script>
+{% endblock %}
+
+{% block status %}
+  {{ block.super }}
+
+  <h3>{% trans "Status" %}</h3>
+
+  <p>
+    {% url 'names:index' as names_url %}
+    {% if domain_name %}
+      {% blocktrans trimmed with domain_name=domain_name %}
+        Your XMPP server domain is set to <b>{{ domain_name }}</b>. User
+        IDs will look like <i>username@{{ domain_name }}</i>. You
+        can setup your domain on the system
+        <a href="{{ names_url }}">Name Services</a> page.
+      {% endblocktrans %}
+    {% else %}
+      {% blocktrans trimmed %}
+        Your XMPP server domain is not set. You can setup your domain on the
+        system <a href="{{ names_url }}">Name Services</a> page.
+      {% endblocktrans %}
+    {% endif %}
+  </p>
+
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block configuration %}
+  <form id="snapshot-configure" class="form-horizontal form-configuration"
+        method="post">
+    {% csrf_token %}
+    <h3>{% trans "Configuration" %}</h3>
+    {{ form|bootstrap_horizontal:'col-md-4' }}
+    <input type="submit" class="btn btn-primary" name="update"
+           value="{% trans "Update setup" %}"/>
+  </form>
+{% endblock %}

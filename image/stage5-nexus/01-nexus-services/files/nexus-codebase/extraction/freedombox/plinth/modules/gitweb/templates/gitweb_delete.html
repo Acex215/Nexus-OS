@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block content %}
+
+  <h3>
+    {% blocktrans trimmed %}
+      Delete Git Repository <em>{{ name }}</em>
+    {% endblocktrans %}
+  </h3>
+
+  <p>
+    {% blocktrans trimmed %}
+      Delete this repository permanently?
+    {% endblocktrans %}
+  </p>
+
+  <form class="form form-delete" method="post">
+    {% csrf_token %}
+
+    <input type="submit" class="btn btn-md btn-danger"
+           value="{% blocktrans %}Delete {{ name }}{% endblocktrans %}"/>
+  </form>
+
+{% endblock %}

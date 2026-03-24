@@ -1,0 +1,150 @@
+{% extends 'help_base.html' %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+
+  <p class="text-center">
+    <img src="{% static 'theme/img/freedombox-logo-250px.png' %}"
+         class="main-graphic" />
+  </p>
+
+  {% if version %}
+    <div class="alert {% if new_version %}alert-warning{% else %}alert-success{% endif %}
+                d-flex align-items-center">
+      <div class="me-2">
+        {% if new_version %}
+          <span class="fa fa-exclamation-triangle" aria-hidden="true"></span>
+          <span class="visually-hidden">{% trans "Caution:" %}</span>
+        {% else %}
+          <span class="fa fa-check-circle" aria-hidden="true"></span>
+          <span class="visually-hidden">{% trans "Success:" %}</span>
+        {% endif %}
+      </div>
+      <div>
+        {% blocktrans trimmed %}
+          You are running {{ os_release }} and {{ box_name }} version {{ version }}.
+        {% endblocktrans %}
+
+        {% if new_version %}
+          {% url 'upgrades:index' as upgrades_url %}
+          {% blocktrans trimmed %}
+            There is a new {{ box_name }} version
+            <a href="{{ upgrades_url }}">available</a>.
+          {% endblocktrans %}
+        {% else %}
+          {% blocktrans trimmed %}
+            {{ box_name }} is up to date.
+          {% endblocktrans %}
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <p>
+    {% blocktrans trimmed %}
+      {{ box_name }} is a community project to develop, design and
+      promote personal servers running free software for private,
+      personal communications.  It is a networking appliance designed
+      to allow interfacing with the rest of the Internet under
+      conditions of protected privacy and data security.  It hosts
+      applications such as blog, wiki, website, social network, email,
+      web proxy and a Tor relay, on a device that can replace your
+      Wi-Fi router, so that your data stays with you.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      We live in a world where our use of the network is mediated by
+      those who often do not have our best interests at heart.  By
+      building software that does not rely on a central service, we
+      can regain control and privacy.  By keeping our data in our
+      homes, we gain useful legal protections over it.  By giving back
+      power to the users over their networks and machines, we are
+      returning the Internet to its intended peer-to-peer
+      architecture.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      There are a number of projects working to realize a future of
+      distributed services; {{ box_name }} aims to bring them all
+      together in a convenient package.
+    {% endblocktrans %}
+  </p>
+
+  <p>
+    {% blocktrans trimmed %}
+      {{ box_name }} is free software, licensed under the GNU Affero
+      General Public License. The source code is available online at the
+      <a href="https://salsa.debian.org/freedombox-team/freedombox">
+        {{ box_name }} repository</a>.  In addition, the source code of
+      any Debian package can be obtained from the
+      <a href="https://sources.debian.org/">Debian Sources</a> site,
+      or by running "apt source <i>package_name</i>" in a terminal
+      (using Cockpit or SSH).
+    {% endblocktrans %}
+  </p>
+
+  <div class="row help-about-links">
+    <section class="col">
+      <h2>{% trans "Learn" %}</h2>
+      <ul>
+        <li>
+          <a href="https://freedombox.org">{% trans "Homepage" %}</a>
+        </li>
+        <li>
+          <a href="https://wiki.debian.org/FreedomBox/Manual">
+            {% trans "Manual" context "User guide"%}
+          </a>
+        </li>
+        <li>
+          <a href="https://wiki.debian.org/FreedomBox">{% trans "Wiki" %}</a>
+        </li>
+      </ul>
+    </section>
+    <section class="col">
+      <h2>{% trans "Contribute" %}</h2>
+      <ul>
+        <li>
+          <a href="https://freedomboxfoundation.org/donate/">{% trans "Donate" %}</a>
+        </li>
+        <li>
+          <a href="https://salsa.debian.org/freedombox-team/">{% trans "Join project" %}</a>
+        </li>
+        <li>
+          <a href="https://hosted.weblate.org/projects/freedombox/">
+            {% trans "Translate" %}
+          </a>
+        </li>
+      </ul>
+    </section>
+    <section class="col">
+      <h2>{% trans "Support" %}</h2>
+      <ul>
+        <li>
+          <a href="https://discuss.freedombox.org/">
+            {%trans "Forum" %}
+          </a>
+        </li>
+        <li>
+          <a href="https://webchat.oftc.net/?randomnick=1&channels=freedombox&prompt=1">
+            {%trans "IRC Chatroom" %}
+          </a>
+        </li>
+        <li>
+          <a href="https://lists.alioth.debian.org/mailman/listinfo/freedombox-discuss">
+            {% trans "Mailing list" %}
+          </a>
+        </li>
+      </ul>
+    </section>
+  </div>
+
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load plinth_extras %}
+{% load static %}
+
+{% block page_head %}
+  <link type="text/css" rel="stylesheet"
+        href="{% static 'samba/samba.css' %}"/>
+{% endblock %}
+
+{% block configuration %}
+  {{ block.super }}
+
+  {% if is_enabled %}
+    <h3>{% trans "Shares" %}</h3>
+    <p>
+      {% blocktrans trimmed %}
+        Note: Only specially created directories will be shared on selected
+        disks, not the whole disk.
+      {% endblocktrans %}
+    </p>
+
+    {% for disk in disks %}
+      <div class="samba-disk-shares">
+        <div class="samba-disk-header">
+          <div class="samba-disk-name">
+            <span class="fa fa-hdd-o"></span>
+            {{ disk.name }}
+          </div>
+          <div class="samba-disk-free">
+            <div class="progress">
+              <div class="progress-bar progress-bar-striped
+                {% if disk.percent_used < 75 %}
+                  bg-success
+                {% elif disk.percent_used < 90 %}
+                  bg-warning
+                {% else %}
+                  bg-danger
+                {% endif %}
+                 w-{{ disk.percent_used }}"
+                role="progressbar" aria-valuenow="{{ disk.percent_used }}"
+                aria-valuemin="0" aria-valuemax="100">
+                {{ disk.percent_used }}%
+              </div>
+            </div>
+            <div>{{ disk.used_str }} / {{ disk.size_str }}</div>
+          </div>
+        </div>
+
+        <form class="form shareform" method="post"
+              action="{% url 'samba:share' disk.mount_point|urlencode:'' %}">
+          {% csrf_token %}
+          <input type="hidden" name="filesystem_type"
+                 value="{{ disk.filesystem_type }}">
+          <div class="table-responsive">
+            <table class="table"
+                   aria-describedby="{{ disk.name }}">
+              <thead>
+                <tr>
+                  <th scope="col">{% trans 'Type' %}</th>
+                  <th scope="col">{% trans 'Name' %}</th>
+                  <th scope="col">{% trans 'Status' %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for share_type in share_types %}
+                  <tr id="samba-share-{{ disk.share_name_prefix }}-{{ share_type.id }}"
+                      class="share">
+                    <td class="share-type">
+                      {{ share_type.type }}
+                    </td>
+                    <td class="share-name">
+                      {{ disk.share_name_prefix }}{{ share_type.share_name_suffix }}
+                    </td>
+                    <td class="share-status">
+                      <button type="submit"
+                        {% if disk.filesystem_type == 'vfat' %}
+                          class="btn toggle-button"
+                          title='{% trans "VFAT partitions are not supported" %}'
+                          disabled
+                          aria-readonly="true"
+                        {% elif share_type.id in shared_mounts|lookup:disk.mount_point %}
+                          class="btn toggle-button toggle-button--toggled"
+                          name="{{ share_type.id }}_share"
+                          value="disable"
+                          aria-pressed="true"
+                        {% else %}
+                          class="btn toggle-button"
+                          name="{{ share_type.id }}_share"
+                          value="enable"
+                          aria-pressed="false"
+                        {% endif %}>
+                      </button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </form>
+      </div>
+    {% endfor %}
+
+    <p>
+      {% url 'storage:index' as storage_url %}
+      {% url 'users:index' as users_url %}
+      {% blocktrans trimmed %}
+        You can find additional information about disks on the
+        <a href="{{ storage_url }}">storage</a> module page and configure
+        access to the shares on the <a href="{{ users_url }}">users</a> module
+        page.
+      {% endblocktrans %}
+    </p>
+
+    <p>{% trans "Users who can currently access group and home shares" %}:
+      {{ users.access_ok|join:", " }}</p>
+
+    {% if users.password_re_enter_needed %}
+      <p>{% trans "Users needing to re-enter their password on the password change page to access group and home shares" %}:
+        <strong>{{ users.password_re_enter_needed|join:", " }}</strong>.</p>
+    {% endif %}
+
+    {% if unavailable_shares %}
+      <h3>{% trans "Unavailable Shares" %}</h3>
+      <p>
+        {% blocktrans trimmed %}
+          Shares that are configured but the disk is not available. If the disk
+          is plugged back in, sharing will be automatically enabled.
+        {% endblocktrans %}
+      </p>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{% trans "Share name" %}</th>
+              <th>{% trans "Action" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for share in unavailable_shares %}
+            <tr>
+              <td>{{ share.name }}</td>
+              <td>
+                <form class="form" method="post"
+                      action="{% url 'samba:share' share.mount_point|urlencode:'' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-danger"
+                          name="{{ share.share_type }}_share"
+                          value="disable">{% trans "Delete" %}
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+

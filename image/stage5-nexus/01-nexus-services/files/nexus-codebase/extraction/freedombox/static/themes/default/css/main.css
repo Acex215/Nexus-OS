@@ -1,0 +1,1030 @@
+/*
+# SPDX-License-Identifier: AGPL-3.0-or-later
+*/
+
+:root {
+    --neutral-light-color: #f5f5f5; /* Light grey */
+    --freedombox-blue-color: #4989D4; /* Blue */
+    --progress-color: #3498db; /* Blue */
+    --freedombox-navbar-color: white;
+    --freedombox-navbar-shadow-color: rgba(0, 0, 0, 0.25);
+    --freedombox-toggle-button-bg: #ccc;
+}
+
+[data-bs-theme="dark"] {
+    --freedombox-toggle-button-bg: #888;
+}
+
+/*
+ * Bootstrap override
+ */
+section:not(:first-child),
+h1:not(:first-child),
+h2:not(:first-child),
+h3:not(:first-child),
+h4:not(:first-child),
+h5:not(:first-child),
+h6:not(:first-child) {
+    margin-top: 2rem;
+}
+
+.btn[disabled] {
+    cursor: not-allowed !important;
+    opacity: .65;
+    box-shadow: none;
+}
+
+/* Primary color changed in bootstrap 4, we want colors closer to FreedomBox
+   colors */
+.btn-primary {
+    --bs-btn-bg: #337ab7; /* Originally: #0d6efd */
+    --bs-btn-border-color: #2e6da4; /* Originally: #0d6efd */
+    --bs-btn-hover-bg: #286090; /* Originally: #0b5ed7 */
+    --bs-btn-hover-border-color: #204d74; /* Originally: #0a58ca */
+    --bs-btn-active-bg: #286090; /* Originally: #0a58ca */
+    --bs-btn-active-border-color: #204d74; /* Originally: #0a53be */
+    --bs-btn-disabled-bg: #286090; /* Originally: #0d6efd */
+    --bs-btn-disabled-border-color: #204d74; /* Originally: #0d6efd */
+}
+
+/* Default style removed in bootstrap 4 */
+.btn-default {
+    --bs-btn-color: var(--bs-body-color);
+    --bs-btn-bg: var(--bs-body-bg);
+    --bs-btn-border-color: var(--bs-tertiary-color);
+    --bs-btn-hover-color: var(--bs-body-color);
+    --bs-btn-hover-bg: var(--bs-secondary-bg);
+    --bs-btn-hover-border-color: var(--bs-tertiary-color);
+    --bs-btn-focus-shadow-rgb: 192, 192, 192;
+    --bs-btn-active-color: var(--bs-body-color);
+    --bs-btn-active-bg: var(--bs-secondary-bg);
+    --bs-btn-active-border-color: var(--bs-tertiary-color);
+    --bs-btn-active-shadow: inset 0 3px 5px var(--bs-border-color-translucent);
+    --bs-btn-disabled-color: var(--bs-body-color);
+    --bs-btn-disabled-bg: var(--bs-secondary-bg);
+    --bs-btn-disabled-border-color: var(--bs-tertiary-color);
+}
+
+/* Help block removed from bootstrap 4, needs updated django-bootstrap-from */
+.help-block {
+    display: block;
+    margin-top: 0.3125rem;
+    margin-bottom: 0.625rem;
+    color: var(--bs-secondary-color);
+}
+
+/* .close was renamed to .alert-dismissable.btn-close in Bootstrap 5, needs
+   updated django-bootstrap-from */
+form .alert {
+    padding-right: 3rem;
+}
+
+form .alert .close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    padding: 1.25rem 1rem;
+    cursor: pointer;
+    color: transparent;
+    box-sizing: content-box;
+    width: 1em;
+    height: 1em;
+    background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;
+    border: 0;
+    border-radius: 0.375rem;
+    opacity: 0.5;
+}
+
+/* Disabled form elements show as gray, removed in Bootstrap 5 */
+.form-control:disabled, .form-control[readonly] {
+    background-color: var(--bs-secondary-bg);
+    opacity: 1;
+}
+
+/* form-horizontal removed in bootstrap, needs updated django-bootstrap-form */
+.form-horizontal > .form-group {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+/* In Bootstrap 5, drop down fields are meant to be to be styled with the
+   form-select class. Needs updated django-bootstrap-form */
+select.form-control {
+    --bs-form-select-bg-img: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+    background-image: var(--bs-form-select-bg-img),var(--bs-form-select-bg-icon, none);
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    padding-right: 2.25rem;  /* Don't overall text on the drop down arrow */
+}
+
+[data-bs-theme="dark"] select.form-control {
+    --bs-form-select-bg-img: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23dee2e6' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+/* In Bootstrap 5, instead of styling .col-* to 100% width by default, .row > *
+   is styled as .form-group has been removed. Needs updated
+   django-bootstrap-form */
+.form-horizontal > .form-group > * {
+    width: 100%;
+}
+
+@media (min-width: 768px) {
+    .form-horizontal > .form-group > .col-md-4 {
+        width: 33.33333333%;
+    }
+
+    .form-horizontal > .form-group > .col-md-8 {
+        width: 66.66666667%;
+    }
+}
+
+.radio .help-block {
+    padding-left: 1.2rem;
+}
+
+.checkbox .help-block {
+    padding-left: 1.4rem;
+}
+
+/* label styling moved to .form-label in Bootstrap 5, needs updated
+   django-bootstrap-form */
+label {
+    margin-bottom: 0.5rem;
+}
+
+/* Form group has been removed in Bootstrap 5, need updated
+   django-bootstrap-form */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+/* Form error display was changed in bootstrap 4, provide compatibility */
+.has-error .help-block,
+.has-error .control-label,
+.has-error .radio,
+.has-error .checkbox,
+.has-error .radio-inline,
+.has-error .checkbox-inline,
+.has-error.radio label,
+.has-error.checkbox label,
+.has-error.radio-inline label,
+.has-error.checkbox-inline label {
+    color: var(--bs-form-invalid-color);
+}
+
+.has-error .form-control {
+    border-color: var(--bs-form-invalid-border-color);
+}
+
+/*
+ * Basic styling
+ */
+body {
+    padding-top: 6rem;
+    position: relative;
+}
+
+.multiple-checkbox li {
+    list-style-type: none;
+}
+
+.multiple-checkbox > div {
+    padding-left: 40px;
+}
+
+.navbar .fa:not(.fa-bars) {
+    margin-right: 0.25rem;
+}
+
+.no-brand .navbar-brand {
+    display: none;
+}
+
+.navbar-brand .fa {
+    float: left;
+    margin-top: -0.4375rem;
+    padding: 0.5rem;
+}
+
+.navbar-brand {
+    height: 3.3125rem;
+    margin-right: -1.25rem;
+}
+
+@media (max-width: 767px) {
+    .navbar-brand {
+        margin-right: auto;
+    }
+}
+
+.nav-tabs {
+    margin-bottom: 1.25rem;
+}
+
+.dropdown-toggle::after {
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Hide log out button if user dropdown is available */
+.js #logout-nojs {
+    display: none;
+}
+
+/* Hide the dropdown icon when javascript is not available */
+.no-js .dropdown-toggle:after {
+    display: none;
+}
+
+.diagnostics-results .diagnostics-result {
+    width: 3.75rem;
+    text-align: center;
+}
+
+.centered-column {
+    text-align: center;
+}
+
+html {
+    position: relative;
+}
+
+body,
+html {
+    height: 100%;
+}
+
+#wrapper {
+    position: relative;
+}
+
+.container {
+    /* Same width as container-xxl in Bootstrap 5 */
+    max-width: 1320px;
+}
+
+.content-container {
+    max-width: 1000px;
+    margin-bottom: 1.25rem;
+}
+
+/* When an exception's text is shown in message as alert component, don't
+   overflow the alert's width. */
+.alert.d-flex div {
+    max-width: 100%;
+}
+
+.alert pre {
+    margin-top: 1rem;
+}
+
+/* Tags */
+.tag {
+    --bs-btn-padding-y: 0.25rem; /* Make the badge shorter */
+    border-style: none;
+}
+
+#selected-tags .tag {
+    border-style: solid;
+}
+
+/* Tag Input Container */
+.tag-input {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .25rem;
+    padding: .375rem .75rem;
+    background-color: var(--bs-body-bg);
+    margin-bottom: 2rem;
+}
+
+/* Remove tag button */
+.tag .remove-tag {
+    background-color: transparent; /* Match the tag's background color */
+    border: none;
+    cursor: pointer;
+    --bs-btn-padding-y: 0; /* To make the entire tag button shorter */
+}
+
+/* Adjust input field width */
+.tag-input input[type="search"] {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    width: auto;
+    min-width: 3rem;
+}
+
+/* dropdown-menu for tags is a scrollable list */
+.tag-input .dropdown-menu {
+    overflow-y: auto;
+    max-height: 15rem;
+}
+
+.tag-input .dropdown-menu > ul {
+    list-style: none;
+    margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+    .content-container {
+        padding: 1.5rem 3rem 3rem;
+    }
+}
+
+footer {
+    text-align: center;
+    padding-top: 20rem;
+}
+
+/*
+ * Bootstrap extensions
+ */
+/* Use .list-group-two-column when there are some items aligned to right */
+.list-group-two-column .list-group-item {
+    display: flex;
+    align-items: center;
+}
+
+.list-group-two-column .list-group-item > :not(:last-child) {
+    margin-right: 0.25rem;
+}
+
+.list-group-two-column .list-group-item > .badge.secondary {
+    font-size: 1rem;
+    font-weight: normal;
+}
+
+.list-group-two-column .list-group-item > .secondary {
+    margin-left: auto;
+    margin-top: -0.25rem;
+    margin-bottom: -0.25rem;
+}
+
+.list-group-two-column .list-group-item > .secondary ~ .secondary {
+    margin-left: 0;
+}
+
+/* Hack to avoid inline styling on bootstrap progress bars */
+.w-0 {width: 0%;} .w-1 {width: 1%;} .w-2 {width: 2%;} .w-3 {width: 3%;}
+.w-4 {width: 4%;} .w-5 {width: 5%;} .w-6 {width: 6%;} .w-7 {width: 7%;}
+.w-8 {width: 8%;} .w-9 {width: 9%;} .w-10 {width: 10%;} .w-11 {width: 11%;}
+.w-12 {width: 12%;} .w-13 {width: 13%;} .w-14 {width: 14%;} .w-15 {width: 15%;}
+.w-16 {width: 16%;} .w-17 {width: 17%;} .w-18 {width: 18%;} .w-19 {width: 19%;}
+.w-20 {width: 20%;} .w-21 {width: 21%;} .w-22 {width: 22%;} .w-23 {width: 23%;}
+.w-24 {width: 24%;} .w-25 {width: 25%;} .w-26 {width: 26%;} .w-27 {width: 27%;}
+.w-28 {width: 28%;} .w-29 {width: 29%;} .w-30 {width: 30%;} .w-31 {width: 31%;}
+.w-32 {width: 32%;} .w-33 {width: 33%;} .w-34 {width: 34%;} .w-35 {width: 35%;}
+.w-36 {width: 36%;} .w-37 {width: 37%;} .w-38 {width: 38%;} .w-39 {width: 39%;}
+.w-40 {width: 40%;} .w-41 {width: 41%;} .w-42 {width: 42%;} .w-43 {width: 43%;}
+.w-44 {width: 44%;} .w-45 {width: 45%;} .w-46 {width: 46%;} .w-47 {width: 47%;}
+.w-48 {width: 48%;} .w-49 {width: 49%;} .w-50 {width: 50%;} .w-51 {width: 51%;}
+.w-52 {width: 52%;} .w-53 {width: 53%;} .w-54 {width: 54%;} .w-55 {width: 55%;}
+.w-56 {width: 56%;} .w-57 {width: 57%;} .w-58 {width: 58%;} .w-59 {width: 59%;}
+.w-60 {width: 60%;} .w-61 {width: 61%;} .w-62 {width: 62%;} .w-63 {width: 63%;}
+.w-64 {width: 64%;} .w-65 {width: 65%;} .w-66 {width: 66%;} .w-67 {width: 67%;}
+.w-68 {width: 68%;} .w-69 {width: 69%;} .w-70 {width: 70%;} .w-71 {width: 71%;}
+.w-72 {width: 72%;} .w-73 {width: 73%;} .w-74 {width: 74%;} .w-75 {width: 75%;}
+.w-76 {width: 76%;} .w-77 {width: 77%;} .w-78 {width: 78%;} .w-79 {width: 79%;}
+.w-80 {width: 80%;} .w-81 {width: 81%;} .w-82 {width: 82%;} .w-83 {width: 83%;}
+.w-84 {width: 84%;} .w-85 {width: 85%;} .w-86 {width: 86%;} .w-87 {width: 87%;}
+.w-88 {width: 88%;} .w-89 {width: 89%;} .w-90 {width: 90%;} .w-91 {width: 91%;}
+.w-92 {width: 92%;} .w-93 {width: 93%;} .w-94 {width: 94%;} .w-95 {width: 95%;}
+.w-96 {width: 96%;} .w-97 {width: 97%;} .w-98 {width: 98%;} .w-99 {width: 99%;}
+.w-100 {width: 100%;}
+
+/*
+ * Clients information
+ */
+.client-icon {
+    display: inline-block;
+    width: 100%;
+    height: auto;
+    max-height: 1.25rem;
+    max-width: 1.25rem;
+    margin: auto;
+}
+
+#clients .btn {
+    width: 9rem;
+    margin-right: 1rem;
+}
+
+#clients th, #clients td {
+    line-height: 3rem;
+}
+
+/* Icon when collapsible content is shown */
+.collapsible-button .fa {
+    margin-left: 0.3125rem;
+}
+
+.collapsible-button .fa-chevron-right:before,
+.no-js .collapsible-button.collapsed .fa-chevron-right:before {
+    content: "\f078";
+}
+
+.collapsible-button.collapsed .fa-chevron-right:before {
+    content: "\f054";
+}
+
+/* No-JS fallbacks for collapsible content */
+.no-js .collapse:not(.no-no-js) {
+    display: block;
+}
+
+.manual-page {
+    text-align: right;
+}
+
+/*
+ * Top navigation
+ */
+.main-header {
+    background: var(--freedombox-blue-color);
+    box-shadow: 0 0.25rem 0.375rem 0 var(--freedombox-navbar-shadow-color);
+    border: none;
+}
+
+.main-header > .container > nav.navbar {
+    padding: 0;
+}
+
+.main-header .nav-item .nav-link {
+    padding: 0.9375rem !important;
+    height: 3.25rem;
+}
+
+.main-header .nav-link {
+    --bs-navbar-color: var(--freedombox-navbar-color);
+    --bs-navbar-active-color: var(--freedombox-navbar-color);
+    --bs-navbar-hover-color: var(--freedombox-navbar-color);
+    --bs-nav-link-color: var(--freedombox-navbar-color);
+    --bs-nav-link-active-color: var(--freedombox-navbar-color);
+    --bs-nav-link-hover-color: var(--freedombox-navbar-color);
+}
+
+.main-header .navbar-toggler {
+    --bs-navbar-toggler-border-color: var(--freedombox-navbar-color);
+    --bs-navbar-color: var(--freedombox-navbar-color);
+    /* In mobile layout, during first setup, maintain the height of the navbar */
+    margin: 0.6875rem 0;
+}
+
+@media screen and (max-width: 767px) {
+    .main-header .dropdown-menu {
+        --bs-dropdown-link-color: var(--freedombox-navbar-color);
+        --bs-dropdown-link-active-color: var(--freedombox-navbar-color);
+        --bs-dropdown-link-hover-color: var(--freedombox-navbar-color);
+        --bs-dropdown-link-hover-bg: var(--freedombox-blue-color);
+        --bs-dropdown-link-active-bg: var(--freedombox-blue-color);
+        --bs-dropdown-bg: var(--freedombox-blue-color);
+        --bs-dropdown-border-color: var(--freedombox-navbar-color);
+    }
+
+    .main-header .navbar-nav .nav-item:last-of-type .dropdown-menu {
+        margin-bottom: 1.25rem;
+    }
+}
+
+.main-header .navbar-brand.active,
+.main-header .nav-link.active {
+    border-bottom: var(--freedombox-navbar-color) 3px solid;
+}
+
+.main-header .dropdown-menu .active .fa-check {
+    display: block !important;
+}
+
+/* Breadcrumbs */
+.breadcrumb-item {
+    --bs-breadcrumb-divider: ">";
+}
+
+.breadcrumb-item .fa-home {
+    font-size: 1.5rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    margin: 0 0.5rem;
+}
+
+/* Cards in Index, Apps, System and Help pages */
+.card-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.row > .card-list {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.card-section-title, .system-section-title {
+    display: flex;
+    font-weight: 600;
+    font-size: 1.5rem;
+    margin: 1.25rem 0;
+}
+
+.card {
+    display: block;
+    line-height: 1.42857143;
+    text-align: center;
+    width: 11.5rem;
+    padding: 1rem 0.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    transition: border .2s ease-in-out;
+}
+
+.card:hover {
+    background: var(--bs-secondary-bg);
+}
+
+.card > a {
+    display: block;
+    padding: 0rem;
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+.card-title {
+    font-size: 1.25rem;
+    margin-bottom: 0;
+}
+
+.card-tags {
+    font-weight: 400;
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+
+    /* Show ellipsis after 3 lines. */
+    /* Standardized in CSS Overflow Module Level 4 */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+}
+
+.card-icon span,
+.card-icon img {
+    width: 6.25rem;
+    height: 6.25rem;
+    font-size: 5rem;
+    margin: 0.5rem 0;
+}
+
+.card .tag-separator {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>%3ccircle style='fill:%236c757d' cx='8' cy='8' r='8'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    display: inline-block;
+    width: 0.1875rem;
+    height: 0.375rem;
+    margin: 0 0.5rem;
+}
+
+/* System page - special card styling */
+.system-page .card-list {
+    justify-content: left;
+    margin: 0;
+}
+
+.system-page .card {
+    text-align: left;
+    width: 20.625rem;
+    padding: 0;
+}
+
+.system-page .card > a {
+    display: grid;
+    grid-template-columns: 2.1875rem auto;
+    grid-column-gap: 0.625rem;
+    padding: 0.8125rem;
+}
+
+.system-page .card-title {
+    font-size: 1.125rem;
+    font-style: normal;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    grid-row: 1;
+    grid-column: 2;
+    padding: 0.375rem 0 0;
+}
+
+.system-page .card-icon {
+    grid-row: 1 / 3;
+    grid-column: 1;
+}
+
+.system-page .card-icon span {
+    height: auto;
+    font-size: 2.1875rem;
+}
+
+.system-page .card-description {
+    grid-row: 2;
+    grid-column: 2;
+    padding: 0;
+    min-height: 1.125rem;
+}
+
+.names-table {
+    table-layout: fixed;
+    overflow-wrap: break-word;
+}
+
+.names-domain-column {
+    width: 50%;
+}
+
+
+/*
+ * First setup pages
+ */
+.firstboot-spinner {
+    text-align: center;
+}
+
+.firstboot-spinner span.fa {
+    float: none;
+    margin: auto;
+}
+
+.next-steps {
+    list-style: none;
+    margin-top: 1.5rem;
+    padding: 0;
+}
+
+.next-steps li {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 0;
+}
+
+.next-steps .app-icon {
+    font-size: 3rem;
+    margin-right: 1rem;
+    width: 3rem;
+    text-align: center;
+}
+
+.next-steps form {
+    display: inline;
+}
+
+/*
+ * Toggle button
+ */
+.toggle-button {
+    border-radius: 0.8125rem;
+    width: 3.125rem;
+    height: 1.625rem;
+    background: var(--freedombox-toggle-button-bg);
+    --bs-btn-hover-bg: var(--freedombox-toggle-button-bg);
+    --bs-btn-disabled-bg: var(--freedombox-toggle-button-bg);;
+    --bs-btn-disabled-border-color: transparent;
+    position: relative;
+}
+
+.toggle-button::before {
+    content: '';
+    display: block;
+    height: 1.5rem;
+    width: 1.5rem;
+    border-radius: 100%;
+    background: var(--bs-body-bg);
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    transform: translateY(-50%);
+}
+
+.toggle-button--toggled {
+    background: var(--freedombox-blue-color);
+    --bs-btn-hover-bg: var(--freedombox-blue-color);
+    --bs-btn-disabled-bg: var(--freedombox-blue-color);
+}
+
+.toggle-button--toggled::before {
+    left: 100%;
+    transform: translateY(-50%) translateX(-100%);
+}
+
+.toggle-button.running-status-button::before {
+    top: 0;
+    border: 0.25rem solid var(--bs-body-bg);
+    border-top-color: var(--freedombox-blue-color);
+    animation: spin 1s linear infinite;
+}
+
+.toggle-button.toggle-button--toggled.running-status-button::before {
+    margin-left: -1.5rem;
+}
+
+/*
+ * Form button with loading progress.
+ */
+.running-status-button-before {
+    display: inline-block;
+    border: 0.25rem solid var(--bs-btn-color);
+    border-top-color: transparent;
+    border-radius: 50%;
+    width: 1rem;
+    height: 1rem;
+    animation: spin 1s linear infinite;
+    margin-left: 0.625rem;
+    margin-bottom: -0.25rem;
+    margin-right: -1.625rem;
+    position: relative;
+    z-index: 10;
+}
+
+.running-status-button:disabled {
+    cursor: default;
+}
+
+input[type='submit'].running-status-button {
+    padding-left: 2rem;
+}
+
+/*
+ * Select all checkbox for multiple checkboxes field.
+ */
+.select-all-label {
+    border: 1px solid var(--bs-secondary-border-subtle);
+    background-color: var(--bs-tertiary-bg);
+    border-radius: 0.25rem;
+    padding: 0.5rem 1rem 0.25rem;
+    margin-left: -1rem;
+}
+
+/*
+ * Button toolbar
+ */
+.btn-toolbar {
+    margin-top: 0.625rem;
+    margin-bottom: 0.625rem;
+}
+
+.btn-toolbar > :not(:last-child):not(.running-status-button-before) {
+    margin-right: 0.5rem;
+}
+
+.btn-toolbar .button-secondary:first-child,
+.btn-toolbar .form:not(.button-secondary) + .button-secondary,
+.btn-toolbar .form:not(.button-secondary) + .running-status-button-before,
+.btn-toolbar .btn:not(.button-secondary) + .button-secondary,
+.btn-toolbar .btn:not(.button-secondary) + .running-status-button-before {
+    margin-left: auto;
+}
+
+.btn-toolbar > .running-status-button-before {
+    margin-bottom: 0;
+    align-self: center;
+}
+
+/*
+ * App's header
+ */
+.app-header {
+    display: grid;
+    grid-template-columns: 0.2fr 1fr;
+    column-gap: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.app-header > img {
+    margin: 0 auto;
+    width: 100%;
+}
+
+section.app-description {
+    grid-column: 2;
+    margin-top: 0;
+}
+
+.app-header-single-column  {
+    grid-template-columns: 1fr;
+}
+.app-header-single-column .app-description {
+    grid-column: 1;
+}
+
+.app-titles {
+    display: flex;
+    flex-flow: row;
+    justify-content: space-between;
+}
+
+.app-titles h3 {
+    margin-top: -0.3125rem;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+    font-weight: normal;
+    font-style: italic;
+}
+
+.form-app-enable-disable {
+    margin: auto 0;
+}
+
+.app-tags {
+    margin-bottom: 0.5rem;
+    margin-left: -0.75rem;
+    line-height: 2.75;
+}
+
+.app-tags .tag {
+    vertical-align: top;
+}
+
+@media screen and (max-width: 767px) {
+    .app-header {
+        display: flex;
+        flex-flow: column;
+    }
+
+    .app-header img {
+        width: 9.375rem;
+        height: 9.375rem;
+        margin-top: 0;
+    }
+
+    .app-titles {
+        display: flex;
+        flex-flow: column-reverse;
+        justify-content: center;
+        height: auto;
+    }
+
+    .app-titles h2 {
+        margin: 0 0 0.9375rem 0;
+    }
+
+    .app-titles .form-app-enable-disable {
+        margin: 1.875rem auto;
+    }
+
+    .app-titles .toggle-button {
+        transform: scale(1.2);
+    }
+}
+
+/*
+ * Help
+ */
+/* Manual - anchor is below navbar */
+*[id^='idm']:before {
+    display: block;
+    content: " ";
+    margin-top: -3.75rem;
+    height: 3.75rem;
+    visibility: hidden;
+}
+
+.help-about-links > section {
+    margin-top: 2rem;
+}
+
+.help-about-links h2 {
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.help-about-links ul {
+    list-style: none;
+    padding: 0;
+}
+
+/*
+ * Notifications
+ */
+.notifications {
+    margin-left: -0.9375rem;
+    margin-right: -0.9375rem;
+    position: relative;
+    transition: none;  /* Remove Bootstrap's default animation */
+}
+
+.notifications.collapsing {
+    display: none;  /* Don't show up with blue background momentarily */
+}
+
+.notifications > ul {
+    position: absolute; /* Don't increase parent's height */
+    list-style: none;
+    width: 100%;
+    padding: 0;
+    float: none;
+    margin-top: 0;
+    background-clip: border-box;
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 0 0 0.25em 0.25em;
+}
+
+/* Style for individual notification */
+.notification {
+    padding: 0.625rem 0.9375rem;
+    border-left: 0.3125rem solid;
+    max-height: 100rem;  /* HACK: Very high value for closing transition. */
+}
+
+.notification:not(:first-child) {
+    border-top: 1px solid var(--bs-border-color-translucent);
+}
+
+.notification.htmx-swapping {
+    opacity: 0;
+    overflow: hidden;
+    max-height: 0;
+    transition: opacity 0.3s, max-height 0.3s;
+}
+
+.notification-time {
+    float: right;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+}
+
+.notification-title {
+    font-weight: bold;
+}
+
+img.notification-icon {
+    display: inline-block;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin-top: -0.25rem;
+}
+
+/* Show badge with various colors and overlap it onto icon */
+.notifications-dropdown .badge {
+    padding: 0.125rem 0.3125rem;
+    margin-left: -0.75rem;
+}
+
+.notification-exception, .notification-error {
+    border-left-color: var(--bs-danger);
+}
+
+.notification-warning {
+    border-left-color: var(--bs-warning);
+}
+
+.notification-info, .notification-debug {
+    border-left-color: var(--bs-info);
+}
+
+/* Two different notifications for each small and one for large screens */
+.notifications-dropdown {
+    display: none;
+}
+
+.collapse .notifications-dropdown {
+    display: block;
+}
+
+@media screen and (max-width: 767px) {
+    .notifications-dropdown {
+        display: block;
+    }
+
+    .collapsing .notifications-dropdown,
+    .collapse .notifications-dropdown {
+        display: none;
+    }
+}
+
+/* Accordion */
+.accordion {
+    margin-bottom: 1.25rem;
+}
+
+.accordion-header {
+    margin: 0;
+}
+
+/* Logs */
+textarea.log {
+    width: 100%;
+    text-wrap: nowrap;
+}

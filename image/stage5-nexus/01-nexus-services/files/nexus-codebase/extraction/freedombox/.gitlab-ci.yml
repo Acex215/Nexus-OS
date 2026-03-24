@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+include:
+  - remote: https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/salsa-ci.yml
+  - local: /.ci/functional-tests.yml
+
+image: registry.salsa.debian.org/freedombox-team/freedombox:gitlabci
+
+stages:
+  - provisioning
+  - build
+  - functional-tests
+  - publish
+  - test
+
+code-quality:
+  stage: test
+  needs: []
+  script:
+    - make check-code
+
+static-type-check:
+  stage: test
+  needs: []
+  script:
+    - make check-type
+
+unit-tests:
+  stage: test
+  needs: []
+  before_script:
+    - make provision-dev
+  script:
+    - adduser tester --gecos "First Last,RoomNumber,WorkPhone,HomePhone" --disabled-password
+    - echo "tester:password" | chpasswd
+    - cp -r . /home/tester/plinth
+    - chown -R tester:tester /home/tester/plinth
+    - su -c "cd ~/plinth; make check-tests-cov" tester
+    - cp -r /home/tester/plinth/htmlcov test-coverage-report
+  coverage: '/^TOTAL\s+.*\s+(\d+\.\d+%)$/'
+  artifacts:
+    paths:
+      - test-coverage-report/*
+
+doc-tests:
+  stage: test
+  needs: []
+  script:
+    - make check-doc
+
+run-functional-tests-stable:
+  extends: .run-functional-tests
+
+build:
+    extends: .build-package
+
+build-backports:
+    extends: .build-package
+    variables:
+      RELEASE: trixie-backports
+
+build i386:
+    extends: .build-package-i386
+
+build source:
+    extends: .build-source-only
+
+test-build-any:
+    extends: .test-build-package-any
+
+test-build-all:
+    extends: .test-build-package-all
+
+# reprotest causes the pipeline to take too long (over 1 hour)
+#reprotest:
+#    extends: .test-reprotest
+
+lintian:
+    extends: .test-lintian
+
+# autopkgtest is flaky due to
+# https://salsa.debian.org/freedombox-team/freedombox/-/issues/2077
+autopkgtest:
+    extends: .test-autopkgtest
+    allow_failure: true
+
+blhc:
+    extends: .test-blhc
+
+piuparts:
+    extends: .test-piuparts
+
+missing-breaks:
+    extends: .test-missing-breaks
+
+rc-bugs:
+    extends: .test-rc-bugs
+
+aptly:
+    extends: .publish-aptly
+

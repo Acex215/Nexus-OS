@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block content %}
+  <h3>{% trans "Security Report" %}</h3>
+  <p>
+    {% blocktrans trimmed with count=freedombox_report.vulns %}
+      There are {{ count }} reported security vulnerabilities in the FreedomBox
+      app, which provides the core services and user interface for a FreedomBox
+      server.
+    {% endblocktrans %}
+  </p>
+  <p>
+    {% blocktrans trimmed %}
+      The following table lists the current reported number of
+      security vulnerabilities for each installed app. More
+      information on the vulnerabilities can be found on the
+      <a href="https://security-tracker.debian.org/tracker/">Debian
+        Security Bug Tracker</a>.
+    {% endblocktrans %}
+  </p>
+  <p>
+    {% blocktrans trimmed %}
+      For apps that provide services, the "Sandboxed" column shows whether
+      sandboxing features are in use. Sandboxing mitigates the impact of a
+      potentially compromised app to the rest of the system.
+    {% endblocktrans %}
+  </p>
+  <p>
+    {% blocktrans trimmed %}
+      "Sandbox Coverage" is a score of how effectively the service is isolated
+      from the rest of the system. It is only displayed while the service is
+      running.
+    {% endblocktrans %}
+  </p>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "App Name" %}</th>
+          <th>{% trans "Current Vulnerabilities" %}</th>
+          <th>{% trans "Sandboxed" %}</th>
+          <th>{% trans "Sandbox Coverage" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for app in apps_report %}
+          <tr>
+            <td>{{ app.name }}</td>
+            <td>{{ app.vulns }}</td>
+            <td>
+              {% if app.sandboxed is None %}
+                {% trans "N/A" %}
+              {% elif app.sandboxed %}
+                {% trans "Yes" %}
+              {% else %}
+                {% trans "No" %}
+              {% endif %}
+            </td>
+            <td>
+              {% if app.sandbox_coverage %}
+                {{ app.sandbox_coverage }}%
+              {% elif app.sandboxed %}
+                {% trans "Not running" %}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

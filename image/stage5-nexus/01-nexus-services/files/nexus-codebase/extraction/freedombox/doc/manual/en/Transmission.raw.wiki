@@ -1,0 +1,73 @@
+#language en
+
+##TAG:TRANSLATION-HEADER-START
+~- [[FreedomBox/Manual/Transmission|English]] - [[es/FreedomBox/Manual/Transmission|Español]] - [[DebianWiki/EditorGuide#translation|(+)]] -~
+##TAG:TRANSLATION-HEADER-END
+
+<<TableOfContents()>>
+
+## BEGIN_INCLUDE
+
+== Transmission (Distributed File Sharing via BitTorrent) ==
+||<tablestyle="float: right;"> {{attachment:Transmission-icon_en_V01.png|Transmission icon}} ||
+
+'''Available since''': version 0.5
+
+=== What is Transmission ? ===
+
+Transmission is a !BitTorrent node (both, client and server at the same time).
+
+!BitTorrent is a communications protocol for peer-to-peer (P2P) file sharing.
+ * It is '''not anonymous'''; you should assume that others can see what files you are sharing.
+ * This technology works best for big, popular files.
+
+There are two !BitTorrent web nodes available in !FreedomBox: Transmission and [[FreedomBox/Manual/Deluge|Deluge]]. They have similar features, but you may prefer one over the other.
+
+Transmission is a lightweight !BitTorrent client that is well known for its simplicity and a default configuration that "Just Works".
+
+=== Screenshot ===
+
+{{attachment:transmission.png|Transmission Web Interface|width=800}}
+
+=== Using Transmission ===
+
+After installing Transmission, it can be accessed at {{{https://<your freedombox>/transmission}}}. Transmission uses single sign-on from !FreedomBox, which means that if you are logged in on your !FreedomBox, you can directly access Transmission without having to enter the credentials again. Otherwise, you will be prompted to login first and then redirected to the Transmission app.
+
+=== Tips ===
+
+==== Transferring Downloads from the FreedomBox ====
+
+ 1. Transmission's downloads directory can be added as a shared folder in the [[FreedomBox/Manual/Sharing|Sharing]] app. You can then access your downloads from this shared folder using a web browser.
+ 2. (Advanced) If you have the ssh access to your !FreedomBox, you can use sftp or scp to browse the downloads directory using a suitable file manager or web browser:
+    * [[https://apps.kde.org/en/dolphin|Dolphin]] or [[https://apps.kde.org/es/konqueror|Konqueror]], if you access from a KDE desktop
+    * The ''Other locations'' option in the default file manager, if you're on Gnome
+    * [[https://winscp.net|WinSCP]] or [[https://filezilla-project.org|FileZilla]], if you're on Windows
+    * [[https://f-droid.org/es/packages/com.ghostsq.commander.sftp/|Ghost Commander]] or [[https://f-droid.org/es/packages/org.kknickkk.spider/|Spider]], if you're on Android.
+
+
+=== Port Forwarding ===
+
+If your !FreedomBox is behind a router you optionally might want to set up port forwarding on your router in order to improve communication with other peers. You should forward the following ports for Transmission:
+
+    TCP 51413 (or your configured ''peer listening'' port) 
+
+=== Using Remote Apps ===
+
+In addition to using the web interface to control Transmission on !FreedomBox, desktop and mobile apps may also be used. List of tested clients and their platforms are listed on the app page in !FreedomBox web interface. When configuring these clients the URL to connect must be /transmission-remote/rpc and the port must be 443.
+
+=== External Links ===
+
+ * Upstream Project: https://transmissionbt.com/
+ * Upstream Support Forum: https://forum.transmissionbt.com/
+ * Debian Transmission Wiki: https://wiki.debian.org/Transmission
+ * !BitTorrent Introduction: https://www.bittorrent.org/introduction.html
+ * Wikipedia on !BitTorrent: https://en.wikipedia.org/wiki/BitTorrent
+
+## END_INCLUDE
+
+Back to [[FreedomBox/Features|Features introduction]] or [[FreedomBox/Manual|manual]] pages.
+
+<<Include(FreedomBox/Portal)>>
+
+----
+CategoryFreedomBox

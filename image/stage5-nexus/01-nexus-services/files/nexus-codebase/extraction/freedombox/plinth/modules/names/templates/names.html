@@ -1,0 +1,173 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+
+{% block status %}
+  {{ block.super }}
+
+  <h3>{% trans "Domains" %}</h3>
+
+  <div class="table-responsive">
+    <table class="table names-table">
+      <thead>
+        <tr>
+          <th>{% trans "Type" %}</th>
+          <th class="names-domain-column">{% trans "Domain Name" %}</th>
+          <th>{% trans "Services" %}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for domain in status.domains %}
+          <tr>
+            <td>{{ domain.domain_type.display_name }}</td>
+            <td class="names-domain-column">{{ domain.name }}</td>
+            <td>{{ domain.get_readable_services|join:', ' }}</td>
+            <td>
+              {% if domain.domain_type.configuration_url %}
+                <a href="{% url domain.domain_type.configuration_url %}"
+                   role="button" class="btn btn-md btn-default">
+                  <span class="fa fa-wrench" aria-hidden="true"></span>
+                  {% trans "Configure" %}
+                </a>
+              {% endif %}
+              {% if domain.domain_type.edit_url %}
+                <a href="{% url domain.domain_type.edit_url domain.name %}"
+                   role="button" class="btn btn-md btn-default"
+                   title="{% trans 'Edit' %}">
+                  <span class="fa fa-pencil-square-o" aria-hidden="true"></span>
+                </a>
+              {% endif %}
+              {% if domain.domain_type.delete_url %}
+                <a href="{% url domain.domain_type.delete_url domain.name %}"
+                   role="button" class="btn btn-md btn-default"
+                   title="{% trans 'Delete' %}">
+                  <span class="fa fa-trash-o" aria-hidden="true"></span>
+                </a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h4>{% trans "Add Domains" %}</h4>
+
+  <div class="row">
+    <div class="col-md-6">
+      <div id="domains-add" class="list-group list-group-two-column">
+        {% for domain_type in status.unused_domain_types %}
+          <div class="list-group-item d-flex justify-content-between">
+            <div>{{ domain_type.display_name }}</div>
+            {% if domain_type.configuration_url %}
+              <a href="{% url domain_type.configuration_url %}"
+                 role="button" class="btn btn-md btn-default">
+                <span class="fa fa-wrench" aria-hidden="true"></span>
+                {% trans "Configure" %}
+              </a>
+            {% endif %}
+            {% if domain_type.add_url %}
+              <a href="{% url domain_type.add_url %}"
+                 role="button" class="btn btn-md btn-default">
+                <span class="fa fa-plus" aria-hidden="true"></span>
+                {% trans "Add" %}
+              </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <h3>{% trans "Resolver Status" %}</h3>
+
+  {% if resolved_installed and resolved_status %}
+    <div class="table-responsive">
+      <table class="table resolved-status-table">
+        <tbody>
+          {% for link in resolved_status %}
+            <tr>
+              <th colspan="2">
+                {% if link.link_index == 0 %}
+                  {% trans "Global" %}
+                {% else %}
+                  {% trans "Link" %} {{ link.link_index }} ({{link.interface_name}})
+                {% endif %}
+              </th>
+            </tr>
+            <tr>
+              <td>{% trans "DNS-over-TLS" %}</td>
+              <td>{{ link.dns_over_tls_string }}</td>
+            </tr>
+            <tr>
+              <td>{% trans "DNSSEC" %}</td>
+              <td>{{ link.dnssec_string }}/{{ link.dnssec_supported_string }}</td>
+            </tr>
+            {% if link.current_dns_server %}
+              <tr>
+                <td>{% trans "Current DNS Server" %}</td>
+                <td>{{ link.current_dns_server }}</td>
+              </tr>
+            {% endif %}
+            {% if link.dns_servers %}
+              <tr>
+                <td>{% trans "DNS Servers" %}</td>
+                <td>
+                  {% for server in link.dns_servers %}
+                    {{ server }}<br />
+                  {% endfor %}
+                </td>
+              </tr>
+            {% endif %}
+            {% if link.fallback_dns_servers %}
+              <tr>
+                <td>{% trans "Fallback DNS Servers" %}</td>
+                <td>
+                  {% for server in link.fallback_dns_servers %}
+                  {{ server }}<br />
+                  {% endfor %}
+                </td>
+              </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elif not resolved_installed %}
+    <p>
+      {% blocktrans trimmed %}
+        systemd-resolved package is not installed. Install it for additional
+        functionality.
+      {% endblocktrans %}
+      <form class="form form-install-resolved" method="post"
+            action="{% url 'rerun-setup' app_id='names' %}">
+        {% csrf_token %}
+
+        <input type="submit" class="btn btn-primary" name="install_resolved"
+               value="{% trans 'Install' %}"/>
+      </form>
+    </p>
+  {% else %}
+    <div class="alert alert-danger d-flex align-items-center">
+      <div class="me-2">
+        <span class="fa fa-exclamation-triangle" aria-hidden="true"></span>
+        <span class="visually-hidden">{% trans "Caution:" %}</span>
+      </div>
+      <div>
+        {% trans "Error retrieving status:" %} {{ resolved_status_error }}
+      </div>
+    </div>
+  {% endif %}
+
+{% endblock %}
+
+{% block configuration %}
+  {% if resolved_installed %}
+    {{ block.super }}
+  {% endif %}
+{% endblock %}

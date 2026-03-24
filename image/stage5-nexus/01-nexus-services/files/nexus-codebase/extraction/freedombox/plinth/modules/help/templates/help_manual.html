@@ -1,0 +1,21 @@
+{% extends 'help_base.html' %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load i18n %}
+{% load static %}
+
+{% block page_head %}
+  <link type="text/css" rel="stylesheet"
+        href="{% static 'help/help.css' %}"/>
+{% endblock %}
+
+{% block content %}
+  <a href="{% url 'help:download-manual' %}" class="btn btn-default pdf"
+     role="button">
+    <span class="fa fa-download fa-fw fa-lg"></span>
+    {% trans 'Download as PDF' %}
+  </a>
+  {{ content|safe }}
+{% endblock %}

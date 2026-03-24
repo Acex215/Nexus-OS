@@ -1,0 +1,38 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+{% load bootstrap %}
+{% load i18n %}
+
+{% block status %}
+  {{ block.super }}
+
+  <h3>{% trans "Server Fingerprints" %}</h3>
+
+  <p>
+    {% blocktrans trimmed %}
+      When connecting to the server, ensure that the fingerprint shown by the
+      SSH client matches one of these fingerprints.
+    {% endblocktrans %}
+  </p>
+
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Algorithm" %}</th>
+          <th>{% trans "Fingerprint" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for host_key in host_keys %}
+          <tr>
+            <td>{{ host_key.algorithm }}</td>
+            <td><samp>{{ host_key.fingerprint }}</samp></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

@@ -1,0 +1,19 @@
+[Unit]
+Description=NEXUS Node Agent
+After=network-online.target nexus-first-run.service
+Wants=network-online.target
+ConditionPathExists=/opt/nexus/config/node-initialized
+
+[Service]
+Type=simple
+User=nexus
+Group=nexus
+WorkingDirectory=/opt/nexus
+ExecStart=/usr/bin/python3 /opt/nexus/agents/node_agent.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/opt/nexus/logs/node-agent.log
+StandardError=append:/opt/nexus/logs/node-agent.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,3 @@
+[submodule ".scm-ci-helpers"]
+	path = .scm-ci-helpers
+	url = https://gitlab.com/librespacefoundation/ops/scm-ci-helpers.git

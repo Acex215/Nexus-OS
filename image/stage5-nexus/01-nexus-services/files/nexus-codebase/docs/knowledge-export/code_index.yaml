@@ -1,0 +1,305 @@
+# NEXUS OS Compiled Database — Code Index
+# Generated: 2026-03-21
+# Scope: Dev Assistant pipeline (/opt/nexus/agents/) + shared infrastructure
+#
+# Only indexes files in the LIVE system. CAF files (/opt/nexus/automation/) are
+# excluded — see caf-orchestrator-DEPRECATED in components.yaml.
+
+files:
+
+  # ════════════════════════════════════════════════════════════════
+  # DEV ASSISTANT CORE
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/dev_assistant.py
+    category: core
+    component: dev-assistant-bot
+    purpose: "Main Discord bot: task analysis, planning, SEARCH/REPLACE execution, approval workflow"
+    imports_from: [llm_router_v2, blockchain_logger, task_queue, queue_commands,
+                   autonomous_loop, task_decomposer, knowledge_planner, safety_gates]
+    imported_by: []
+    entry_point: true
+    protected: true
+    notes: "In PROTECTED_PATHS — bot cannot modify itself"
+
+  - path: /opt/nexus/agents/autonomous_loop.py
+    category: core
+    component: autonomous-loop
+    purpose: "Async task execution loop: pick → execute → summarize, with safety gates"
+    imports_from: [knowledge_indexer, safety_gates, task_logger, test_validator]
+    imported_by: [dev_assistant]
+    entry_point: false
+
+  - path: /opt/nexus/agents/queue_commands.py
+    category: core
+    component: dev-assistant-bot
+    purpose: "Discord command parser for queue management (show, add, remove, status, etc.)"
+    imports_from: [change_analyzer, failure_analyzer]
+    imported_by: [dev_assistant]
+    entry_point: false
+
+  - path: /opt/nexus/agents/task_queue.py
+    category: core
+    component: task-queue
+    purpose: "Persistent YAML task queue with status tracking"
+    imports_from: []
+    imported_by: [dev_assistant, queue_commands, autonomous_loop]
+    entry_point: false
+
+  - path: /opt/nexus/agents/task_decomposer.py
+    category: core
+    component: task-decomposer
+    purpose: "Coordinator LLM breaks large tasks into ordered sub-tasks with dependencies"
+    imports_from: [llm_router_v2]
+    imported_by: [dev_assistant]
+    entry_point: false
+
+  # ════════════════════════════════════════════════════════════════
+  # LLM ROUTING
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/llm_router_v2.py
+    category: core
+    component: llm-routing
+    purpose: "4-tier LLM routing with fallback, thinking token stripping, health checks"
+    imports_from: []
+    imported_by: [dev_assistant, task_decomposer]
+    entry_point: false
+    notes: "Uses aiohttp or httpx (graceful fallback). TierConfig dataclass for each tier."
+
+  # ════════════════════════════════════════════════════════════════
+  # SAFETY & RELIABILITY
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/safety_gates.py
+    category: safety
+    component: safety-layer
+    purpose: "SafetyGate (risk-based approval), ScopeEnforcer, RetryPolicy"
+    imports_from: [safety_config]
+    imported_by: [dev_assistant, autonomous_loop]
+    entry_point: false
+
+  - path: /opt/nexus/agents/safety_config.py
+    category: safety
+    component: safety-layer
+    purpose: "Centralized safety constants, env-var configurable"
+    imports_from: []
+    imported_by: [safety_gates]
+    entry_point: false
+
+  - path: /opt/nexus/agents/health_monitor.py
+    category: safety
+    component: safety-layer
+    purpose: "Async health checks for disk, LLM endpoints, blockchain"
+    imports_from: []
+    imported_by: [dev_assistant, queue_commands]
+    entry_point: false
+
+  - path: /opt/nexus/agents/test_validator.py
+    category: safety
+    component: safety-layer
+    purpose: "Post-execution pytest runner: validates changes don't break tests"
+    imports_from: []
+    imported_by: [autonomous_loop]
+    entry_point: false
+
+  # ════════════════════════════════════════════════════════════════
+  # KNOWLEDGE & LEARNING
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/task_logger.py
+    category: knowledge
+    component: knowledge-layer
+    purpose: "Structured JSONL logging of every task outcome"
+    imports_from: []
+    imported_by: [autonomous_loop]
+    entry_point: false
+
+  - path: /opt/nexus/agents/knowledge_indexer.py
+    category: knowledge
+    component: knowledge-layer
+    purpose: "ChromaDB upsert/query for task logs (dev_assistant_tasks collection)"
+    imports_from: []
+    imported_by: [autonomous_loop, knowledge_planner]
+    entry_point: false
+    notes: "Singleton ChromaDB HttpClient at localhost:8000"
+
+  - path: /opt/nexus/agents/knowledge_planner.py
+    category: knowledge
+    component: knowledge-layer
+    purpose: "Injects similar past task outcomes into coordinator LLM prompt"
+    imports_from: [knowledge_indexer]
+    imported_by: [dev_assistant]
+    entry_point: false
+    notes: "get_planning_context() and get_failure_warnings() — max 5 entries, truncated"
+
+  - path: /opt/nexus/agents/failure_analyzer.py
+    category: knowledge
+    component: knowledge-layer
+    purpose: "Categorized failure pattern recognition"
+    imports_from: [task_logger]
+    imported_by: [queue_commands]
+    entry_point: false
+
+  - path: /opt/nexus/agents/change_analyzer.py
+    category: knowledge
+    component: knowledge-layer
+    purpose: "'What changed in last N hours' summaries (tasks + git commits)"
+    imports_from: [task_logger]
+    imported_by: [queue_commands]
+    entry_point: false
+
+  # ════════════════════════════════════════════════════════════════
+  # BLOCKCHAIN
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/blockchain_logger.py
+    category: blockchain
+    component: blockchain-logging
+    purpose: "Log agent decisions to ReasoningLedger on-chain (SHA256 hash audit trail)"
+    imports_from: []
+    imported_by: [dev_assistant, verify_system]
+    entry_point: false
+    notes: "Singleton with nonce lock. RPC: 10.0.20.3:8545 (correct VLAN 20 IP)."
+
+  # ════════════════════════════════════════════════════════════════
+  # AGENT HIERARCHY (Dormant)
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/agent_registry.py
+    category: agents
+    component: agent-hierarchy
+    purpose: "30 agent definitions with tier assignments and system prompts"
+    imports_from: []
+    imported_by: [dev_assistant, llm_router_v2, hierarchy_manager, verify_system]
+    entry_point: false
+    notes: "Shared between Dev Assistant (for tier routing) and dormant hierarchy"
+
+  - path: /opt/nexus/agents/hierarchy_manager.py
+    category: agents
+    component: agent-hierarchy
+    purpose: "Manages 30 Discord bot instances with LangGraph workflows"
+    imports_from: [agent_registry, llm_client, blockchain_logger]
+    imported_by: []
+    entry_point: true
+    notes: "NOT currently running. No systemd service."
+
+  - path: /opt/nexus/agents/llm_client.py
+    category: agents
+    component: agent-hierarchy
+    purpose: "Async LLM client for agent hierarchy (HuggingFace API + local fallback)"
+    imports_from: []
+    imported_by: [hierarchy_manager, agent_workflow]
+    entry_point: false
+    notes: "STALE IP: LOCAL_INFERENCE_URL = 192.168.8.128 (pre-VLAN). See gap G108."
+
+  - path: /opt/nexus/agents/verify_system.py
+    category: agents
+    component: agent-hierarchy
+    purpose: "System verification: agents, blockchain, tokens, decision logs"
+    imports_from: [agent_registry, blockchain_logger]
+    imported_by: []
+    entry_point: true
+
+  # ════════════════════════════════════════════════════════════════
+  # LIBNEXUS
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/libnexus/__init__.py
+    category: core
+    component: libnexus
+    purpose: "Package init: exports NexusKernel and NexusStorage"
+    imports_from: [libnexus.kernel, libnexus.nexus_storage]
+    imported_by: [scripts/phase2_validation, scripts/register_nodes]
+    entry_point: false
+
+  - path: /opt/nexus/libnexus/kernel.py
+    category: core
+    component: libnexus
+    purpose: "NexusKernel: blockchain syscall abstraction over all smart contracts (339 lines)"
+    imports_from: [libnexus.contracts]
+    imported_by: [libnexus.nexus_storage, scripts/phase2_validation, scripts/register_nodes]
+    entry_point: false
+
+  - path: /opt/nexus/libnexus/contracts.py
+    category: core
+    component: libnexus
+    purpose: "Contract address + ABI loader with lazy caching from contracts/deployed/"
+    imports_from: []
+    imported_by: [libnexus.kernel, libnexus.nexus_storage]
+    entry_point: false
+
+  - path: /opt/nexus/libnexus/nexus_storage.py
+    category: core
+    component: libnexus
+    purpose: "IPFS + blockchain storage coordination"
+    imports_from: [libnexus.contracts, libnexus.kernel]
+    imported_by: []
+    entry_point: false
+
+  # ════════════════════════════════════════════════════════════════
+  # TESTS
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/agents/test_phase3_batch1.py
+    category: test
+    component: safety-layer
+    purpose: "Unit tests for safety_gates.py — SafetyGate, ScopeEnforcer, RetryPolicy"
+    imports_from: [safety_gates]
+    imported_by: []
+    entry_point: false
+    notes: "Stubs discord module; runs without Discord installed"
+
+  - path: /opt/nexus/agents/test_phase4_change_analyzer.py
+    category: test
+    component: knowledge-layer
+    purpose: "Unit tests for change_analyzer.py"
+    imports_from: [change_analyzer]
+    imported_by: []
+    entry_point: false
+
+  - path: /opt/nexus/agents/test_blockchain_logger.py
+    category: test
+    component: blockchain-logging
+    purpose: "Integration tests for blockchain_logger.py — requires live Geth"
+    imports_from: [blockchain_logger]
+    imported_by: []
+    entry_point: false
+    notes: "Writes real on-chain entries; requires nexus-master Geth running"
+
+  - path: /opt/nexus/agents/test_hierarchy_v2.py
+    category: test
+    component: llm-routing
+    purpose: "Verification suite: tier configs, health checks, direct inference, routing"
+    imports_from: [llm_router_v2]
+    imported_by: []
+    entry_point: true
+
+  # ════════════════════════════════════════════════════════════════
+  # SCRIPTS & UTILITIES
+  # ════════════════════════════════════════════════════════════════
+
+  - path: /opt/nexus/scripts/verify-llm-endpoints.sh
+    category: utility
+    component: llm-inference
+    purpose: "Bash script to health-check all 4 LLM endpoints with troubleshooting guidance"
+    imports_from: []
+    imported_by: []
+    entry_point: true
+
+  - path: /opt/nexus/agents/task_queue.yaml
+    category: config
+    component: task-queue
+    purpose: "Persistent task queue data (gitignored)"
+    imports_from: []
+    imported_by: []
+    entry_point: false
+
+  - path: /opt/nexus/agents/.env
+    category: config
+    component: agent-hierarchy
+    purpose: "Bot tokens, Discord guild/channel IDs, owner ID"
+    imports_from: []
+    imported_by: [dev_assistant, hierarchy_manager, discord_comms]
+    entry_point: false
+    protected: true

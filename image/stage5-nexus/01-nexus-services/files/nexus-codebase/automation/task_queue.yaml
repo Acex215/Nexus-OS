@@ -1,0 +1,21 @@
+tasks:
+- added_at: '2026-03-09T20:00:00Z'
+  added_by: human
+  branch_name: agent/v2/gap-G019-strip-json-dedup
+  completed_at: '2026-03-10T15:57:25.501907+00:00'
+  description: Deduplicate _strip_json(). The identical function exists in /opt/nexus/automation/feedback_loop.py
+    (line 57) and /opt/nexus/automation/task_planner.py (line 146). Create a new file
+    /opt/nexus/automation/utils.py containing the _strip_json function copied from
+    feedback_loop.py. Then in both feedback_loop.py and task_planner.py, remove the
+    local _strip_json function definition and add 'from utils import _strip_json'
+    to the imports section. Use action 'replace' for all patches. The search strings
+    must be the exact function definitions as they appear in each file.
+  error: 'Halted at G5:EXECUTE: Patch search string not found in /opt/nexus/automation/feedback_loop.py:
+    ''def _strip_json(json_str):\n    try:\n        return json.loads(json_str)\n    exce''
+    — file starts with: ''#!/usr/bin/env python3\n"""NEXUS OS CAF — Feedback Loop\n\nCloses
+    the learning loop: after every task execution this module performs\nstructured
+    analysis, stores lessons, and updates the change ledger.\nLe'''
+  id: gap-G019-strip-json-dedup
+  priority: 1
+  started_at: '2026-03-10T15:48:44.177142+00:00'
+  status: rolled_back

@@ -1,0 +1,146 @@
+{% extends "app.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load static %}
+
+{% block status %}
+  {{ block.super}}  {% comment %} To extend instead of overwrite {% endcomment %}
+
+  <div class="btn-toolbar">
+    <a class="btn btn-default btn-md" href="{% url 'upgrades:dist-upgrade' %}">
+      {% trans "Distribution Update" %}</a>
+  </div>
+
+  <h3>{% trans "Status" %}</h3>
+  <div class="upgrades-status-frame clearfix">
+    <div class="upgrade-status-icon pull-left">
+      {% if is_busy %}
+        <span class="fa fa-refresh fa-spin fa-3x fa-pull-left text-info"></span>
+      {% elif new_version %}
+        <span class="fa fa-frown-o fa-3x fa-pull-left text-warning"></span>
+      {% else %}
+        <span class="fa fa-smile-o fa-3x fa-pull-left text-body-tertiary"></span>
+      {% endif %}
+    </div>
+    <p>
+      {% blocktrans trimmed %}
+        You are running {{ os_release }} and {{ box_name }} version {{ version }}.
+      {% endblocktrans %}
+      {% if is_busy %}
+        <strong>{% trans "Updating..." %}</strong>
+      {% elif new_version %}
+        {% blocktrans trimmed %}
+          There is a new {{ box_name }} version available.
+        {% endblocktrans %}
+        <strong>{% trans "Your Freedombox needs an update!" %}</strong>
+      {% else %}
+        {% blocktrans %}{{ box_name }} is up to date.{% endblocktrans %}
+      {% endif %}
+    </p>
+  </div>
+{% endblock %}
+
+{% block extra_content %}
+  <h3>{% trans "Frequent Feature Updates" %}</h3>
+  <p>
+    {% if can_activate_backports and not is_backports_requested %}
+      {% blocktrans trimmed %}
+        Frequent feature updates can be activated. Activating them is
+        recommended.
+      {% endblocktrans %}
+    {% elif can_activate_backports and is_backports_requested %}
+      {% blocktrans trimmed %}
+        Frequent feature updates are activated.
+      {% endblocktrans %}
+    {% else %}
+      {% blocktrans trimmed %}
+        Frequent feature updates cannot be activated. They may not be necessary
+        on your distribution.
+      {% endblocktrans %}
+    {% endif %}
+  </p>
+  <p>
+    {% if can_activate_backports %}
+      {% blocktrans trimmed %}
+        Frequent feature updates allow the {{box_name}} Service, plus a very
+        limited set of software, to receive new features more frequently (from
+        the backports or unstable repository). This results in receiving some
+        new features within weeks, instead of only once every 2 years or so.
+        Note that software with frequent feature updates does not have support
+        from the Debian Security Team. Instead, they are maintained by
+        contributors to Debian and the {{box_name}} community.
+      {% endblocktrans %}
+    {% endif %}
+  </p>
+  {% if can_activate_backports and not is_backports_requested %}
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+      <div class="me-2">
+        <span class="fa fa-exclamation-triangle" aria-hidden="true"></span>
+        <span class="visually-hidden">{% trans "Caution:" %}</span>
+      </div>
+      <div>
+        {% url 'snapshot:index' as snapshot_url %}
+        {% blocktrans trimmed %}
+          <strong>Warning!</strong> Once frequent feature updates are activated,
+          they cannot be deactivated. You may wish to take a snapshot using
+          <a href="{{ snapshot_url }}">Storage Snapshots</a> before continuing.
+        {% endblocktrans %}
+      </div>
+    </div>
+    <p>
+      <form class="form" method="post"
+            action="{% url 'upgrades:activate-backports' %}">
+        {% csrf_token %}
+        <input type="submit" class="btn btn-primary"
+               value="{% trans 'Activate frequent feature updates (recommended)' %}"/>
+      </form>
+    </p>
+  {% endif %}
+
+  <h3>{% trans "Manual Update" %}</h3>
+  {% if is_busy %}
+    <div class="btn-toolbar">
+      <button type="button" class="btn btn-default" disabled="disabled">
+        <span class="spinner-border spinner-border-sm" aria-hidden="true">
+        </span>
+        <span role="status">{% trans "Updating..." %}</span>
+      </button>
+    </div>
+  {% else %}
+    <div class="btn-toolbar">
+      <form class="form" method="post" action="{% url 'upgrades:upgrade' %}">
+        {% csrf_token %}
+        <input type="submit" class="btn btn-default"
+               value="{% trans "Update now" %}"/>
+      </form>
+    </div>
+  {% endif %}
+
+  <p>
+    {% blocktrans trimmed %}
+      <strong>This may take a long time to complete.</strong> During an update,
+      you cannot install apps. Also, this web interface may be temporarily
+      unavailable and show an error. In that case, refresh the page to
+      continue.
+    {% endblocktrans %}
+  </p>
+
+  {% if log %}
+    <p>
+      <a class="btn btn-default collapsed collapsible-button" role="button"
+         data-bs-toggle="collapse" href="#collapse-log" aria-expanded="false"
+         aria-controls="collapse-log">
+        <span class="fa fa-chevron-right fa-fw" aria-hidden="true"></span>
+        {% trans "Show recent update logs" %}
+      </a>
+
+      <div class="collapse" id="collapse-log">
+        <pre>{{ log }}</pre>
+      </div>
+    </p>
+  {% endif %}
+{% endblock %}

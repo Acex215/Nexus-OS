@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% comment %}
+# SPDX-License-Identifier: AGPL-3.0-or-later
+{% endcomment %}
+
+{# Template to display/configure an App, used by views.AppView #}
+
+{% load bootstrap %}
+{% load i18n %}
+{% load plinth_extras %}
+{% load static %}
+
+{% block content %}
+
+  {% include "app-header.html" %}
+
+  {% include "toolbar.html" with enabled=is_enabled %}
+
+  {% block subsubmenu %}
+    {% if subsubmenu %}
+      {% show_subsubmenu subsubmenu %}
+    {% endif %}
+  {% endblock %}
+
+  {% block status %}
+    {% if is_running is not None and not is_running %}
+      <div id='service-not-running' role="alert"
+           class="alert alert-danger d-flex align-items-center {{ is_enabled|yesno:',d-none' }}">
+        <div class="me-2">
+          <span class="fa fa-exclamation-triangle" aria-hidden="true"></span>
+          <span class="visually-hidden">{% trans "Caution:" %}</span>
+        </div>
+        <div>
+          {% blocktrans trimmed with service_name=app_info.name %}
+            Service <em>{{ service_name }}</em> is not running.
+          {% endblocktrans %}
+        </div>
+      </div>
+    {% endif %}
+  {% endblock %}
+
+  {% block internal_zone %}
+    {% include "internal-zone.html" %}
+  {% endblock %}
+
+  {% block port_forwarding_info %}
+    {% include "port-forwarding-info.html" with service_name=app_info.name %}
+  {% endblock %}
+
+  {% block configuration %}
+    {% if form %}
+      <h3>{% trans "Configuration" %}</h3>
+
+      <form id="app-form" class="form form-configuration" method="post">
+        {% csrf_token %}
+
+        {{ form|bootstrap }}
+
+        <input type="submit" class="btn btn-primary"
+              value="{% trans "Update setup" %}"/>
+      </form>
+    {% endif %}
+  {% endblock %}
+
+  {% block extra_content %}
+  {% endblock %}
+
+{% endblock %}
