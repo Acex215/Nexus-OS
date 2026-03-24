@@ -34,3 +34,7 @@ logs/
 ipfs/blocks/
 *.pyc
 __pycache__/
+config/file_keys/*.key
+chromadb/
+logs/
+ipfs/blocks/
