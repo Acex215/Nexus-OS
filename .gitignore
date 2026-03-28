@@ -1,40 +1,96 @@
-# Runtime state — modified by agent during operation, not source-controlled
-automation/task_queue.yaml
-agents/task_queue.yaml
+# ═══════════════════════════════════════════
+# NEXUS OS .gitignore — Public Release
+# ═══════════════════════════════════════════
 
-# Python bytecode
-**/__pycache__/
-**/*.pyc
-**/*.pyo
+# ── Secrets ──
+*.key
+*.pem
+*.p12
+config/file_keys/
+networking/peer_keys/
+blockchain/keystore/
+blockchain/password.txt
+config/gateway_auth_token
 
-# Submodule working tree changes handled separately
-automation/task_queue.yaml
-automation/task_queue.yaml
-automation/*.log
-automation/indexer.log
-automation/orchestrator.log
-automation/logs/
-automation/__pycache__/
-automation/.git_monitor_state
-automation/.notification_state.json
-automation/.task_timings.json
-automation/audit.jsonl
-automation/world_model.db
-automation/intent_registry.yaml.bak.*
-automation/change_ledger.md
-backups/
+# ── Runtime state (regenerated at boot) ──
+chromadb/
+ipfs/blocks/
 ipfs/datastore/
-*.ldb
-*.agent_v2_backup.*
-pi-gen
-training_data/
-config/file_keys/*.key
-chromadb/
+ipfs/repo.lock
+ipfs/api
+ipfs/gateway
 logs/
-ipfs/blocks/
-*.pyc
+agents/logs/
+agents/sessions/
+agents/*.pid
+config/circuit_breakers.json
+config/repair_daemon_state.json
+config/manifests/
+config/shard_maps/
+config/node_identity.json
+config/pending_registration.json
+config/behavioral_consent_active
+config/privacy_budget.json
+core/services.db
+*.db
+*.sqlite
+
+# ── Private components (separate repos or local-only) ──
+dashboard/
+workspace/
+extraction/
+automation/
+
+# ── Internal knowledge (not part of the codebase) ──
+docs/compiled-db/
+docs/compiled-db-caf-archive/
+docs/diagnostics/
+docs/knowledge-export/
+docs/archive/
+research/
+services/backups/
+
+# ── Build systems + large output (users download pre-built images) ──
+pi-gen/
+image/pi-gen/work/
+image/pi-gen/deploy/
+*.img
+*.img.xz
+*.zip
+
+# ── Python ──
 __pycache__/
-config/file_keys/*.key
-chromadb/
-logs/
-ipfs/blocks/
+*.pyc
+*.egg-info/
+*.egg
+.venv/
+venv/
+*.venv/
+
+# ── Node/JS ──
+node_modules/
+dist/
+package-lock.json
+
+# ── ML model checkpoints (binary, large) ──
+models/*.npz
+models/*.pt
+models/*.onnx
+models/*.bin
+
+# ── Contract build artifacts (keep source + deployed JSONs) ──
+contracts/.venv/
+contracts/node_modules/
+
+# ── Editor/IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Backup / temp ──
+*.bak
+*.backup
+*.orig
+*.tmp
