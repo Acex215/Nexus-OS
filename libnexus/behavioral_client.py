@@ -218,6 +218,40 @@ class BehavioralClient:
         return self.contract.functions.compoundCount().call()
 
     # ═══════════════════════════════════════════
+    # SELF-READ (always available — user reads own data)
+    # Unlike debug_read_*, these work after debugMode is disabled.
+    # ═══════════════════════════════════════════
+
+    def self_read_action(self, action_id):
+        """Read your own action data. Always available."""
+        result = self.contract.functions.selfReadAction(action_id).call(
+            {'from': self.wallet}
+        )
+        return {
+            'channelId': result[0], 'actionType': result[1],
+            'timestamp': result[2], 'epochMs': result[3],
+            'data': result[4]
+        }
+
+    def self_read_actions(self, start_time, end_time):
+        """Read your own actions in a time range. Always available."""
+        return self.contract.functions.selfReadActions(
+            start_time, end_time
+        ).call({'from': self.wallet})
+
+    def self_get_action_count(self):
+        """Get your own total action count. Always available."""
+        return self.contract.functions.selfGetActionCount().call(
+            {'from': self.wallet}
+        )
+
+    def self_get_channel_stats(self, channel_id):
+        """Get your own channel stats. Always available."""
+        return self.contract.functions.selfGetChannelStats(channel_id).call(
+            {'from': self.wallet}
+        )
+
+    # ═══════════════════════════════════════════
     # DEBUG (only works when contract debugMode is true)
     # ═══════════════════════════════════════════
 
