@@ -1866,6 +1866,41 @@ async def behavioral_channels():
 
 
 # ---------------------------------------------------------------------------
+# Local Insight endpoints (always available — not debug-mode dependent)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/insight/current")
+async def get_current_pattern():
+    from modules.local_insight import LocalInsightEngine
+    engine = LocalInsightEngine()
+    return engine.current_pattern()
+
+@app.get("/api/insight/summary")
+async def get_daily_insight_summary():
+    from modules.local_insight import LocalInsightEngine
+    engine = LocalInsightEngine()
+    return engine.daily_summary()
+
+@app.get("/api/insight/typing")
+async def get_typing_trend():
+    from modules.local_insight import LocalInsightEngine
+    engine = LocalInsightEngine()
+    return engine.typing_speed_trend()
+
+@app.get("/api/insight/compare")
+async def get_now_vs_average():
+    from modules.local_insight import LocalInsightEngine
+    engine = LocalInsightEngine()
+    return engine.now_vs_average()
+
+@app.get("/api/insight/all")
+async def get_all_insights():
+    from modules.local_insight import LocalInsightEngine
+    engine = LocalInsightEngine()
+    return engine.get_all_insights()
+
+
+# ---------------------------------------------------------------------------
 # Serve frontend
 # ---------------------------------------------------------------------------
 DIST_DIR = Path(__file__).parent.parent / "dist"
