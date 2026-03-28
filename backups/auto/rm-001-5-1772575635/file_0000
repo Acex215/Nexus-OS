@@ -1,0 +1,57 @@
+# NEXUS OS Encoding Protocol
+
+## Action Type Registry
+
+This document defines the action type registry for the NEXUS OS encoding protocol. Each action type has a unique `uint256` type_id and corresponding ABI signature.
+
+### Type ID Range: 0x1 - 0xA (Reserved)
+
+---
+
+## Action Types
+
+| Type ID | Name | Description | ABI Signature |
+|---------|------|-------------|---------------|
+| `0x1` | `TransferECT` | Transfer ECT tokens between wallets | `transferECT(address to, uint256 amount)` |
+| `0x2` | `DeployAgent` | Deploy a new agent contract on-chain | `deployAgent(string memory name, bytes32 publicKey)` |
+| `0x3` | `ExecuteReasoning` | Execute reasoning task via ReasoningLedger | `executeReasoning(bytes32 taskId, string memory decision, string memory reasoning)` |
+| `0x4` | `AllocateResources` | Allocate computing resources to agent | `allocateResources(address agent, uint256 cpuShares, uint256 memoryMB)` |
+| `0x5` | `StoreData` | Store data on IPFS with blockchain metadata | `storeData(bytes32 ipfsHash, string memory metadata)` |
+| `0x6` | `ScheduleTask` | Schedule task using temporal binning | `scheduleTask(uint8 hourBin, bytes32 taskId, address agent)` |
+| `0x7` | `UpdateThresholds` | Update system threshold parameters | `updateThresholds(string memory param, uint256 newValue)` |
+| `0x8` | `RotateKeys` | Rotate encryption keys for privacy | `rotateKeys(address agent, bytes32 newPublicKey)` |
+| `0x9` | `QueryLedger` | Query ReasoningLedger entries | `queryLedger(address agent, uint256 startIndex, uint256 endIndex)` |
+| `0xA` | `RegisterDevice` | Register new device as cryptographic wallet | `registerDevice(string memory deviceId, bytes32 publicKey, string memory hardwareId)` |
+
+---
+
+## Encoding Format
+
+
+Action Packet Structure:
+┌─────────────┬──────────────┬─────────────────┬──────────────┐
+│ Type ID     │ Nonce        │ Payload Length  │ Payload      │
+│ (uint256)   │ (uint256)    │ (uint32)        │ (bytes)      │
+├─────────────┼──────────────┼─────────────────┼──────────────┤
+│ 0x1-0xA     │ Block-based  │ Variable         │ ABI-encoded  │
+└─────────────┴──────────────┴─────────────────┴──────────────┘
+
+
+## Security Considerations
+
+1. **Type ID Validation**: All action types must be validated against this registry before execution
+2. **Signature Verification**: Agent signatures verified via cryptographic wallet identity
+3. **Temporal Binning**: ScheduleTask uses 8,760 hourly bins for universal scheduling abstraction
+4. **Privacy**: RotateKeys supports daily encryption rotation per constitutional principle #8
+
+## Related Contracts
+
+- `AgentGovernance.sol` - Agent lifecycle management
+- `ReasoningLedger.sol` - Decision logging and reasoning storage
+- `ResourceManager.sol` - Resource allocation tracking
+- `StorageRegistry.sol` - IPFS metadata registry
+
+---
+
+*Document Version: 1.0*
+*Last Updated: $(date +%Y-%m-%d)*
