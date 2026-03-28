@@ -249,6 +249,18 @@ def main():
     print("\nSaving node identity...")
     save_identity(wallet_info["address"], registered, caps)
 
+    # Step 7: Force password change on first login
+    subprocess.run(["passwd", "--expire", "nexus"], check=False)
+    print("  Password expired — user must change on first login.")
+
+    # Step 8: Generate gateway auth token
+    token_path = CONFIG_DIR / "gateway_auth_token"
+    if not token_path.exists():
+        with open(token_path, "w") as f:
+            f.write(secrets.token_hex(32))
+        os.chmod(token_path, 0o600)
+        print(f"  Gateway auth token generated: {token_path}")
+
     print("\nFirst-boot setup complete.\n")
 
 

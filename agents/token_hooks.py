@@ -12,7 +12,7 @@ import hashlib
 
 log = logging.getLogger("token_hooks")
 
-ENFORCEMENT_ENABLED = os.environ.get("ENFORCEMENT_ENABLED", "false").lower() == "true"
+ENFORCEMENT_ENABLED = os.environ.get("ENFORCEMENT_ENABLED", "true").lower() == "true"
 
 # Agent tier lookup (wallet → tier). Populated by hierarchy_manager at startup.
 AGENT_TIERS = {}

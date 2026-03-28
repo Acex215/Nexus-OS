@@ -203,6 +203,26 @@ class NexusGateway:
 
     async def _handle_ws(self, websocket, path=None):
         """Handle a single WebSocket connection lifecycle."""
+        # Auth check for remote connections
+        remote_ip = websocket.remote_address[0] if hasattr(websocket, 'remote_address') else '127.0.0.1'
+        if remote_ip not in ('127.0.0.1', '::1', 'localhost'):
+            # Remote connection — require auth token
+            try:
+                auth_msg = await asyncio.wait_for(websocket.recv(), timeout=5.0)
+                token_path = "/opt/nexus/config/gateway_auth_token"
+                if os.path.exists(token_path):
+                    with open(token_path) as f:
+                        expected = f.read().strip()
+                    if auth_msg.strip() != expected:
+                        await websocket.close(4001, "Invalid auth token")
+                        return
+                else:
+                    await websocket.close(4002, "No auth token configured")
+                    return
+            except asyncio.TimeoutError:
+                await websocket.close(4003, "Auth timeout")
+                return
+
         client_info = {"user_id": None, "channel": None, "session_id": None}
         self._clients[websocket] = client_info
         try:
