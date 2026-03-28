@@ -195,3 +195,44 @@
 13:08:31.663559 db@janitor F·5 G·1
 13:08:31.663576 db@janitor removing table-53
 13:08:31.663618 db@open done T·63.950648ms
+=============== Mar 24, 2026 (EDT) ===============
+18:34:19.262675 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+18:34:19.263519 CURRENT: missing target file: MANIFEST-000060
+18:34:19.265644 CURRENT.bak: missing target file: MANIFEST-000054
+=============== Mar 24, 2026 (EDT) ===============
+18:34:19.266191 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+18:34:19.266246 table@recovery F·3
+18:34:19.266249 table@recovery recovering @57
+18:34:19.272103 table@recovery recovered @57 Gk·50 Ck·0 Cb·0 S·7128 Q·7157
+18:34:19.272116 table@recovery recovering @58
+18:34:19.272641 table@recovery recovered @58 Gk·75 Ck·0 Cb·0 S·11266 Q·7233
+18:34:19.272653 table@recovery recovering @61
+18:34:19.275210 table@recovery recovered @61 Gk·7 Ck·0 Cb·0 S·1300 Q·7241
+18:34:19.275233 table@recovery recovered F·3 N·132 Gk·132 Ck·0 Q·7241
+18:34:19.307090 version@stat F·[3] S·19KiB[19KiB] Sc·[0.75]
+18:34:19.313287 db@open opening
+18:34:19.313362 journal@recovery F·1
+18:34:19.314322 journal@recovery recovering @62
+18:34:19.332433 memdb@flush created L0@63 N·831 S·92KiB "/F5..EJY,v8072":"/pr..D3K,v8008"
+18:34:19.332641 version@stat F·[4] S·111KiB[111KiB] Sc·[1.00]
+18:34:19.339051 db@janitor F·7 G·0
+18:34:19.339080 db@open done T·25.774722ms
+18:34:19.339401 table@compaction L0·4 -> L1·0 S·111KiB Q·8074
+18:34:19.351773 table@build created L1@65 N·633 S·70KiB "/F5..43A,v5460":"/pr..D3K,v8008"
+18:34:19.351833 version@stat F·[0 1] S·70KiB[0B 70KiB] Sc·[0.00 0.00]
+18:34:19.361925 table@compaction committed F-3 S-40KiB Ke·0 D·330 T·22.497871ms
+18:34:19.362065 table@remove removed @63
+18:34:19.362100 table@remove removed @61
+18:34:19.362124 table@remove removed @58
+18:34:19.362147 table@remove removed @57
+=============== Mar 27, 2026 (EDT) ===============
+18:15:45.272350 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+18:15:45.275395 version@stat F·[0 1] S·70KiB[0B 70KiB] Sc·[0.00 0.00]
+18:15:45.275431 db@open opening
+18:15:45.275903 journal@recovery F·1
+18:15:45.277479 journal@recovery recovering @64
+18:15:45.301427 memdb@flush created L0@66 N·1162 S·82KiB "/F5..PNI,v9231":"/pr..D3K,d9093"
+18:15:45.301618 version@stat F·[1 1] S·153KiB[82KiB 70KiB] Sc·[0.25 0.00]
+18:15:45.327919 db@janitor F·5 G·1
+18:15:45.327936 db@janitor removing manifest-63
+18:15:45.329797 db@open done T·54.357593ms

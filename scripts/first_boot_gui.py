@@ -31,6 +31,7 @@ class FirstBootWizard:
         self.private_key = ""
         self.node_role = tk.StringVar(value="client")
         self.gateway_url = tk.StringVar(value="")
+        self.behavioral_enabled = tk.BooleanVar(value=False)
 
         self.current_step = 0
         self.steps = [
@@ -38,6 +39,7 @@ class FirstBootWizard:
             self.step_identity,
             self.step_role,
             self.step_network,
+            self.step_behavioral,
             self.step_complete,
         ]
 
@@ -393,7 +395,133 @@ class FirstBootWizard:
 
         self._next_step()
 
-    # --- Step 5: Complete ---
+    # --- Step 5: Behavioral Intelligence (Optional) ---
+    def step_behavioral(self):
+        f = self.content_frame
+
+        title = self._make_label(
+            f, "Behavioral Intelligence (Optional)",
+            size=24, color="#00c8dc", bold=True,
+        )
+        title.pack(pady=(10, 15))
+
+        intro = self._make_label(
+            f,
+            "NEXUS can record your device interactions to train a "
+            "privacy-preserving AI model. This is completely optional.",
+            size=12, color="#a0a8c0",
+        )
+        intro.pack(pady=(0, 10))
+
+        # What's recorded
+        recorded_label = self._make_label(f, "WHAT'S RECORDED:", size=11, color="#e0e0e0", bold=True)
+        recorded_label.pack(anchor=tk.W, pady=(5, 2))
+        recorded_desc = self._make_label(
+            f,
+            "Every action you take on this device \u2014 keystrokes, clicks, "
+            "URLs visited, app usage, files opened, messages, system state, "
+            "location, weather, audio controls, and more \u2014 is recorded as "
+            "a blockchain transaction on YOUR private chain.",
+            size=10, color="#a0a8c0",
+        )
+        recorded_desc.pack(anchor=tk.W, padx=(15, 0), pady=(0, 8))
+
+        # What the network sees
+        network_label = self._make_label(f, "WHAT THE NETWORK SEES:", size=11, color="#e0e0e0", bold=True)
+        network_label.pack(anchor=tk.W, pady=(5, 2))
+        network_desc = self._make_label(
+            f,
+            "A 32-byte hash. Nothing else. The network cannot reconstruct "
+            "any individual action from this hash.",
+            size=10, color="#a0a8c0",
+        )
+        network_desc.pack(anchor=tk.W, padx=(15, 0), pady=(0, 8))
+
+        # What you control
+        control_label = self._make_label(f, "WHAT YOU CONTROL:", size=11, color="#e0e0e0", bold=True)
+        control_label.pack(anchor=tk.W, pady=(5, 2))
+        control_desc = self._make_label(
+            f,
+            "\u2022 Enable or disable at any time in NEXUS Monitor\n"
+            "\u2022 Per-channel control (disable individual channels)\n"
+            "\u2022 Emergency stop button (instant halt + data destruction)\n"
+            "\u2022 Full audit trail of every pipeline event on-chain",
+            size=10, color="#a0a8c0",
+        )
+        control_desc.pack(anchor=tk.W, padx=(15, 0), pady=(0, 8))
+
+        cost_label = self._make_label(
+            f, "TOKEN COST: 10 ECT per day for collection.",
+            size=10, color="#6478a0",
+        )
+        cost_label.pack(anchor=tk.W, pady=(0, 5))
+
+        change_label = self._make_label(
+            f, "You can change this at any time in NEXUS Settings.",
+            size=10, color="#6478a0",
+        )
+        change_label.pack(anchor=tk.W, pady=(0, 15))
+
+        # Toggle
+        toggle_frame = tk.Frame(f, bg="#1a2040", padx=15, pady=12)
+        toggle_frame.pack(fill=tk.X, pady=5)
+
+        toggle_cb = tk.Checkbutton(
+            toggle_frame, text="Enable Behavioral Collection",
+            variable=self.behavioral_enabled,
+            bg="#1a2040", fg="#e0e0e0", selectcolor="#2a3050",
+            font=("DejaVu Sans", 13, "bold"), anchor=tk.W,
+            activebackground="#1a2040", activeforeground="#00c8dc",
+        )
+        toggle_cb.pack(anchor=tk.W)
+
+        off_label = tk.Label(
+            toggle_frame, text="Default: OFF",
+            bg="#1a2040", fg="#6478a0", font=("DejaVu Sans", 10),
+        )
+        off_label.pack(anchor=tk.W, padx=(25, 0))
+
+        self._add_nav_buttons(next_cmd=self._finish_behavioral)
+
+    def _finish_behavioral(self):
+        """Apply behavioral consent choice and proceed."""
+        if self.behavioral_enabled.get():
+            import time as _time
+
+            # Create local consent file
+            consent_dir = "/opt/nexus/config"
+            os.makedirs(consent_dir, exist_ok=True)
+            consent_path = os.path.join(consent_dir, "behavioral_consent_active")
+            with open(consent_path, "w") as f:
+                json.dump({
+                    "granted_at": int(_time.time()),
+                    "wallet": self.wallet_address,
+                    "source": "first_boot_wizard",
+                }, f, indent=2)
+
+            # Try on-chain consent grant (non-blocking, best-effort)
+            try:
+                import sys
+                sys.path.insert(0, '/opt/nexus')
+                sys.path.insert(0, '/opt/nexus-distro')
+                from libnexus.behavioral_client import BehavioralClient
+                client = BehavioralClient()
+                client.grant_consent()
+            except Exception:
+                pass  # Chain may not be reachable yet; consent file is enough
+
+            # Enable the systemd service
+            try:
+                subprocess.run(
+                    ["sudo", "systemctl", "enable", "nexus-behavioral"],
+                    capture_output=True, timeout=10,
+                )
+            except Exception:
+                pass
+
+        self._next_step()
+
+    # --- Step 6: Complete ---
     def step_complete(self):
         f = self.content_frame
 

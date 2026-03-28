@@ -21,3 +21,95 @@
 2026-03-24 06:34:12,343 [run-mining]   Clusters:    0 nodes
 2026-03-24 06:34:12,343 [run-mining]   Reputation:  0 wallets
 2026-03-24 06:34:12,343 [run-mining]   Anomalies:   0/0 flagged
+2026-03-24 21:00:12,337 [run-mining] === Scheduled mining job starting ===
+2026-03-24 21:00:16,087 [run-mining] === Pattern Mining ===
+2026-03-24 21:00:16,310 [run-mining] Found 4040 association rules
+2026-03-24 21:00:16,311 [run-mining]   ['duration=fast'] => ['hour_bin=00-04']  (conf=1.00, lift=4.00)
+2026-03-24 21:00:16,311 [run-mining]   ['hour_bin=00-04'] => ['duration=fast']  (conf=1.00, lift=4.00)
+2026-03-24 21:00:16,311 [run-mining]   ['duration=fast'] => ['outcome=success']  (conf=1.00, lift=1.00)
+2026-03-24 21:00:16,311 [run-mining]   ['duration=fast'] => ['priority=P2']  (conf=1.00, lift=1.00)
+2026-03-24 21:00:16,311 [run-mining]   ['duration=fast'] => ['risk=low']  (conf=1.00, lift=1.00)
+2026-03-24 21:00:16,311 [run-mining] === Resource Mining ===
+2026-03-24 21:00:16,319 [run-mining] Resource mining: not enough nodes (0) for clustering
+2026-03-24 21:00:16,319 [run-mining] Classified 0 nodes into tiers
+2026-03-24 21:00:16,319 [run-mining] === Reputation Mining ===
+2026-03-24 21:00:16,325 [run-mining] Scored 0 wallets
+2026-03-24 21:00:16,325 [run-mining] === Anomaly Detection ===
+2026-03-24 21:00:16,331 [run-mining] Anomaly detection: not enough nodes (0) for meaningful analysis
+2026-03-24 21:00:16,332 [run-mining] Checked 0 nodes, 0 anomalous
+2026-03-24 21:00:16,359 [run-mining] Results saved to /opt/nexus/logs/mining_results.json
+2026-03-24 21:00:16,388 [run-mining] ChromaDB connection failed: module 'chromadb' has no attribute 'HttpClient' — skipping upload
+2026-03-24 21:00:16,389 [run-mining] === Mining job complete ===
+2026-03-24 21:00:16,389 [run-mining]   Patterns:    4040 rules
+2026-03-24 21:00:16,389 [run-mining]   Clusters:    0 nodes
+2026-03-24 21:00:16,389 [run-mining]   Reputation:  0 wallets
+2026-03-24 21:00:16,389 [run-mining]   Anomalies:   0/0 flagged
+2026-03-25 21:00:07,153 [run-mining] === Scheduled mining job starting ===
+2026-03-25 21:00:09,871 [run-mining] === Pattern Mining ===
+2026-03-25 21:00:10,068 [run-mining] Found 4040 association rules
+2026-03-25 21:00:10,068 [run-mining]   ['hour_bin=00-04'] => ['duration=fast']  (conf=1.00, lift=4.00)
+2026-03-25 21:00:10,068 [run-mining]   ['duration=fast'] => ['hour_bin=00-04']  (conf=1.00, lift=4.00)
+2026-03-25 21:00:10,068 [run-mining]   ['duration=fast'] => ['outcome=success']  (conf=1.00, lift=1.00)
+2026-03-25 21:00:10,068 [run-mining]   ['duration=fast'] => ['priority=P2']  (conf=1.00, lift=1.00)
+2026-03-25 21:00:10,068 [run-mining]   ['duration=fast'] => ['risk=low']  (conf=1.00, lift=1.00)
+2026-03-25 21:00:10,068 [run-mining] === Resource Mining ===
+2026-03-25 21:00:10,077 [run-mining] Resource mining: not enough nodes (0) for clustering
+2026-03-25 21:00:10,077 [run-mining] Classified 0 nodes into tiers
+2026-03-25 21:00:10,077 [run-mining] === Reputation Mining ===
+2026-03-25 21:00:10,084 [run-mining] Scored 0 wallets
+2026-03-25 21:00:10,084 [run-mining] === Anomaly Detection ===
+2026-03-25 21:00:10,089 [run-mining] Anomaly detection: not enough nodes (0) for meaningful analysis
+2026-03-25 21:00:10,089 [run-mining] Checked 0 nodes, 0 anomalous
+2026-03-25 21:00:10,116 [run-mining] Results saved to /opt/nexus/logs/mining_results.json
+2026-03-25 21:00:10,117 [run-mining] ChromaDB connection failed: module 'chromadb' has no attribute 'HttpClient' — skipping upload
+2026-03-25 21:00:10,117 [run-mining] === Mining job complete ===
+2026-03-25 21:00:10,117 [run-mining]   Patterns:    4040 rules
+2026-03-25 21:00:10,117 [run-mining]   Clusters:    0 nodes
+2026-03-25 21:00:10,117 [run-mining]   Reputation:  0 wallets
+2026-03-25 21:00:10,117 [run-mining]   Anomalies:   0/0 flagged
+2026-03-26 21:00:10,231 [run-mining] === Scheduled mining job starting ===
+2026-03-26 21:00:12,448 [run-mining] === Pattern Mining ===
+2026-03-26 21:00:12,654 [run-mining] Found 4040 association rules
+2026-03-26 21:00:12,654 [run-mining]   ['hour_bin=00-04'] => ['duration=fast']  (conf=1.00, lift=4.00)
+2026-03-26 21:00:12,655 [run-mining]   ['duration=fast'] => ['hour_bin=00-04']  (conf=1.00, lift=4.00)
+2026-03-26 21:00:12,655 [run-mining]   ['duration=fast'] => ['outcome=success']  (conf=1.00, lift=1.00)
+2026-03-26 21:00:12,655 [run-mining]   ['duration=fast'] => ['priority=P2']  (conf=1.00, lift=1.00)
+2026-03-26 21:00:12,655 [run-mining]   ['duration=fast'] => ['risk=low']  (conf=1.00, lift=1.00)
+2026-03-26 21:00:12,655 [run-mining] === Resource Mining ===
+2026-03-26 21:00:12,663 [run-mining] Resource mining: not enough nodes (0) for clustering
+2026-03-26 21:00:12,663 [run-mining] Classified 0 nodes into tiers
+2026-03-26 21:00:12,663 [run-mining] === Reputation Mining ===
+2026-03-26 21:00:12,670 [run-mining] Scored 0 wallets
+2026-03-26 21:00:12,670 [run-mining] === Anomaly Detection ===
+2026-03-26 21:00:12,676 [run-mining] Anomaly detection: not enough nodes (0) for meaningful analysis
+2026-03-26 21:00:12,676 [run-mining] Checked 0 nodes, 0 anomalous
+2026-03-26 21:00:12,704 [run-mining] Results saved to /opt/nexus/logs/mining_results.json
+2026-03-26 21:00:12,704 [run-mining] ChromaDB connection failed: module 'chromadb' has no attribute 'HttpClient' — skipping upload
+2026-03-26 21:00:12,705 [run-mining] === Mining job complete ===
+2026-03-26 21:00:12,705 [run-mining]   Patterns:    4040 rules
+2026-03-26 21:00:12,705 [run-mining]   Clusters:    0 nodes
+2026-03-26 21:00:12,705 [run-mining]   Reputation:  0 wallets
+2026-03-26 21:00:12,705 [run-mining]   Anomalies:   0/0 flagged
+2026-03-27 21:00:09,234 [run-mining] === Scheduled mining job starting ===
+2026-03-27 21:00:13,050 [run-mining] === Pattern Mining ===
+2026-03-27 21:00:13,264 [run-mining] Found 4040 association rules
+2026-03-27 21:00:13,264 [run-mining]   ['hour_bin=00-04'] => ['duration=fast']  (conf=1.00, lift=4.00)
+2026-03-27 21:00:13,264 [run-mining]   ['duration=fast'] => ['hour_bin=00-04']  (conf=1.00, lift=4.00)
+2026-03-27 21:00:13,264 [run-mining]   ['duration=fast'] => ['outcome=success']  (conf=1.00, lift=1.00)
+2026-03-27 21:00:13,264 [run-mining]   ['duration=fast'] => ['priority=P2']  (conf=1.00, lift=1.00)
+2026-03-27 21:00:13,264 [run-mining]   ['duration=fast'] => ['risk=low']  (conf=1.00, lift=1.00)
+2026-03-27 21:00:13,264 [run-mining] === Resource Mining ===
+2026-03-27 21:00:13,273 [run-mining] Resource mining: not enough nodes (0) for clustering
+2026-03-27 21:00:13,273 [run-mining] Classified 0 nodes into tiers
+2026-03-27 21:00:13,273 [run-mining] === Reputation Mining ===
+2026-03-27 21:00:13,280 [run-mining] Scored 0 wallets
+2026-03-27 21:00:13,280 [run-mining] === Anomaly Detection ===
+2026-03-27 21:00:13,286 [run-mining] Anomaly detection: not enough nodes (0) for meaningful analysis
+2026-03-27 21:00:13,286 [run-mining] Checked 0 nodes, 0 anomalous
+2026-03-27 21:00:13,313 [run-mining] Results saved to /opt/nexus/logs/mining_results.json
+2026-03-27 21:00:13,347 [run-mining] ChromaDB connection failed: module 'chromadb' has no attribute 'HttpClient' — skipping upload
+2026-03-27 21:00:13,347 [run-mining] === Mining job complete ===
+2026-03-27 21:00:13,347 [run-mining]   Patterns:    4040 rules
+2026-03-27 21:00:13,347 [run-mining]   Clusters:    0 nodes
+2026-03-27 21:00:13,347 [run-mining]   Reputation:  0 wallets
+2026-03-27 21:00:13,347 [run-mining]   Anomalies:   0/0 flagged
