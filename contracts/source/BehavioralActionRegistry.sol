@@ -539,6 +539,66 @@ contract BehavioralActionRegistry {
     }
 
     // ═══════════════════════════════════════════
+    // SELF-READ FUNCTIONS
+    // These are NOT debug-only. Users can ALWAYS read their own data.
+    // This is the architectural separation:
+    //   debugRead* = developer reads anyone's data → disabled before launch
+    //   selfRead* = user reads own data → always available
+    //
+    // Privacy protects users from THE NETWORK, not from THEMSELVES.
+    // ═══════════════════════════════════════════
+
+    /**
+     * @notice Read your own action data. Always available.
+     * @dev msg.sender must match the action's user field.
+     *      This function works even when debugMode is false.
+     */
+    function selfReadAction(uint256 actionId) external view returns (
+        uint8 channelId, uint16 actionType,
+        uint32 timestamp, uint16 epochMs, bytes memory data
+    ) {
+        Action storage a = actions[actionId];
+        require(a.user == msg.sender, "Not your action");
+        return (a.channelId, a.actionType, a.timestamp, a.epochMs, a.data);
+    }
+
+    /**
+     * @notice Read your own actions in a time range. Always available.
+     */
+    function selfReadActions(uint32 startTime, uint32 endTime)
+        external view returns (uint256[] memory matchingIds)
+    {
+        uint256[] storage ids = userActionIds[msg.sender];
+        uint256 matchCount = 0;
+        for (uint256 i = 0; i < ids.length; i++) {
+            uint32 t = actions[ids[i]].timestamp;
+            if (t >= startTime && t <= endTime) matchCount++;
+        }
+        matchingIds = new uint256[](matchCount);
+        uint256 j = 0;
+        for (uint256 i = 0; i < ids.length; i++) {
+            uint32 t = actions[ids[i]].timestamp;
+            if (t >= startTime && t <= endTime) {
+                matchingIds[j++] = ids[i];
+            }
+        }
+    }
+
+    /**
+     * @notice Get your own action count. Always available.
+     */
+    function selfGetActionCount() external view returns (uint256) {
+        return userActionIds[msg.sender].length;
+    }
+
+    /**
+     * @notice Get your own channel stats. Always available.
+     */
+    function selfGetChannelStats(uint8 channelId) external view returns (uint256) {
+        return channelActionCounts[msg.sender][channelId];
+    }
+
+    // ═══════════════════════════════════════════
     // ADMIN / LOCKOUT
     // ═══════════════════════════════════════════
 
