@@ -1,4 +1,0 @@
-[submodule "plugins"]
-    path = plugins
-    url = https://github.com/RaspAP/plugins
-    branch = master

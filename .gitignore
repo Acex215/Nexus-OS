@@ -40,6 +40,11 @@ dashboard/
 workspace/
 extraction/
 automation/
+services/
+webchat/
+mcp/
+deploy/
+nexus-cli
 
 # ── Internal knowledge (not part of the codebase) ──
 docs/compiled-db/
@@ -48,7 +53,13 @@ docs/diagnostics/
 docs/knowledge-export/
 docs/archive/
 research/
-services/backups/
+
+# ── Embedded codebase copies (pi-gen build copies at build time) ──
+image/stage5-nexus/01-nexus-services/files/nexus-codebase/
+
+# ── Stale root-level docs ──
+NEXUS_VISION.md
+NEXUS_OS_Current_State.md
 
 # ── Build systems + large output (users download pre-built images) ──
 pi-gen/

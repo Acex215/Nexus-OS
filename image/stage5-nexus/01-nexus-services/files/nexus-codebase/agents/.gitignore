@@ -1,4 +1,0 @@
-.env
-*.log
-__pycache__/
-training_data/

@@ -1,5 +1,0 @@
-#!/usr/bin/env python3
-
-def tx_to_action(tx_hash):
-    # Placeholder implementation
-    return None, None, None, None

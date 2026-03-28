@@ -1,3 +1,0 @@
-{"timestamp": 1774362269.0170598, "datetime": "2026-03-24T14:24:29.017070+00:00", "wallet": "0xWorker_Carol", "operation": "exec", "event": "ect_over_budget", "spent": 30, "cost": 5, "limit": 30}
-{"timestamp": 1774362269.018045, "datetime": "2026-03-24T14:24:29.018049+00:00", "wallet": "0xDir_Bob", "operation": "inference", "event": "op_over_budget", "count": 50, "limit": 50}
-{"timestamp": 1774362272.064885, "datetime": "2026-03-24T14:24:32.064893+00:00", "wallet": "SYSTEM", "operation": "safe_mode", "event": "activated", "reason": "Correlated node failure: 3 nodes down in 5 min (nexus-storage, nexus-master, nexus-ai)"}

@@ -1,1 +1,0 @@
-DNSMASQ_LEASES = '/var/lib/misc/dnsmasq.leases'
