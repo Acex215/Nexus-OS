@@ -1840,6 +1840,32 @@ async def circuit_breaker_resume(name: str, req: BreakerActionRequest):
 
 
 # ---------------------------------------------------------------------------
+# Behavioral Intelligence (proxy to port 8769)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/behavioral/summary")
+async def behavioral_summary():
+    """Proxy to behavioral API for dashboard integration."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://localhost:8769/api/behavioral/stats/summary", timeout=3) as r:
+            return json.loads(r.read())
+    except:
+        return {"consent_active": False, "total_actions": 0, "total_compounds": 0,
+                "privacy_budget_pct": 0, "debug_mode": False, "available": False}
+
+@app.get("/api/behavioral/channels")
+async def behavioral_channels():
+    """Proxy channel stats for dashboard."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://localhost:8769/api/behavioral/stats", timeout=3) as r:
+            return json.loads(r.read())
+    except:
+        return {"channels": {}, "available": False}
+
+
+# ---------------------------------------------------------------------------
 # Serve frontend
 # ---------------------------------------------------------------------------
 DIST_DIR = Path(__file__).parent.parent / "dist"
