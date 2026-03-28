@@ -90,7 +90,9 @@ contracts/node_modules/
 *~
 
 # ── Backup / temp ──
+backups/
 *.bak
 *.backup
+*.agent_v2_backup.*
 *.orig
 *.tmp
