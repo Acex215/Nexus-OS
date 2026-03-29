@@ -11,6 +11,7 @@ mod submitter;
 use channels::keystroke::KeystrokeChannel;
 use channels::mouse::MouseChannel;
 use channels::window::WindowChannel;
+use channels::file::FileChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -80,6 +81,12 @@ async fn main() {
         source.run().await;
     });
 
+    let file_tx = tx.clone();
+    let file_handle = tokio::spawn(async move {
+        let source = FileChannel::new(file_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -127,6 +134,9 @@ async fn main() {
         }
         _ = window_handle => {
             tracing::warn!("Window channel exited");
+        }
+        _ = file_handle => {
+            tracing::warn!("File channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
