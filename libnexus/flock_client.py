@@ -32,7 +32,6 @@ class FlockClient:
             'from': self.wallet,
             'nonce': self.w3.eth.get_transaction_count(self.wallet),
             'gas': gas,
-            'gasPrice': 0
         })
         tx_hash = self.w3.eth.send_transaction(tx)
         return self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)

@@ -60,13 +60,12 @@ class BehavioralClient:
                 return json.load(f).get('wallet_address')
         return None
 
-    def _send_tx(self, fn):
+    def _send_tx(self, fn, gas=500000):
         """Send a transaction to the contract."""
         tx = fn.build_transaction({
             'from': self.wallet,
             'nonce': self.w3.eth.get_transaction_count(self.wallet),
-            'gas': 500000,
-            'gasPrice': 0
+            'gas': gas,
         })
         tx_hash = self.w3.eth.send_transaction(tx)
         return tx_hash
