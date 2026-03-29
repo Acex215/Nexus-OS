@@ -1,0 +1,45 @@
+NEXUS OS — Source Available License
+
+Copyright (c) 2025-2026 V2 Network. All rights reserved.
+
+Patent Status: Provisional patent filed March 6, 2026.
+               Nonprovisional filing due March 6, 2027.
+
+TERMS:
+
+1. SOURCE ACCESS: The source code is made available for inspection,
+   educational use, and contribution under the terms below.
+
+2. PERMITTED USES:
+   - Personal, non-commercial use on your own hardware
+   - Academic research and citation
+   - Contributing improvements back to this repository
+   - Building applications that run ON NEXUS OS
+
+3. RESTRICTED USES (without written permission from V2 Network):
+   - Commercial distribution of NEXUS OS or derivatives
+   - Incorporating substantial portions into competing products
+   - Using the patented architecture (temporal binning, behavioral
+     action ledger, blockchain-coordinated OS) in other systems
+   - Removing or modifying patent notices or attribution
+
+4. PATENT NOTICE: The following are covered by pending patent claims:
+   - Temporal binning as a universal scheduling abstraction
+   - Blockchain-coordinated behavioral action recording
+   - On-chain compound token representation of behavioral sequences
+   - Privacy-preserving federated learning with blockchain-verified
+     data destruction
+   - Dual-token economy for OS resource management
+
+5. CONTRIBUTIONS: Code contributed to this repository is licensed
+   under these same terms. Contributors retain copyright to their
+   individual contributions.
+
+6. NO WARRANTY: This software is provided "as is" without warranty
+   of any kind.
+
+7. This license will be updated to a standard open-source license
+   (Apache 2.0 or similar) after nonprovisional patent filing,
+   subject to patent protection of core innovations.
+
+For commercial licensing inquiries: https://venture-verse.org
