@@ -60,20 +60,29 @@ class KeystrokeChannel(BaseChannel):
         self._pause_reported = False
 
     def _find_keyboard(self):
-        """Find the first keyboard input device."""
+        """Find the real keyboard input device, skipping HDMI/audio devices."""
         if not HAS_EVDEV:
             return None
         devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        candidates = []
         for dev in devices:
+            # Skip HDMI audio devices that falsely expose EV_KEY
+            if 'hdmi' in dev.name.lower():
+                continue
             caps = dev.capabilities(verbose=True)
             for cap_name, events in caps.items():
                 if cap_name == ('EV_KEY', 1):
-                    # Check if it has letter keys (not just a mouse with buttons)
                     event_codes = [e[0] if isinstance(e, tuple) else e for e in events]
                     key_names = [str(e) for e in event_codes]
                     if any('KEY_A' in str(k) for k in key_names):
-                        return dev
-        return None
+                        candidates.append(dev)
+                        break
+        # Prefer devices with "keyboard" or "kbd" in the name
+        for dev in candidates:
+            name_lower = dev.name.lower()
+            if 'keyboard' in name_lower or 'kbd' in name_lower:
+                return dev
+        return candidates[0] if candidates else None
 
     def _run(self):
         """Main keystroke capture loop."""
