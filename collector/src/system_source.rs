@@ -22,7 +22,7 @@ impl SystemSources {
         let handles = vec![
             tokio::spawn(Self::procfs_monitor(self.tx.clone())),
             // filesystem_monitor replaced by channels::file::FileChannel
-            tokio::spawn(Self::clipboard_monitor(self.tx.clone())),
+            // clipboard_monitor replaced by channels::clipboard::ClipboardChannel
             tokio::spawn(Self::process_monitor(self.tx.clone())),
             tokio::spawn(Self::audio_monitor(self.tx.clone())),
             tokio::spawn(Self::display_monitor(self.tx.clone())),

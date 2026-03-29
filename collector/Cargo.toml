@@ -9,7 +9,7 @@ description = "NEXUS OS screen-fidelity behavioral event collector"
 evdev = "0.12"
 
 # X11 protocol (window events, screen state — no subprocess overhead)
-x11rb = { version = "0.13", features = ["allow-unsafe-code"] }
+x11rb = { version = "0.13", features = ["allow-unsafe-code", "xfixes"] }
 
 # Filesystem notifications (kernel-level, no polling)
 inotify = "0.10"
@@ -49,6 +49,12 @@ tiny-keccak = { version = "2", features = ["keccak"] }
 
 # D-Bus client (for NetworkManager, UPower, notifications)
 zbus = "4"
+
+# SQLite (for browser history reading)
+rusqlite = "0.31"
+
+# URL parsing
+url = "2"
 
 [profile.release]
 opt-level = 3

@@ -12,6 +12,8 @@ use channels::keystroke::KeystrokeChannel;
 use channels::mouse::MouseChannel;
 use channels::window::WindowChannel;
 use channels::file::FileChannel;
+use channels::clipboard::ClipboardChannel;
+use channels::web::WebChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -87,6 +89,18 @@ async fn main() {
         source.run().await;
     });
 
+    let clipboard_tx = tx.clone();
+    let clipboard_handle = tokio::spawn(async move {
+        let source = ClipboardChannel::new(clipboard_tx);
+        source.run().await;
+    });
+
+    let web_tx = tx.clone();
+    let web_handle = tokio::spawn(async move {
+        let source = WebChannel::new(web_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -137,6 +151,12 @@ async fn main() {
         }
         _ = file_handle => {
             tracing::warn!("File channel exited");
+        }
+        _ = clipboard_handle => {
+            tracing::warn!("Clipboard channel exited");
+        }
+        _ = web_handle => {
+            tracing::warn!("Web channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
