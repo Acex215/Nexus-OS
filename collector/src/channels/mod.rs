@@ -8,3 +8,5 @@ pub mod notification;
 pub mod session;
 pub mod audio;
 pub mod peripheral;
+pub mod gps;
+pub mod weather;

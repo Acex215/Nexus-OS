@@ -29,8 +29,8 @@ impl SystemSources {
             tokio::spawn(Self::display_monitor(self.tx.clone())),
             tokio::spawn(Self::power_monitor(self.tx.clone())),
             tokio::spawn(Self::wifi_monitor(self.tx.clone())),
-            tokio::spawn(Self::gps_monitor(self.tx.clone())),
-            tokio::spawn(Self::weather_monitor(self.tx.clone())),
+            // gps_monitor replaced by channels::gps::GpsChannel
+            // weather_monitor replaced by channels::weather::WeatherChannel
             // peripheral_monitor replaced by channels::peripheral::PeripheralChannel
             // session_monitor replaced by channels::session::SessionChannel
         ];

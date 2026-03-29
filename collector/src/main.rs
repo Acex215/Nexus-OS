@@ -18,6 +18,8 @@ use channels::notification::NotificationChannel;
 use channels::session::SessionChannel;
 use channels::audio::AudioChannel;
 use channels::peripheral::PeripheralChannel;
+use channels::gps::{GpsChannel, new_shared_position};
+use channels::weather::WeatherChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -129,6 +131,23 @@ async fn main() {
         source.run().await;
     });
 
+    // GPS + Weather share position data
+    let shared_pos = new_shared_position();
+
+    let gps_tx = tx.clone();
+    let gps_pos = shared_pos.clone();
+    let gps_handle = tokio::spawn(async move {
+        let source = GpsChannel::new(gps_tx, gps_pos);
+        source.run().await;
+    });
+
+    let weather_tx = tx.clone();
+    let weather_pos = shared_pos.clone();
+    let weather_handle = tokio::spawn(async move {
+        let source = WeatherChannel::new(weather_tx, weather_pos);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -197,6 +216,12 @@ async fn main() {
         }
         _ = periph_handle => {
             tracing::warn!("Peripheral channel exited");
+        }
+        _ = gps_handle => {
+            tracing::warn!("GPS channel exited");
+        }
+        _ = weather_handle => {
+            tracing::warn!("Weather channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
