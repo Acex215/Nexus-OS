@@ -10,6 +10,7 @@ mod submitter;
 
 use channels::keystroke::KeystrokeChannel;
 use channels::mouse::MouseChannel;
+use channels::window::WindowChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -73,6 +74,12 @@ async fn main() {
         source.run().await;
     });
 
+    let window_tx = tx.clone();
+    let window_handle = tokio::spawn(async move {
+        let source = WindowChannel::new(window_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -117,6 +124,9 @@ async fn main() {
         }
         _ = mouse_handle => {
             tracing::warn!("Mouse channel exited");
+        }
+        _ = window_handle => {
+            tracing::warn!("Window channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
