@@ -5,3 +5,6 @@ pub mod file;
 pub mod clipboard;
 pub mod web;
 pub mod notification;
+pub mod session;
+pub mod audio;
+pub mod peripheral;

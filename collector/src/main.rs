@@ -15,6 +15,9 @@ use channels::file::FileChannel;
 use channels::clipboard::ClipboardChannel;
 use channels::web::WebChannel;
 use channels::notification::NotificationChannel;
+use channels::session::SessionChannel;
+use channels::audio::AudioChannel;
+use channels::peripheral::PeripheralChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -108,6 +111,24 @@ async fn main() {
         source.run().await;
     });
 
+    let session_tx = tx.clone();
+    let session_handle = tokio::spawn(async move {
+        let source = SessionChannel::new(session_tx);
+        source.run().await;
+    });
+
+    let audio_tx = tx.clone();
+    let audio_handle = tokio::spawn(async move {
+        let source = AudioChannel::new(audio_tx);
+        source.run().await;
+    });
+
+    let periph_tx = tx.clone();
+    let periph_handle = tokio::spawn(async move {
+        let source = PeripheralChannel::new(periph_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -167,6 +188,15 @@ async fn main() {
         }
         _ = notif_handle => {
             tracing::warn!("Notification channel exited");
+        }
+        _ = session_handle => {
+            tracing::warn!("Session channel exited");
+        }
+        _ = audio_handle => {
+            tracing::warn!("Audio channel exited");
+        }
+        _ = periph_handle => {
+            tracing::warn!("Peripheral channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
