@@ -10,3 +10,4 @@ pub mod audio;
 pub mod peripheral;
 pub mod gps;
 pub mod weather;
+pub mod framebuffer;

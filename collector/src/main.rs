@@ -20,6 +20,7 @@ use channels::audio::AudioChannel;
 use channels::peripheral::PeripheralChannel;
 use channels::gps::{GpsChannel, new_shared_position};
 use channels::weather::WeatherChannel;
+use channels::framebuffer::FramebufferChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -148,6 +149,12 @@ async fn main() {
         source.run().await;
     });
 
+    let fb_tx = tx.clone();
+    let fb_handle = tokio::spawn(async move {
+        let source = FramebufferChannel::new(fb_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -222,6 +229,9 @@ async fn main() {
         }
         _ = weather_handle => {
             tracing::warn!("Weather channel exited");
+        }
+        _ = fb_handle => {
+            tracing::warn!("Framebuffer channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
