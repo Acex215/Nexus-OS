@@ -2,11 +2,13 @@ use clap::Parser;
 use tokio::sync::mpsc;
 
 mod events;
+mod channels;
 mod input_source;
 mod x11_source;
 mod system_source;
 mod submitter;
 
+use channels::keystroke::KeystrokeChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -58,6 +60,12 @@ async fn main() {
     let (tx, rx) = mpsc::channel(args.buffer_size);
 
     // Spawn all event sources
+    let keystroke_tx = tx.clone();
+    let keystroke_handle = tokio::spawn(async move {
+        let source = KeystrokeChannel::new(keystroke_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -96,6 +104,9 @@ async fn main() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Shutting down...");
+        }
+        _ = keystroke_handle => {
+            tracing::warn!("Keystroke channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
