@@ -23,12 +23,13 @@ impl SystemSources {
             tokio::spawn(Self::procfs_monitor(self.tx.clone())),
             // filesystem_monitor replaced by channels::file::FileChannel
             // clipboard_monitor replaced by channels::clipboard::ClipboardChannel
+            // notification_monitor replaced by channels::notification::NotificationChannel
             tokio::spawn(Self::process_monitor(self.tx.clone())),
             tokio::spawn(Self::audio_monitor(self.tx.clone())),
             tokio::spawn(Self::display_monitor(self.tx.clone())),
             tokio::spawn(Self::power_monitor(self.tx.clone())),
             tokio::spawn(Self::wifi_monitor(self.tx.clone())),
-            tokio::spawn(Self::notification_monitor(self.tx.clone())),
+            // notification_monitor replaced by channels::notification::NotificationChannel
             tokio::spawn(Self::gps_monitor(self.tx.clone())),
             tokio::spawn(Self::weather_monitor(self.tx.clone())),
             tokio::spawn(Self::peripheral_monitor(self.tx.clone())),

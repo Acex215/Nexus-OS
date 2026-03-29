@@ -14,6 +14,7 @@ use channels::window::WindowChannel;
 use channels::file::FileChannel;
 use channels::clipboard::ClipboardChannel;
 use channels::web::WebChannel;
+use channels::notification::NotificationChannel;
 use input_source::InputSource;
 use x11_source::X11Source;
 use system_source::SystemSources;
@@ -101,6 +102,12 @@ async fn main() {
         source.run().await;
     });
 
+    let notif_tx = tx.clone();
+    let notif_handle = tokio::spawn(async move {
+        let source = NotificationChannel::new(notif_tx);
+        source.run().await;
+    });
+
     let input_tx = tx.clone();
     let input_handle = tokio::spawn(async move {
         let source = InputSource::new(input_tx);
@@ -157,6 +164,9 @@ async fn main() {
         }
         _ = web_handle => {
             tracing::warn!("Web channel exited");
+        }
+        _ = notif_handle => {
+            tracing::warn!("Notification channel exited");
         }
         _ = input_handle => {
             tracing::warn!("Input source exited");
