@@ -1,0 +1,56 @@
+[package]
+name = "nexus-collector"
+version = "0.1.0"
+edition = "2021"
+description = "NEXUS OS screen-fidelity behavioral event collector"
+
+[dependencies]
+# Input device events (keyboard, mouse, touchpad — zero-copy from kernel)
+evdev = "0.12"
+
+# X11 protocol (window events, screen state — no subprocess overhead)
+x11rb = { version = "0.13", features = ["allow-unsafe-code"] }
+
+# Filesystem notifications (kernel-level, no polling)
+inotify = "0.10"
+
+# Process info from /proc
+procfs = "0.16"
+
+# Async runtime (for concurrent event sources)
+tokio = { version = "1", features = ["full"] }
+
+# Serialization (compact binary format for blockchain payloads)
+rmp-serde = "1"  # MessagePack
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP client (for JSON-RPC to Geth)
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+
+# Crossbeam for lock-free ring buffer
+crossbeam = "0.8"
+
+# Time handling
+chrono = "0.4"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# CLI arguments
+clap = { version = "4", features = ["derive"] }
+
+# Hex encoding for blockchain interaction
+hex = "0.4"
+
+# Keccak256 hashing (matching Ethereum's hash function)
+tiny-keccak = { version = "2", features = ["keccak"] }
+
+# D-Bus client (for NetworkManager, UPower, notifications)
+zbus = "4"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
