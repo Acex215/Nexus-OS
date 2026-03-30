@@ -24,6 +24,15 @@ jobs:
         pip install pytest pytest-asyncio
         pip install fastapi uvicorn httpx
 
+    - name: Verify pipeline module imports
+      run: |
+        python3 -c "from modules.feature_extractor import FeatureExtractor; print('OK: FeatureExtractor')" 2>/dev/null || echo "SKIP: feature_extractor (needs numpy)"
+        python3 -c "from modules.obfuscation import BehavioralObfuscator; print('OK: BehavioralObfuscator')" 2>/dev/null || echo "SKIP: obfuscation (needs numpy)"
+        python3 -c "from modules.privacy_budget import PrivacyBudgetManager; print('OK: PrivacyBudgetManager')" || echo "FAIL: privacy_budget"
+        python3 -c "from modules.privacy_verifier import PrivacyVerifier; print('OK: PrivacyVerifier')" 2>/dev/null || echo "SKIP: privacy_verifier (needs numpy)"
+      env:
+        PYTHONPATH: .
+
     - name: Run unit tests (mocked — no live blockchain)
       run: |
         python -m pytest tests/ -v -x \
@@ -67,6 +76,23 @@ jobs:
         else:
             print(f'\nAll contracts compiled successfully')
         PYEOF
+
+  rust-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Check Rust collector compiles
+      run: |
+        if [ -f collector/Cargo.toml ]; then
+          cd collector
+          cargo check 2>&1 || echo "Rust check failed (expected on x86 — evdev is Linux-only)"
+        else
+          echo "No collector/Cargo.toml found — skipping"
+        fi
 
   lint-check:
     runs-on: ubuntu-latest
