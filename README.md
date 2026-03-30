@@ -91,7 +91,9 @@ coordination, audit, economics, and privacy enforcement.
 - Dual-token economy with real ECT/RST transactions
 - Temporal scheduler with hourly bin assignment
 - Federated learning coordinator with epoch management
-- 18-channel behavioral intelligence collection
+- 18-channel behavioral intelligence collection (Rust, screen-fidelity)
+- 288-dim feature extraction with differential privacy pipeline
+- Daily epoch cycle with salt rotation and gradient hashing
 - Consent-gated data pipeline with on-chain proof of destruction
 - Flashable desktop OS image via pi-gen (arm64 bookworm)
 
@@ -128,6 +130,10 @@ contracts/          Smart contracts
 ├── source/             20 Solidity source files
 ├── deployed/           ABIs + live addresses
 └── scripts/            Deployment scripts
+collector/          Rust screen-fidelity collector
+├── src/                18-channel behavioral capture
+├── Cargo.toml          Dependencies
+└── target/             Build output (gitignored)
 modules/            Subsystem modules
 ├── channels/           18 behavioral collection channels
 ├── collector.py        Master collection orchestrator
@@ -152,10 +158,13 @@ docs/               Architecture, economics, credentials
 abstraction. The same data structure handles OS process scheduling,
 user calendar events, and behavioral pattern analysis.
 
-**Behavioral Action Ledger** — Every micro-action (keystrokes, clicks,
-URLs, system state) recorded as a blockchain transaction. Compound
-tokens aggregate 5-minute behavioral patterns into single on-chain
-entities for correlation analysis.
+**Behavioral Action Ledger** — A Rust collector captures every
+micro-action at full evdev rate (keystrokes, mouse movement, window
+focus, clipboard, file operations, browser history, notifications,
+GPS, weather, audio, peripherals) as blockchain transactions. Compound
+tokens aggregate 5-minute patterns for correlation analysis. A daily
+epoch cycle extracts 288-dimensional feature vectors and applies
+6-layer privacy transformation before any data leaves the device.
 
 **Privacy by Architecture** — Raw data stays on-device. Only
 irreversible gradient hashes reach the network. 6-layer privacy stack:

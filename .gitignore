@@ -69,6 +69,9 @@ image/pi-gen/deploy/
 *.img.xz
 *.zip
 
+# ── Rust build output ──
+collector/target/
+
 # ── Python ──
 __pycache__/
 *.pyc
