@@ -69,16 +69,16 @@ class BehavioralClient:
             BehavioralClient._nonce_lock = threading.Lock()
 
         with BehavioralClient._nonce_lock:
-            nonce = self.w3.eth.get_transaction_count(self.wallet)
+            nonce = self.w3.eth.get_transaction_count(self.wallet, 'pending')
+            # EIP-1559 gas params — London fork is active on this PoA chain
+            suggested = self.w3.eth.gas_price
             tx_params = {
                 'from': self.wallet,
                 'nonce': nonce,
                 'gas': gas,
+                'maxFeePerGas': suggested * 2,
+                'maxPriorityFeePerGas': suggested,
             }
-            # Private PoA chain: use gasPrice=0
-            # If this fails with "transaction underpriced", the chain
-            # has London fork enabled — switch to maxFeePerGas/maxPriorityFeePerGas
-            tx_params['gasPrice'] = 0
 
             tx = fn.build_transaction(tx_params)
             tx_hash = self.w3.eth.send_transaction(tx)
