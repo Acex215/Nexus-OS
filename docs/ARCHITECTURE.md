@@ -38,6 +38,19 @@ Python library providing a syscall-like interface to blockchain:
 - Erasure-coded distributed storage
 - Data mining on blockchain history
 
+### 5b. Rust Collector Layer
+High-performance behavioral data capture at screen fidelity:
+- Built with tokio async runtime, evdev, x11rb, zbus
+- Captures at full evdev rate (125-1000 Hz for mouse, all keycodes)
+- 18 parallel channel tasks + compound token minter
+- Multi-keyboard support including Pi Pico 2 HID microcontrollers
+- Framebuffer OCR via Tesseract for pixel-level screen text extraction
+- JSON-RPC direct writes to BehavioralActionRegistry on private chain
+- Python reads the same contract via web3.py (no IPC needed)
+
+The Rust collector replaces the Python collector for production use.
+The Python collector remains as a development/debugging fallback.
+
 ### 6. Agent Layer
 OS-level services:
 - WebSocket gateway (inter-node communication)
@@ -52,7 +65,8 @@ Custom GTK4 desktop applications (in nexus-distro repo):
 ## Data Flow: Behavioral Intelligence Pipeline
 
 ```
-User activity → 18 collection channels → on-chain actions
+User activity → Rust collector (18 channels, evdev/X11/D-Bus/inotify)
+→ on-chain actions (BehavioralActionRegistry via JSON-RPC)
 → compound tokens (5-min aggregates) → feature extraction (288-dim)
 → Laplace noise → daily salt rotation → gradient hash (keccak256)
 → FlockCoordinator submission → federated averaging
