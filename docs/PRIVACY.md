@@ -5,13 +5,14 @@ for legal review prior to public release.
 
 ## 1. What Data Is Collected
 
-When the user grants explicit on-chain consent, 18 behavioral channels
-can collect device activity:
+When the user grants explicit on-chain consent, a Rust-based collector
+captures device activity across 18 behavioral channels at screen
+fidelity (full evdev rate for input devices):
 
 | Channel | What's Recorded | Recording Method |
 |---------|----------------|------------------|
-| Keystroke | Keycodes, timing, modifiers | evdev /dev/input |
-| Mouse | Coordinates, clicks, scroll, hovers | evdev /dev/input |
+| Keystroke | Keycodes, timing, modifiers, inter-key intervals | evdev (multi-keyboard incl. Pi Pico 2 HID) |
+| Mouse | Absolute position (full evdev rate), clicks, scroll, drags, hovers | evdev (125-1000 Hz) |
 | Window | Window titles, application class, focus | xdotool, xprop |
 | Web | URLs from browser history, search queries | SQLite (Chromium/Firefox) |
 | Message | Desktop notifications (app, summary, body) | D-Bus |
@@ -25,6 +26,7 @@ can collect device activity:
 | WiFi | SSID, signal strength (60-second intervals) | iwconfig |
 | Audio | Volume changes, mute, output device | pactl (PulseAudio) |
 | Display | Brightness changes, monitor connections | sysfs, xrandr |
+| Display (ext.) | Screen text via OCR (5-second snapshots) | X11 XGetImage + Tesseract |
 | Power | Battery level, charging state, sleep/wake | sysfs |
 | Peripheral | USB/Bluetooth connect/disconnect | udevadm |
 | Notification | All desktop notifications | dbus-monitor |
@@ -64,6 +66,12 @@ This hash is the result of a 6-layer transformation:
 4. Rotated vector → model training gradient (weight deltas)
 5. Gradient → keccak256 hash (32 bytes, one-way)
 6. Hash → FlockCoordinator smart contract (on private chain)
+
+The 288-dimensional feature vector is computed by feature_extractor.py:
+16 statistical features (count, rate, burst, pause, entropy, interval
+stats, hourly concentration) x 18 channels. The obfuscation module
+applies daily salt rotation via an orthogonal matrix derived from
+FlockCoordinator's epoch salt, preventing cross-day correlation.
 
 **From the hash, it is mathematically impossible to reconstruct:**
 - What the user typed
