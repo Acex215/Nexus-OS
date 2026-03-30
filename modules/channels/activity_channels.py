@@ -786,9 +786,16 @@ class AppLifecycleChannel(BaseChannel):
         while self.active:
             try:
                 self._poll_cycle()
+            except Exception as e:
+                self.errors += 1
+                if self.errors <= 3 or self.errors % 100 == 0:
+                    print(f"[{self.name}] Poll error #{self.errors}: {type(e).__name__}: {e}")
+            try:
                 self._check_dpkg_log()
             except Exception as e:
                 self.errors += 1
+                if self.errors <= 3 or self.errors % 100 == 0:
+                    print(f"[{self.name}] dpkg check error #{self.errors}: {type(e).__name__}: {e}")
             time.sleep(self._poll_interval)
 
     def _poll_cycle(self):
@@ -800,13 +807,23 @@ class AppLifecycleChannel(BaseChannel):
         # New processes
         for pid in current_set - known_set:
             info = current[pid]
-            self._record_launch(pid, info)
+            try:
+                self._record_launch(pid, info)
+            except Exception as e:
+                self.errors += 1
+                if self.errors <= 3 or self.errors % 100 == 0:
+                    print(f"[{self.name}] Launch record error #{self.errors} (pid {pid}): {type(e).__name__}: {e}")
 
         # Exited processes
         for pid in known_set - current_set:
             info = self._known_pids[pid]
             runtime = time.time() - info.get('tracked_since', time.time())
-            self._record_exit(pid, info, runtime)
+            try:
+                self._record_exit(pid, info, runtime)
+            except Exception as e:
+                self.errors += 1
+                if self.errors <= 3 or self.errors % 100 == 0:
+                    print(f"[{self.name}] Exit record error #{self.errors} (pid {pid}): {type(e).__name__}: {e}")
 
         # Update known pids
         for pid in current_set - known_set:
