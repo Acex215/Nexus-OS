@@ -1,0 +1,24 @@
+[Unit]
+Description=NEXUS Behavioral Collector (Rust)
+After=network-online.target nexus-geth.service
+Wants=network-online.target
+ConditionPathExists=/opt/nexus/config/behavioral_consent_active
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/nexus-collector \
+    --rpc-url http://10.0.20.3:8545 \
+    --wallet 0x817B0842B208B76A7665948F8D1A0592F9b1e958 \
+    --contract 0xA9cFe1C89667bB8649BCD905F358449aB14b8D37 \
+    --stats-interval 300 \
+    --no-framebuffer
+Restart=on-failure
+RestartSec=10
+Environment=RUST_LOG=nexus_collector=info
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nexus-collector
+
+[Install]
+WantedBy=multi-user.target

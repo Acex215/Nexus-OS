@@ -1,0 +1,9 @@
+[Unit]
+Description=NEXUS Daily Epoch Timer
+
+[Timer]
+OnCalendar=*-*-* 23:50:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

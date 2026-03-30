@@ -1,0 +1,14 @@
+[Unit]
+Description=NEXUS Daily Epoch Cycle
+After=network-online.target nexus-geth.service
+ConditionPathExists=/opt/nexus/config/behavioral_consent_active
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/nexus/contracts/.venv/bin/python3 /opt/nexus/scripts/daily_epoch.py
+WorkingDirectory=/opt/nexus
+Environment=PYTHONPATH=/opt/nexus
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nexus-epoch
