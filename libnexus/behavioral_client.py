@@ -60,15 +60,29 @@ class BehavioralClient:
                 return json.load(f).get('wallet_address')
         return None
 
+    _nonce_lock = None  # Class-level threading lock
+
     def _send_tx(self, fn, gas=500000):
-        """Send a transaction to the contract."""
-        tx = fn.build_transaction({
-            'from': self.wallet,
-            'nonce': self.w3.eth.get_transaction_count(self.wallet),
-            'gas': gas,
-        })
-        tx_hash = self.w3.eth.send_transaction(tx)
-        return tx_hash
+        """Send a transaction to the contract. Thread-safe nonce management."""
+        if BehavioralClient._nonce_lock is None:
+            import threading
+            BehavioralClient._nonce_lock = threading.Lock()
+
+        with BehavioralClient._nonce_lock:
+            nonce = self.w3.eth.get_transaction_count(self.wallet)
+            tx_params = {
+                'from': self.wallet,
+                'nonce': nonce,
+                'gas': gas,
+            }
+            # Private PoA chain: use gasPrice=0
+            # If this fails with "transaction underpriced", the chain
+            # has London fork enabled — switch to maxFeePerGas/maxPriorityFeePerGas
+            tx_params['gasPrice'] = 0
+
+            tx = fn.build_transaction(tx_params)
+            tx_hash = self.w3.eth.send_transaction(tx)
+            return tx_hash
 
     def _ms_in_second(self):
         """Milliseconds within current second (0-999)."""
@@ -98,17 +112,24 @@ class BehavioralClient:
     def record_action(self, channel_id, action_type, data_bytes):
         """Record a single significant action immediately on-chain."""
         epoch_ms = self._ms_in_second()
-        tx = self._send_tx(
-            self.contract.functions.recordAction(
-                channel_id, action_type, epoch_ms, data_bytes
-            )
-        )
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx, timeout=10)
-        # Extract actionId from event logs
-        logs = self.contract.events.ActionRecorded().process_receipt(receipt)
-        action_id = logs[0]['args']['actionId'] if logs else None
-        self._last_compound_action_id = action_id
-        return action_id
+        for attempt in range(3):
+            try:
+                tx = self._send_tx(
+                    self.contract.functions.recordAction(
+                        channel_id, action_type, epoch_ms, data_bytes
+                    )
+                )
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx, timeout=10)
+                logs = self.contract.events.ActionRecorded().process_receipt(receipt)
+                action_id = logs[0]['args']['actionId'] if logs else None
+                self._last_compound_action_id = action_id
+                return action_id
+            except Exception as e:
+                if attempt < 2 and ('nonce' in str(e).lower() or 'replacement' in str(e).lower()):
+                    import time
+                    time.sleep(0.1 * (attempt + 1))
+                    continue
+                raise
 
     # ═══════════════════════════════════════════
     # BATCH RECORDING (high-frequency channels)
@@ -141,21 +162,32 @@ class BehavioralClient:
             encoded += struct.pack('>H', len(micro)) + micro
 
         epoch_ms = self._ms_in_second()
-        tx = self._send_tx(
-            self.contract.functions.recordBatch(
-                channel_id, action_type, epoch_ms, encoded, micro_count
-            )
-        )
-        receipt = self.w3.eth.wait_for_transaction_receipt(tx, timeout=10)
 
-        # Clear batch
-        self._pending_batch[key] = []
-        self._batch_timestamps[key] = time.time()
+        for attempt in range(3):
+            try:
+                tx = self._send_tx(
+                    self.contract.functions.recordBatch(
+                        channel_id, action_type, epoch_ms, encoded, micro_count
+                    )
+                )
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx, timeout=10)
 
-        logs = self.contract.events.BatchRecorded().process_receipt(receipt)
-        action_id = logs[0]['args']['startActionId'] if logs else None
-        self._last_compound_action_id = action_id
-        return action_id
+                # Clear batch only on success
+                self._pending_batch[key] = []
+                self._batch_timestamps[key] = time.time()
+
+                logs = self.contract.events.BatchRecorded().process_receipt(receipt)
+                action_id = logs[0]['args']['startActionId'] if logs else None
+                self._last_compound_action_id = action_id
+                return action_id
+            except Exception as e:
+                if attempt < 2 and ('nonce' in str(e).lower() or 'replacement' in str(e).lower()):
+                    import time as _time
+                    _time.sleep(0.1 * (attempt + 1))
+                    continue
+                # On final failure, clear the batch anyway to prevent infinite retry
+                self._pending_batch[key] = []
+                raise
 
     def flush_all_batches(self):
         """Flush all pending batches. Called by the 1-second timer."""
