@@ -505,6 +505,8 @@ class FileChannel(BaseChannel):
                 self._process_event(line)
             except Exception as e:
                 self.errors += 1
+                if self.errors <= 3 or self.errors % 100 == 0:
+                    print(f"[{self.name}] Event error #{self.errors}: {type(e).__name__}: {e}")
 
         if self._process:
             self._process.terminate()

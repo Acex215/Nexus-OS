@@ -81,32 +81,26 @@ class SystemChannel(BaseChannel):
         """Collect a complete system resource snapshot."""
         snapshot = {}
 
-        # CPU usage per core
-        snapshot['cpu'] = self._get_cpu_usage()
+        subsystems = [
+            ('cpu', self._get_cpu_usage),
+            ('memory', self._get_memory),
+            ('load', self._get_load_average),
+            ('temperature', self._get_temperature),
+            ('network', self._get_network_delta),
+            ('disk_usage', self._get_disk_usage),
+            ('disk_io', self._get_disk_io_delta),
+            ('top_processes', self._get_top_processes),
+            ('uptime', self._get_uptime),
+        ]
 
-        # Memory
-        snapshot['memory'] = self._get_memory()
-
-        # Load average
-        snapshot['load'] = self._get_load_average()
-
-        # CPU temperature
-        snapshot['temperature'] = self._get_temperature()
-
-        # Network I/O delta
-        snapshot['network'] = self._get_network_delta()
-
-        # Disk usage
-        snapshot['disk_usage'] = self._get_disk_usage()
-
-        # Disk I/O delta
-        snapshot['disk_io'] = self._get_disk_io_delta()
-
-        # Top 5 processes by CPU
-        snapshot['top_processes'] = self._get_top_processes()
-
-        # Uptime
-        snapshot['uptime'] = self._get_uptime()
+        for name, fn in subsystems:
+            try:
+                snapshot[name] = fn()
+            except Exception as e:
+                self.errors += 1
+                if self.errors <= 3 or self.errors % 100 == 0:
+                    print(f"[{self.name}] Subsystem '{name}' error #{self.errors}: {type(e).__name__}: {e}")
+                snapshot[name] = {} if name != 'top_processes' else []
 
         return snapshot
 
