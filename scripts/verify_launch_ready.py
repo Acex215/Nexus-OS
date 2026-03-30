@@ -49,6 +49,11 @@ required = [
     'modules/collector.py', 'modules/channels/base_channel.py',
     'agents/nexus_gateway.py', 'agents/node_agent.py',
     'agents/token_hooks.py', 'scripts/first_boot_setup.py',
+    'modules/feature_extractor.py', 'modules/obfuscation.py',
+    'modules/privacy_budget.py', 'modules/local_insight.py',
+    'scripts/daily_epoch.py', 'scripts/verify_collection.py',
+    'scripts/verify_integrity.py', 'scripts/nexus_debug_cli.py',
+    'tests/test_behavioral_pipeline.py',
 ]
 for f in required:
     check(f, os.path.exists(f'/opt/nexus/{f}'), "MISSING")
@@ -155,6 +160,43 @@ if found_secrets:
         check(f"No hardcoded secret: {s}", False, "POTENTIAL SECRET IN CODE")
 else:
     check("No hardcoded secrets detected", True)
+
+# ── 7. Rust Collector ──
+print("\n[7] Rust Collector")
+rust_binary = '/usr/local/bin/nexus-collector'
+check("Rust collector binary installed", os.path.isfile(rust_binary),
+      "Not built — run: cd /opt/nexus/collector && cargo build --release")
+rust_cargo = '/opt/nexus/collector/Cargo.toml'
+check("Cargo.toml exists", os.path.isfile(rust_cargo), "MISSING")
+rust_src = '/opt/nexus/collector/src/main.rs'
+check("src/main.rs exists", os.path.isfile(rust_src), "MISSING")
+channels_dir = '/opt/nexus/collector/src/channels'
+if os.path.isdir(channels_dir):
+    channel_files = [f for f in os.listdir(channels_dir) if f.endswith('.rs') and f != 'mod.rs']
+    check(f"Channel modules: {len(channel_files)}", len(channel_files) >= 10,
+          f"Only {len(channel_files)} channels (expected 10+)")
+else:
+    check("Channel modules directory", False, "MISSING")
+
+# ── 8. Pipeline Modules ──
+print("\n[8] Pipeline Modules")
+pipeline_modules = [
+    ('modules/feature_extractor.py', 'FeatureExtractor'),
+    ('modules/obfuscation.py', 'BehavioralObfuscator'),
+    ('modules/privacy_budget.py', 'PrivacyBudgetManager'),
+    ('modules/privacy_verifier.py', 'PrivacyVerifier'),
+    ('modules/local_insight.py', 'LocalInsightEngine'),
+]
+for path, class_name in pipeline_modules:
+    full = f'/opt/nexus/{path}'
+    if os.path.isfile(full):
+        with open(full) as f:
+            content = f.read()
+        has_class = f'class {class_name}' in content
+        check(f"{path} contains {class_name}", has_class,
+              f"Class {class_name} not found")
+    else:
+        check(path, False, "MISSING")
 
 # ── Summary ──
 print(f"\n{'═'*60}")
