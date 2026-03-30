@@ -98,8 +98,9 @@ class CompoundMinter:
                 action = self.client.get_action(aid)
                 channel_counts[action['channelId']] += 1
                 action_count += 1
-            except Exception:
-                pass
+            except Exception as e:
+                if action_count == 0:
+                    print(f"[CompoundMinter] Error reading action {aid}: {e}")
 
         if action_count == 0:
             self._last_action_id = end_id
@@ -208,7 +209,9 @@ class BatchFlushOrchestrator:
                     self.total_flushed_batches += pending
                     self.flush_count += 1
             except Exception as e:
-                pass  # Don't crash the orchestrator on transient errors
+                self.errors = getattr(self, 'errors', 0) + 1
+                if self.errors <= 5 or self.errors % 50 == 0:
+                    print(f"[BatchFlushOrchestrator] Flush error #{self.errors}: {type(e).__name__}: {e}")
             time.sleep(self.FLUSH_INTERVAL)
 
     def get_stats(self):
