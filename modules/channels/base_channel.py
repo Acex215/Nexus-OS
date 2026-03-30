@@ -48,7 +48,9 @@ class BaseChannel:
             self._run()
         except Exception as e:
             self.errors += 1
-            print(f"[{self.name}] Fatal error: {e}")
+            import traceback
+            print(f"[{self.name}] Fatal error: {type(e).__name__}: {e}")
+            traceback.print_exc()
 
     def _run(self):
         """Override this in each channel implementation."""
@@ -75,6 +77,8 @@ class BaseChannel:
             return action_id
         except Exception as e:
             self.errors += 1
+            if self.errors <= 3 or self.errors % 100 == 0:
+                print(f"[{self.name}] _record error #{self.errors}: {type(e).__name__}: {e}")
             return None
 
     def _batch(self, action_type, micro_data):
@@ -84,3 +88,5 @@ class BaseChannel:
             self.event_count += 1
         except Exception as e:
             self.errors += 1
+            if self.errors <= 3 or self.errors % 100 == 0:
+                print(f"[{self.name}] _batch error #{self.errors}: {type(e).__name__}: {e}")
