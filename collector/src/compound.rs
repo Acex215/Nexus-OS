@@ -105,19 +105,34 @@ impl CompoundMinter {
 
             let aggregate_data = rmp_serde::to_vec(&stats).unwrap_or_default();
 
-            match self.submit_mint(start_id, end_id, &unique_channels, &aggregate_data).await {
-                Ok(_) => {
-                    tracing::info!(
-                        "Compound minted: {} actions across {} channels ({:.1}/min)",
-                        new_actions, stats.channel_count,
-                        new_actions as f64 / (MINT_INTERVAL_SECS as f64 / 60.0)
-                    );
-                    last_action_id = current_count;
-                }
-                Err(e) => {
-                    tracing::warn!("Compound mint failed: {}", e);
+            // Brief pause to let submitter's pending txs clear nonce space
+            tokio::time::sleep(Duration::from_secs(2)).await;
+
+            // Retry up to 3 times with fresh nonce each attempt
+            let mut success = false;
+            for attempt in 0..3 {
+                match self.submit_mint(start_id, end_id, &unique_channels, &aggregate_data).await {
+                    Ok(_) => {
+                        tracing::info!(
+                            "Compound minted: {} actions across {} channels ({:.1}/min)",
+                            new_actions, stats.channel_count,
+                            new_actions as f64 / (MINT_INTERVAL_SECS as f64 / 60.0)
+                        );
+                        last_action_id = current_count;
+                        success = true;
+                        break;
+                    }
+                    Err(e) => {
+                        if attempt < 2 {
+                            tracing::debug!("Compound attempt {}: {} — retrying", attempt + 1, e);
+                            tokio::time::sleep(Duration::from_secs(3)).await;
+                        } else {
+                            tracing::warn!("Compound mint failed after 3 attempts: {}", e);
+                        }
+                    }
                 }
             }
+            let _ = success;
         }
     }
 
